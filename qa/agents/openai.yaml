@@ -1,0 +1,6 @@
+interface:
+  display_name: "nanostack-qa"
+  short_description: "Quality assurance with Playwright browser testing, API testing, CLI testing, and root-cause debugging."
+  default_prompt: "Use nanostack-qa to verify that code works correctly."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,253 @@
+#!/usr/bin/env bash
+# nanostack setup — register skills with Claude Code / Codex / Kiro
+# No build step required. No runtime dependencies.
+#
+# Install:
+#   git clone https://github.com/garagon/nanostack.git ~/.claude/skills/nanostack
+#   cd ~/.claude/skills/nanostack && ./setup
+#
+# Per-repo:
+#   git clone https://github.com/garagon/nanostack.git .claude/skills/nanostack
+#   cd .claude/skills/nanostack && ./setup
+#
+# Codex:
+#   git clone https://github.com/garagon/nanostack.git ~/nanostack
+#   cd ~/nanostack && ./setup --host codex
+set -e
+
+NANOSTACK_DIR="$(cd "$(dirname "$0")" && pwd)"
+SOURCE_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+SKILLS_DIR="$(dirname "$NANOSTACK_DIR")"
+SKILLS=(think plan review qa security ship guard conductor)
+
+# sed -i portability (BSD vs GNU)
+if sed --version >/dev/null 2>&1; then
+  sed_inplace() { sed -i "$@"; }
+else
+  sed_inplace() { sed -i '' "$@"; }
+fi
+
+# ─── Parse flags ──────────────────────────────────────────────
+HOST="claude"
+LOCAL_INSTALL=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --host)  [ -z "${2:-}" ] && echo "Missing value for --host" >&2 && exit 1; HOST="$2"; shift 2 ;;
+    --host=*) HOST="${1#--host=}"; shift ;;
+    --local) LOCAL_INSTALL=1; shift ;;
+    --help)
+      cat <<'HELP'
+Usage: ./setup [OPTIONS]
+
+Options:
+  --host <agent>    Target: claude (default), codex, kiro, auto
+  --local           Install to .claude/skills/ in current working directory
+  --help            Show this help
+
+Install methods:
+  # Global (recommended)
+  git clone https://github.com/garagon/nanostack.git ~/.claude/skills/nanostack
+  cd ~/.claude/skills/nanostack && ./setup
+
+  # Per-repo
+  ./setup --local
+
+  # Multi-agent
+  ./setup --host auto
+HELP
+      exit 0
+      ;;
+    *) shift ;;
+  esac
+done
+
+case "$HOST" in
+  claude|codex|kiro|auto) ;;
+  *) echo "Unknown --host: $HOST (expected claude, codex, kiro, or auto)" >&2; exit 1 ;;
+esac
+
+# --local override
+if [ "$LOCAL_INSTALL" -eq 1 ]; then
+  SKILLS_DIR="$(pwd)/.claude/skills"
+  mkdir -p "$SKILLS_DIR"
+  # Clone or symlink nanostack into local skills
+  NANOSTACK_LOCAL="$SKILLS_DIR/nanostack"
+  if [ ! -e "$NANOSTACK_LOCAL" ]; then
+    ln -snf "$SOURCE_DIR" "$NANOSTACK_LOCAL"
+    echo "Linked $NANOSTACK_LOCAL → $SOURCE_DIR"
+  fi
+  HOST="claude"
+fi
+
+# ─── Auto-detect agents ──────────────────────────────────────
+INSTALL_CLAUDE=0
+INSTALL_CODEX=0
+INSTALL_KIRO=0
+
+if [ "$HOST" = "auto" ]; then
+  command -v claude >/dev/null 2>&1 && INSTALL_CLAUDE=1
+  command -v codex >/dev/null 2>&1 && INSTALL_CODEX=1
+  command -v kiro-cli >/dev/null 2>&1 && INSTALL_KIRO=1
+  command -v kiro >/dev/null 2>&1 && INSTALL_KIRO=1
+  # Default to claude if nothing detected
+  [ "$INSTALL_CLAUDE" -eq 0 ] && [ "$INSTALL_CODEX" -eq 0 ] && [ "$INSTALL_KIRO" -eq 0 ] && INSTALL_CLAUDE=1
+elif [ "$HOST" = "claude" ]; then
+  INSTALL_CLAUDE=1
+elif [ "$HOST" = "codex" ]; then
+  INSTALL_CODEX=1
+elif [ "$HOST" = "kiro" ]; then
+  INSTALL_KIRO=1
+fi
+
+# ─── Claude Code ──────────────────────────────────────────────
+# Creates symlinks from ~/.claude/skills/<skill> → nanostack/<skill>
+# so Claude Code discovers each skill as a top-level slash command.
+install_claude() {
+  local skills_dir="$1"
+  local linked=()
+
+  # Check we're inside a skills directory
+  local basename
+  basename="$(basename "$skills_dir")"
+  if [ "$basename" != "skills" ]; then
+    echo "  (skipped skill symlinks — not inside a skills/ directory)"
+    echo "  Recommended: git clone into ~/.claude/skills/nanostack"
+    return
+  fi
+
+  for skill in "${SKILLS[@]}"; do
+    local target="$skills_dir/$skill"
+    # Only create symlink if it doesn't exist as a real directory
+    if [ -L "$target" ] || [ ! -e "$target" ]; then
+      ln -snf "nanostack/$skill" "$target"
+      linked+=("$skill")
+    fi
+  done
+
+  if [ ${#linked[@]} -gt 0 ]; then
+    echo "  Linked skills: ${linked[*]}"
+  fi
+}
+
+# ─── OpenAI Codex ─────────────────────────────────────────────
+# Creates nanostack-<skill> directories with symlinks in ~/.codex/skills/
+install_codex() {
+  local codex_skills="${HOME}/.codex/skills"
+  mkdir -p "$codex_skills"
+
+  # Create runtime root with symlinks to source
+  local codex_root="$codex_skills/nanostack"
+  mkdir -p "$codex_root"
+  ln -snf "$SOURCE_DIR/SKILL.md" "$codex_root/SKILL.md"
+  ln -snf "$SOURCE_DIR/AGENTS.md" "$codex_root/AGENTS.md"
+
+  local linked=()
+  for skill in "${SKILLS[@]}"; do
+    local target="$codex_skills/nanostack-${skill}"
+    if [ -L "$target" ] || [ ! -e "$target" ]; then
+      ln -snf "$SOURCE_DIR/$skill" "$target"
+      linked+=("nanostack-${skill}")
+    fi
+  done
+
+  if [ ${#linked[@]} -gt 0 ]; then
+    echo "  Linked skills: ${linked[*]}"
+  fi
+}
+
+# ─── Amazon Kiro ──────────────────────────────────────────────
+# Copies SKILL.md files with path rewriting (Kiro doesn't follow symlinks well)
+install_kiro() {
+  local kiro_skills="${HOME}/.kiro/skills"
+  local kiro_root="$kiro_skills/nanostack"
+  mkdir -p "$kiro_root"
+
+  # Copy root files
+  sed -e 's|~/.claude/skills/nanostack|~/.kiro/skills/nanostack|g' \
+      -e 's|\.claude/skills|.kiro/skills|g' \
+      "$SOURCE_DIR/SKILL.md" > "$kiro_root/SKILL.md"
+  cp "$SOURCE_DIR/AGENTS.md" "$kiro_root/AGENTS.md"
+
+  for skill in "${SKILLS[@]}"; do
+    local target="$kiro_root/$skill"
+    rm -rf "$target"
+    cp -r "$SOURCE_DIR/$skill" "$target"
+    # Rewrite paths
+    while IFS= read -r mdfile; do
+      sed_inplace -e 's|~/.claude/skills/nanostack|~/.kiro/skills/nanostack|g' "$mdfile"
+    done < <(find "$target" -name "*.md")
+  done
+
+  find "$kiro_root" -path "*/bin/*" -type f -exec chmod +x {} \;
+}
+
+# ─── Config ──────────────────────────────────────────────────
+# Persist installation metadata to ~/.nanostack/setup.json
+write_setup_config() {
+  local config_dir="$HOME/.nanostack"
+  mkdir -p "$config_dir"
+
+  local agents="[]"
+  [ "$INSTALL_CLAUDE" -eq 1 ] && agents=$(echo "$agents" | jq '. + ["claude"]')
+  [ "$INSTALL_CODEX" -eq 1 ] && agents=$(echo "$agents" | jq '. + ["codex"]')
+  [ "$INSTALL_KIRO" -eq 1 ] && agents=$(echo "$agents" | jq '. + ["kiro"]')
+
+  jq -n \
+    --arg src "$SOURCE_DIR" \
+    --arg ver "$(git -C "$SOURCE_DIR" describe --tags 2>/dev/null || git -C "$SOURCE_DIR" rev-parse --short HEAD 2>/dev/null || echo 'unknown')" \
+    --argjson agents "$agents" \
+    --argjson local "$LOCAL_INSTALL" \
+    --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+    '{
+      schema_version: "1",
+      source: $src,
+      version: $ver,
+      agents: $agents,
+      local_install: ($local == 1),
+      installed_at: $date
+    }' > "$config_dir/setup.json"
+}
+
+# ─── Execute ──────────────────────────────────────────────────
+echo "Nanostack Setup"
+echo "================"
+echo ""
+
+if [ "$INSTALL_CLAUDE" -eq 1 ]; then
+  install_claude "$SKILLS_DIR"
+  if [ "$LOCAL_INSTALL" -eq 1 ]; then
+    echo "nanostack ready (claude, project-local)."
+  else
+    echo "nanostack ready (claude)."
+  fi
+  echo "  skills: $SKILLS_DIR"
+fi
+
+if [ "$INSTALL_CODEX" -eq 1 ]; then
+  install_codex
+  echo "nanostack ready (codex)."
+  echo "  skills: ${HOME}/.codex/skills"
+fi
+
+if [ "$INSTALL_KIRO" -eq 1 ]; then
+  install_kiro
+  echo "nanostack ready (kiro)."
+  echo "  skills: ${HOME}/.kiro/skills/nanostack"
+fi
+
+# Save installation config
+write_setup_config
+echo ""
+echo "  config: ~/.nanostack/setup.json"
+
+echo ""
+echo "Available skills:"
+for skill in "${SKILLS[@]}"; do
+  echo "  /$skill"
+done
+echo ""
+echo "Workflow: /think → /plan → build → /review → /qa → /security → /ship"
+echo "Safety:   /guard (activate on-demand)"
+echo ""
+echo "Configure: run bin/init-config.sh --interactive in any project"
+echo "Update:    cd $(basename "$NANOSTACK_DIR") && git pull"

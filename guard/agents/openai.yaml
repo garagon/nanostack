@@ -1,0 +1,6 @@
+interface:
+  display_name: "nanostack-guard"
+  short_description: "On-demand safety guardrails — blocks destructive operations, freezes writes outside scope, warns on risky commands."
+  default_prompt: "Use nanostack-guard when working near production or sensitive systems."
+policy:
+  allow_implicit_invocation: true

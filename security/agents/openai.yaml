@@ -1,0 +1,6 @@
+interface:
+  display_name: "nanostack-security"
+  short_description: "Security audit — OWASP Top 10 scan, STRIDE threat model, dependency vulnerability check, actionable fix report."
+  default_prompt: "Use nanostack-security to audit code for security vulnerabilities before shipping."
+policy:
+  allow_implicit_invocation: true

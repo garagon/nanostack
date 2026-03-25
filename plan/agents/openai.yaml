@@ -1,0 +1,6 @@
+interface:
+  display_name: "nanostack-plan"
+  short_description: "Implementation planning — scope assessment, file-level step-by-step plans with verification criteria."
+  default_prompt: "Use nanostack-plan to create an implementation plan before starting non-trivial work."
+policy:
+  allow_implicit_invocation: true

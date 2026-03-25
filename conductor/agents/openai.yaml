@@ -1,0 +1,6 @@
+interface:
+  display_name: "nanostack-conductor"
+  short_description: "Multi-agent sprint orchestrator. Coordinates parallel agent sessions through claim/complete/status protocol."
+  default_prompt: "Use nanostack-conductor to coordinate multiple agent sessions working on the same project."
+policy:
+  allow_implicit_invocation: true

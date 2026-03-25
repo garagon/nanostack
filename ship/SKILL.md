@@ -1,0 +1,130 @@
+---
+name: ship
+description: Use when code is ready to ship — creates PRs, merges, deploys, and verifies. Handles the full PR-to-production pipeline. Triggers on /ship.
+hooks:
+  PreToolUse:
+    - matcher: Bash
+      command: "./ship/bin/pre-ship-check.sh"
+---
+
+# /ship — Ship to Production
+
+You get code from "done" to "verified in production" in one pass. You own the full pipeline: pre-flight, PR, CI, deploy, verification. If something breaks after merge, you rollback first and debug second.
+
+## Process
+
+### 1. Pre-flight Check
+
+Run `ship/bin/pre-ship-check.sh` first. It checks for uncommitted changes, missing tests, staged secrets, and committing on main. If it reports warnings, address them before proceeding.
+
+Then verify:
+
+```bash
+# Are there uncommitted changes?
+git status
+
+# Do tests pass?
+# (use the project's test command — check package.json, Makefile, etc.)
+
+# Is the branch up to date with the target?
+git fetch origin && git log --oneline HEAD..origin/main | head -5
+```
+
+If tests fail, fix them first. Do not ship broken code with a "will fix later" comment.
+
+If the branch is behind, rebase or merge:
+```bash
+git rebase origin/main  # preferred for clean history
+# or
+git merge origin/main   # if rebase would be messy
+```
+
+### 2. Create PR
+
+Use the template at `ship/templates/pr-template.md` for the PR body.
+
+```bash
+gh pr create \
+  --title "{{concise title, under 70 chars}}" \
+  --body "$(cat <<'EOF'
+{{filled PR template}}
+EOF
+)"
+```
+
+**PR title rules:**
+- Under 70 characters
+- Start with a verb: Add, Fix, Update, Remove, Refactor
+- Describe the what, not the how
+- No ticket numbers in the title (put them in the body)
+
+**PR body rules:**
+- Summary: 1-3 bullet points of what changed and why
+- Test plan: how to verify this works
+- Link to related issues/tickets
+
+### 3. Monitor CI
+
+After creating the PR, check CI status:
+
+```bash
+gh pr checks <number> --watch
+```
+
+If CI fails:
+- Read the failure log: `gh pr checks <number> --fail-only`
+- Fix the issue and push
+- Do not retry without understanding the failure
+- If a test is genuinely flaky (not caused by your change), note it in the PR
+
+### 4. Post-Merge Verification
+
+After the PR is merged:
+
+```bash
+# Verify merge completed
+gh pr view <number> --json state,mergedAt
+
+# Check deploy pipeline
+gh run list --limit 3
+```
+
+If the project has a staging/production URL, run a **post-deploy checklist:**
+
+1. **Smoke test:** Does the changed feature work? (manual or `/qa --quick` against prod URL)
+2. **Error check:** `gh run view --log-failed` — any new errors in the deploy?
+3. **Side effects:** Did anything else break? Check the pages/endpoints adjacent to your change.
+4. **Metrics:** If monitoring exists (Grafana, Datadog, CloudWatch), check error rate and latency for 5 minutes post-deploy. Any spike > 2x baseline → investigate before moving on.
+
+If any check fails: **stop and rollback** before debugging. A broken prod is worse than a reverted feature.
+
+### 5. Rollback Plan
+
+If something goes wrong after deploy:
+
+```bash
+# Quick rollback: revert the merge commit
+git revert <merge-commit-sha> --mainline 1
+gh pr create --title "Revert: {{original PR title}}" --body "Reverting due to {{reason}}"
+```
+
+Document what went wrong for the team.
+
+## Output
+
+After shipping, close with a summary:
+```
+Ship: PR #42 created. CI passed. Deployed. Smoke test clean.
+Tests: 42 → 51 (+9 new). No regressions.
+```
+
+Include before/after test counts when tests were added during the sprint. Quantify the improvement.
+
+## Gotchas
+
+- **Don't create a PR without running tests locally.** CI catching your bugs is slower than you catching them.
+- **Don't force-push to a branch with open review comments.** It destroys the review context. Push new commits instead.
+- **Don't merge your own PR without review** unless it's a trivial fix (typo, config) and the team norm allows it.
+- **Don't deploy on Friday afternoons.** Unless you want to debug on Saturday morning. If the user insists, note the risk.
+- **One PR = one concern.** If your PR does two unrelated things, split it. The review will be faster and the rollback will be cleaner.
+- **Draft PRs are useful.** If the code isn't ready for review but you want CI to run, create a draft: `gh pr create --draft`

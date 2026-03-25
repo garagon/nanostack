@@ -1,0 +1,249 @@
+---
+name: security
+description: Use before shipping to production. Performs OWASP Top 10 audit and STRIDE threat modeling against the codebase. Supports --quick, --standard, --thorough modes. Also use when the user asks to check security, audit code, or review for vulnerabilities. Triggers on /security.
+---
+
+# /security — Security Audit
+
+You think like an attacker but report like a defender. The real attack surface is rarely the code you wrote. It is the secrets in git history, the dependency you forgot to update, the CI pipeline that leaks tokens, and the AI endpoint without rate limiting. Start there, not at the application logic.
+
+## Intensity Mode
+
+| Mode | Flag | Scope | Confidence gate |
+|------|------|-------|-----------------|
+| **Quick** | `--quick` | OWASP A01-A03 (top 3) + secrets scan + dependency check | 9/10 — only verified findings |
+| **Standard** | (default) | Full OWASP A01-A10 + STRIDE per component + dependencies | 7/10 — report anything with evidence |
+| **Thorough** | `--thorough` | Full OWASP + STRIDE + variant analysis + conflict detection + LLM security check | 3/10 — flag tentative findings marked as TENTATIVE |
+
+Auto-suggest:
+- Pre-commit on small changes → suggest `--quick`
+- Pre-ship standard feature → `--standard` (default)
+- Pre-ship auth/payment/infra, or first audit of a codebase → suggest `--thorough`
+
+**Thorough-only features:**
+- **Variant analysis:** When a finding is VERIFIED, search the entire codebase for the same pattern. One confirmed SQL injection means there may be more.
+- **Conflict detection:** Cross-reference with `/review` artifacts in `~/.nanostack/review/` for contradictions.
+- **TENTATIVE findings:** Below confidence gate but worth noting. Mark as `TENTATIVE: <description>`.
+
+## Setup (first run per project)
+
+First read project config: `bin/init-config.sh`. Use `detected` to scope which checks to run (skip Python checks in a Go project). Use `preferences.conflict_precedence` for cross-skill conflicts.
+
+Then check if `security/config.json` exists. If not, ask the user to classify the project:
+
+```
+What type of project is this?
+1. Public-facing (users/customers on the internet)
+2. Internal (employees/team only, no public access)
+3. Compliance-driven (fintech, health, regulated)
+4. Library/SDK (consumed by other developers)
+```
+
+Store the answer:
+
+```json
+// security/config.json
+{
+  "project_type": "public_facing",
+  "conflict_precedence": "security > review > qa",
+  "configured_at": "2026-03-25"
+}
+```
+
+This determines:
+- **Conflict precedence:** public_facing → security wins. internal → review wins. compliance → security wins hard.
+- **Default intensity:** public_facing/compliance → suggest `--thorough` on first audit. internal/library → `--standard`.
+- **OWASP priority:** public_facing → A01, A03, A07 first. internal → A02, A05, A09 first.
+
+If config already exists, read it and skip setup.
+
+## Process
+
+### 1. Detect Stack
+
+Auto-detect everything. Do NOT ask the user.
+
+- `package.json` → Node.js (check for next, express, fastify, hono)
+- `requirements.txt` / `pyproject.toml` → Python (flask, django, fastapi)
+- `go.mod` → Go (gin, echo, chi)
+- Database deps: prisma, drizzle, mongoose, sqlalchemy, gorm
+- BaaS: supabase, firebase, convex
+- Auth: next-auth, clerk, passport, lucia, jwt
+- AI/LLM: openai, anthropic, langchain, vercel ai sdk
+- Payments: stripe, paddle
+- Infra: `Dockerfile`, `docker-compose.yml`, `.github/workflows/`
+
+Report one-line: `Detected: Next.js 14 + Prisma + Stripe, Docker, GitHub Actions`
+
+### 2. Scan
+
+**CORE (always run):** secrets, injection, auth, config, dependencies, data-exposure.
+
+**CONDITIONAL (only if detected):** AI/LLM endpoints, payment webhook verification, Docker misconfig, CI/CD pipeline security, file upload handling.
+
+For extended check patterns, reference [oktsec/audit](https://github.com/oktsec/audit) checks library.
+
+Read `security/references/owasp-checklist.md` for the OWASP A01-A10 framework.
+
+#### Secrets Scan (CRITICAL — always first)
+
+Search for hardcoded credentials using regex patterns:
+
+| Pattern | What |
+|---------|------|
+| `AKIA[0-9A-Z]{16}` | AWS access key |
+| `sk_live_[a-zA-Z0-9]{24,}` | Stripe live key |
+| `sk-proj-[a-zA-Z0-9\-_]{20,}` | OpenAI project key |
+| `sk-ant-[a-zA-Z0-9\-_]{80,}` | Anthropic key |
+| `ghp_[a-zA-Z0-9]{36}` | GitHub PAT |
+| `-----BEGIN (RSA\|EC\|OPENSSH) PRIVATE KEY` | Private key in code |
+| `(postgres\|mysql\|mongodb\+srv):\/\/[^:\s]+:[^@\s]+@` | DB connection string with password |
+
+**Context rules:** In `*.test.*`, `*.example`, `README*`, or values containing `xxx`, `TODO`, `placeholder` → downgrade to INFO.
+
+**Git history check (mandatory):**
+```bash
+git log --all --oneline -- '.env' '.env.local' '*.pem' '*.key' 2>/dev/null | head -10
+```
+If results: secrets may be in history even if currently gitignored. **CRITICAL** — credentials must be rotated.
+
+**IMPORTANT: Credential redaction.** When reporting secrets, NEVER show the full value. First 4 chars + `****` (e.g., `sk-pr****`).
+
+#### CI/CD Pipeline Security (if `.github/workflows/` exists)
+
+| Check | What to look for |
+|-------|-----------------|
+| Unpinned actions | `uses: action@main` instead of `uses: action@sha256` |
+| `pull_request_target` | Runs with write access on fork PRs — code injection vector |
+| Secrets in logs | `echo ${{ secrets.* }}` or debug mode exposing secrets |
+| Overpermissioned `GITHUB_TOKEN` | `permissions: write-all` when only `contents: read` needed |
+
+#### AI/LLM Security (if AI deps detected)
+
+| Check | What to look for |
+|-------|-----------------|
+| API keys in client bundle | `NEXT_PUBLIC_OPENAI`, `NEXT_PUBLIC_ANTHROPIC` |
+| Prompt injection | User input interpolated into system prompts (`prompt + req.body`) |
+| Missing rate limiting | AI endpoints without rate limiter — attacker runs up your bill |
+| Unsanitized LLM output | LLM response rendered as HTML without escaping |
+
+### 3. False Positive/Negative Traps
+
+**Skip these (false positives):**
+- `.env.example` / `.env.sample` — placeholders, not leaks
+- `sk_test_` / `pk_test_` — Stripe TEST keys, INFO at most
+- UUIDs as identifiers — unguessable, don't flag
+- React/Angular output — XSS-safe by default, only flag escape hatches
+- `eval()` in build configs (webpack, vite) — normal tooling
+- `0.0.0.0` binding inside Docker — expected container behavior
+- SQL in migration files — expected patterns
+
+**Don't miss these (false negatives):**
+- Auth on route but not on data query — IDOR through direct DB access
+- Secrets removed from code but still in `git log`
+- Rate limiting on login but not on password reset
+- SSRF via URL params hitting cloud metadata (`169.254.169.254`)
+- `dangerouslySetInnerHTML` without DOMPurify sanitization
+
+### 3. STRIDE Threat Model
+
+For each component in the system, evaluate:
+
+| Threat | Question |
+|--------|----------|
+| **S**poofing | Can an attacker impersonate a user or service? |
+| **T**ampering | Can data be modified in transit or at rest without detection? |
+| **R**epudiation | Can actions be performed without an audit trail? |
+| **I**nformation Disclosure | Can sensitive data leak through errors, logs, or side channels? |
+| **D**enial of Service | Can the system be overwhelmed or made unavailable? |
+| **E**levation of Privilege | Can a user gain permissions they shouldn't have? |
+
+### 4. Produce Report
+
+Report findings progressively. Don't wait until the end. As each phase completes, output its findings immediately so the user sees work happening.
+
+Open with a summary line:
+```
+Security: CRITICAL (0) HIGH (1) MEDIUM (2) LOW (1) = 4 findings. Score: B
+```
+
+Scoring: A = 0 critical, 0 high, ≤3 medium. B = 0 critical, 1-2 high. C = 3+ high. D = 1-2 critical. F = 3+ critical.
+
+Use `security/templates/security-report.md` for the full structure. Every finding must include:
+- **What** the vulnerability is (specific, not vague)
+- **Where** it exists (file path and line number)
+- **How** to exploit it (proof of concept or clear scenario)
+- **Fix** with actual code, before and after (not "consider sanitizing input")
+- **Severity** using the classification below
+
+Always close with **What's solid**: 2-3 specific things the codebase does well on security. Not filler. If the auth is well implemented, say so and say why.
+
+## Severity Classification
+
+| Severity | Criteria | Examples |
+|----------|----------|---------|
+| **Critical** | Exploitable remotely, no authentication required, leads to full compromise | RCE, SQL injection with admin access, hardcoded admin credentials |
+| **High** | Exploitable with some conditions, significant impact | Stored XSS, IDOR exposing sensitive data, privilege escalation |
+| **Medium** | Requires specific conditions or has limited impact | CSRF, information disclosure via error messages, missing rate limiting |
+| **Low** | Informational or requires unlikely conditions | Missing security headers, verbose error messages, outdated non-vulnerable dependency |
+
+## Conflict Detection
+
+**In `--thorough` mode only.** Check for conflicts with prior `/review` findings:
+
+```bash
+bin/find-artifact.sh review 30
+```
+
+Read `reference/conflict-precedents.md` for known conflict patterns. When detected, mark inline:
+```
+### SEC-005: Excessive error detail
+**Conflicts with:** REV-003 → RESOLUTION: structured errors (code + generic msg to user, details to logs)
+```
+
+## Save Artifact (with `--save`)
+
+```bash
+bin/save-artifact.sh security '<json with phase, mode, summary, findings, conflicts>'
+```
+
+See `reference/artifact-schema.md` for the full schema.
+
+## Mode Summary
+
+| Aspect | Quick | Standard | Thorough |
+|--------|-------|----------|----------|
+| OWASP scope | A01-A03 only | Full A01-A10 | Full + variant analysis |
+| STRIDE | Skip | Per component | Per component + attack trees |
+| Dependencies | `npm audit` only | Full scan | Full + license check |
+| Conflict detection | Skip | Skip | Cross-reference /review |
+| Tentative findings | Skip | Skip | Report as TENTATIVE |
+| Confidence gate | 9/10 | 7/10 | 3/10 |
+
+## Gotchas
+
+- **If you find zero vulnerabilities, say so.** A clean audit is a valid result. Don't manufacture findings to justify the scan.
+- **Don't inflate severity.** Missing security headers on an internal tool is Low, not Medium. Calibrate to actual exploitability.
+- **Don't report theoretical vulnerabilities without evidence.** "This could be vulnerable to XSS" is not a finding. Show the input path, the sink, and the missing sanitization.
+- **Don't skip dependency scanning.** Run `npm audit`, `pip audit`, `go vuln check`, or equivalent. Known CVEs in dependencies are the lowest-hanging fruit.
+- **Don't ignore configuration.** `.env.example`, `docker-compose.yml`, CI/CD configs, and cloud IAM policies are part of the attack surface.
+- **Don't confuse defense-in-depth with redundancy.** Multiple layers of validation at different trust boundaries is correct. Validating the same thing three times in the same function is not.
+- **Authentication ≠ Authorization.** Checking that a user is logged in does not mean checking that they have permission to access the resource.
+- **Secrets in git history are still exposed.** Even if a secret was removed in a later commit, it exists in the history. Check with `git log -p --all -S 'password\|secret\|key\|token'`.
+- **Variant analysis is not optional in `--thorough`.** One confirmed finding means the pattern may exist elsewhere. Search for it.
+
+## Appendix: oktsec/audit Integration
+
+For deeper pattern-based scanning, install [oktsec/audit](https://github.com/oktsec/audit) — 130+ checks across 17 categories with auto stack detection and graded reports (A-F).
+
+```bash
+# Install as a skill (works alongside /security)
+npx skills add oktsec/audit
+```
+
+When oktsec/audit is installed, `/security` handles logic-level vulnerabilities (STRIDE, architecture review, conflict detection) while `/audit` handles pattern-based scanning (regex, dependency audit, config checks). They complement — don't duplicate.
+
+If oktsec CLI is available separately:
+```bash
+oktsec version 2>/dev/null && oktsec scan --path .
+```

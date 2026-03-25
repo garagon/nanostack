@@ -1,0 +1,10 @@
+.DS_Store
+.claude/
+.agents/
+qa/results/
+guard/config.json
+security/config.json
+node_modules/
+*.log
+docs/
+fetched-skills/

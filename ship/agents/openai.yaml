@@ -1,0 +1,6 @@
+interface:
+  display_name: "nanostack-ship"
+  short_description: "Shipping pipeline — PR creation, CI monitoring, post-merge verification, and rollback guidance."
+  default_prompt: "Use nanostack-ship to create PRs and ship code to production."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,6 @@
+interface:
+  display_name: "nanostack-review"
+  short_description: "Two-pass code review — structural correctness then adversarial edge-case hunting. Scales depth by diff size."
+  default_prompt: "Use nanostack-review to review code changes before merging."
+policy:
+  allow_implicit_invocation: true

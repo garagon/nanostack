@@ -1,0 +1,6 @@
+interface:
+  display_name: "nanostack-think"
+  short_description: "Strategic product thinking with YC-grade forcing questions, CEO cognitive patterns, and premise validation."
+  default_prompt: "Use nanostack-think for strategic product discovery and scope decisions."
+policy:
+  allow_implicit_invocation: true
