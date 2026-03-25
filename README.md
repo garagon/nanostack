@@ -2,7 +2,7 @@
 
 Minimal AI coding agent team skills for the full engineering workflow. Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan).
 
-Other tools help you write code faster. Nanostack questions what you're building before you build it. It tells you "that's a 3-week project, but this version ships today" and it's usually right. Then it plans, reviews, tests, audits security, and ships. One person does the work of a full team.
+Other tools help you write code faster. Nanostack questions what you're building before you build it. It tells you "that's a 3-week project, but this version ships today" and it's usually right. Then it plans, reviews, tests, audits security and ships. One person does the work of a full team.
 
 **8 skills. Any agent. Zero dependencies. Zero build step.**
 
@@ -73,7 +73,7 @@ Each skill feeds into the next. `/plan` writes an artifact that `/review` reads 
 | `/think` | **CEO / Founder** | Start here. Six forcing questions that reframe your product before you write code. Challenges premises, checks your ambition level, finds the narrowest wedge. |
 | `/plan` | **Eng Manager** | Scope, steps, files, risks, architecture checkpoint. Enforces product standards on frontend (shadcn/ui, SEO, LLM discoverability). |
 | `/review` | **Staff Engineer** | Two-pass code review: structural then adversarial. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan. |
-| `/qa` | **QA Lead** | Test your code, find bugs, fix them, re-verify. Browser, API, CLI, and debug modes. `--report-only` for findings without fixes. |
+| `/qa` | **QA Lead** | Test your code, find bugs, fix them, re-verify. Browser, API, CLI and debug modes. `--report-only` for findings without fixes. |
 | `/security` | **Security Engineer** | Auto-detects your stack, scans secrets, injection, auth, CI/CD, AI/LLM vulnerabilities. Graded report (A-F). Every finding includes the fix. |
 | `/ship` | **Release Engineer** | Pre-flight checks, PR creation, CI monitoring, post-deploy verification with error rate threshold. Rollback plan included. |
 
@@ -86,7 +86,7 @@ Each skill feeds into the next. `/plan` writes an artifact that `/review` reads 
 
 ### Intensity modes
 
-Not every change needs a full audit. `/review`, `/qa`, and `/security` support three modes:
+Not every change needs a full audit. `/review`, `/qa` and `/security` support three modes:
 
 | Mode | Flag | When to use |
 |------|------|-------------|
@@ -141,7 +141,7 @@ You said "security scanner." The agent said "you're building a prevention gate" 
 
 Nanostack works well with one agent. It gets interesting with three running at once.
 
-`/conductor` coordinates multiple sessions. Each agent claims a phase, executes it, and the next agent picks up the artifact. Review, QA, and security run in parallel because they all depend on build, not on each other.
+`/conductor` coordinates multiple sessions. Each agent claims a phase, executes it and the next agent picks up the artifact. Review, QA and security run in parallel because they all depend on build, not on each other.
 
 ```
 /think → /plan → build ─┬─ /review   (Agent A) ─┐
@@ -198,39 +198,91 @@ Full version in [`ZEN.md`](ZEN.md).
 
 ## Know-how
 
-Most AI coding tools are stateless. Every session starts from zero. Your agent doesn't remember that last month's auth refactor took three weeks because scope drifted twice, or that `/review` and `/security` disagreed on error verbosity and you resolved it with structured error codes.
+Most AI coding tools are stateless. Every session starts from zero. Nanostack remembers.
 
-Nanostack remembers.
+### Artifacts: how knowledge enters the system
 
-Every sprint produces structured artifacts — JSON from each phase, saved to `~/.nanostack/`. The know-how system turns those artifacts into a knowledge base that gets more useful the more you use it.
+Run any skill with `--save` and it writes structured JSON to `~/.nanostack/`:
 
-### What gets captured
+```
+/plan --save       →  ~/.nanostack/plan/20260325-143000.json
+/review --save     →  ~/.nanostack/review/20260325-150000.json
+/qa --save         →  ~/.nanostack/qa/20260325-151500.json
+/security --save   →  ~/.nanostack/security/20260325-152000.json
+```
 
-**Sprint journals.** One entry per sprint with the full decision trail: what `/think` reframed, what `/plan` scoped, what `/review` found, what `/security` graded, what `/ship` deployed.
+Each artifact captures the full output of that phase. A `/review --save` produces:
 
-**Conflict precedents.** When `/review` says "add detail to errors" and `/security` says "don't expose internals," the resolution gets recorded ([10 built-in](reference/conflict-precedents.md)). Next time the same tension appears, it's resolved instantly — not debated again. New precedents accumulate as you work.
+```json
+{
+  "phase": "review",
+  "mode": "standard",
+  "summary": { "blocking": 0, "should_fix": 2, "nitpicks": 1, "positive": 3 },
+  "scope_drift": { "status": "drift_detected", "out_of_scope_files": ["src/unplanned.ts"] },
+  "conflicts": [
+    { "finding_id": "REV-005", "conflicts_with": "SEC-003",
+      "tension": "complementary", "resolution": "structured error codes" }
+  ]
+}
+```
 
-**Learnings.** Things that surprised you. Patterns you noticed. Decisions you'd make differently. Captured in the moment, searchable later.
+Full schema in [`reference/artifact-schema.md`](reference/artifact-schema.md).
 
-**Analytics.** Phase counts, intensity modes, security score trends. See how your process changes over time — are you running more thorough reviews? Is scope drift decreasing? Are security grades improving?
+### Cross-skill intelligence
+
+Skills read each other's artifacts. This happens automatically when artifacts exist.
+
+`/review` finds the most recent `/plan` artifact and checks scope drift:
+
+```bash
+bin/find-artifact.sh plan 2     # find plan artifact from last 2 days for this project
+bin/scope-drift.sh              # compare planned files vs actual git changes
+```
+
+```json
+{ "status": "drift_detected", "out_of_scope_files": ["src/unplanned.ts"], "missing_files": ["tests/auth.test.ts"] }
+```
+
+`/security` finds the most recent `/review` artifact and detects conflicts. `/review` says "add detail to error messages." `/security` says "don't expose internals." Both are right. The resolution gets recorded in the artifact and matches against [10 built-in precedents](reference/conflict-precedents.md). New precedents accumulate as you work.
+
+### Knowledge extraction
+
+Three scripts turn raw artifacts into something you can read and search:
+
+**Sprint journals.** One entry per sprint with the full decision trail.
+
+```bash
+bin/sprint-journal.sh
+# → ~/.nanostack/know-how/journal/2026-03-25-myproject.md
+```
+
+Reads every artifact from the current sprint. Writes what `/think` reframed, what `/plan` scoped, what `/review` found, how conflicts were resolved, what `/security` graded, what `/ship` deployed. One file, one sprint, everything connected.
+
+**Analytics.** Phase counts, intensity modes, security trends across sprints.
+
+```bash
+bin/analytics.sh --obsidian
+# → ~/.nanostack/know-how/dashboard.md
+```
+
+After a few months you can see patterns: are security grades improving? Is scope drift happening less? Are you using `--thorough` more often on auth changes?
+
+**Learnings.** Things that surprised you during a sprint.
+
+```bash
+bin/capture-learning.sh "scope drift happened because we forgot to update the plan after changing the API contract"
+# → appends to ~/.nanostack/know-how/learnings/ongoing.md
+```
 
 ### The Obsidian vault
 
-Everything lives in `~/.nanostack/know-how/` and works as an Obsidian vault. Sprint journals link to conflict precedents. The dashboard links to journals. Learnings link to the sprints where they happened.
-
-```bash
-bin/sprint-journal.sh          # generate journal entry from sprint artifacts
-bin/analytics.sh --obsidian    # generate dashboard with phase counts and trends
-bin/capture-learning.sh "..."  # capture a learning from a sprint
-```
-
-Open `~/.nanostack/know-how/` in Obsidian and switch to graph view. Sprints, conflicts, and learnings are linked — you can trace any decision back to the sprint where it happened.
+Open `~/.nanostack/know-how/` as an Obsidian vault. Sprint journals link to conflict precedents. The dashboard links to recent journals. Learnings reference the sprint where they happened. Graph view shows how everything connects.
 
 ### Why this matters
 
-After ten sprints you have a decision log that shows how your team thinks. After fifty you have institutional knowledge that survives context switches, onboarding, and team changes. The data tells you where your process is strong and where it's weak.
+After ten sprints you have a decision log. After fifty you have institutional knowledge that survives context switches, onboarding and team changes. You can answer questions like "why did we choose structured error codes over verbose messages" by tracing back to the sprint where the conflict was resolved.
 
-No other AI coding tool does this. They help you write code today and forget everything tomorrow. Nanostack doesn't — every sprint makes the next one better.
+No other AI coding tool does this. They forget everything between sessions. Nanostack doesn't. Every sprint makes the next one better.
 
 ## Privacy
 
