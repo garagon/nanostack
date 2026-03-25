@@ -198,7 +198,25 @@ Full version in [`ZEN.md`](ZEN.md).
 
 ## Know-how
 
-Nanostack builds a personal knowledge base as you use it. Everything lives in `~/.nanostack/know-how/` and works as an Obsidian vault.
+Most AI coding tools are stateless. Every session starts from zero. Your agent doesn't remember that last month's auth refactor took three weeks because scope drifted twice, or that `/review` and `/security` disagreed on error verbosity and you resolved it with structured error codes.
+
+Nanostack remembers.
+
+Every sprint produces structured artifacts — JSON from each phase, saved to `~/.nanostack/`. The know-how system turns those artifacts into a knowledge base that gets more useful the more you use it.
+
+### What gets captured
+
+**Sprint journals.** One entry per sprint with the full decision trail: what `/think` reframed, what `/plan` scoped, what `/review` found, what `/security` graded, what `/ship` deployed.
+
+**Conflict precedents.** When `/review` says "add detail to errors" and `/security` says "don't expose internals," the resolution gets recorded ([10 built-in](reference/conflict-precedents.md)). Next time the same tension appears, it's resolved instantly — not debated again. New precedents accumulate as you work.
+
+**Learnings.** Things that surprised you. Patterns you noticed. Decisions you'd make differently. Captured in the moment, searchable later.
+
+**Analytics.** Phase counts, intensity modes, security score trends. See how your process changes over time — are you running more thorough reviews? Is scope drift decreasing? Are security grades improving?
+
+### The Obsidian vault
+
+Everything lives in `~/.nanostack/know-how/` and works as an Obsidian vault. Sprint journals link to conflict precedents. The dashboard links to journals. Learnings link to the sprints where they happened.
 
 ```bash
 bin/sprint-journal.sh          # generate journal entry from sprint artifacts
@@ -206,7 +224,13 @@ bin/analytics.sh --obsidian    # generate dashboard with phase counts and trends
 bin/capture-learning.sh "..."  # capture a learning from a sprint
 ```
 
-Open `~/.nanostack/know-how/` as an Obsidian vault. Sprint journals link to conflict precedents, the dashboard links to journals, learnings accumulate over time. The graph view connects everything.
+Open `~/.nanostack/know-how/` in Obsidian and switch to graph view. Sprints, conflicts, and learnings are linked — you can trace any decision back to the sprint where it happened.
+
+### Why this matters
+
+After ten sprints you have a decision log that shows how your team thinks. After fifty you have institutional knowledge that survives context switches, onboarding, and team changes. The data tells you where your process is strong and where it's weak.
+
+No other AI coding tool does this. They help you write code today and forget everything tomorrow. Nanostack doesn't — every sprint makes the next one better.
 
 ## Privacy
 
