@@ -60,7 +60,7 @@ jq -n \
     },
     preferences: {
       default_intensity: "standard",
-      auto_save: false,
+      auto_save: true,
       conflict_precedence: "security > review > qa"
     },
     configured_at: $date

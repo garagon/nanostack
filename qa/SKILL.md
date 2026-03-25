@@ -110,13 +110,15 @@ Then the full report:
 
 Report progress as you go. After each test group (happy path, error states, edge cases), output results immediately. Don't wait until the end to dump everything.
 
-## Save Artifact (with `--save`)
+## Save Artifact
+
+Always persist the QA results after completing the run:
 
 ```bash
-bin/save-artifact.sh qa '<json with phase, mode, summary, findings>'
+bin/save-artifact.sh qa '<json with phase, mode, summary including wtf_likelihood, findings>'
 ```
 
-See `reference/artifact-schema.md` for the full schema.
+See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `~/.nanostack/config.json`.
 
 ## Mode Summary
 

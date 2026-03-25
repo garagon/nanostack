@@ -32,7 +32,7 @@ Calibrate depth by diff size: **Small** (< 100 lines, quick pass) / **Medium** (
 
 ## Step 0: Scope Drift Check
 
-**Skip in `--quick` mode.** In `--standard`, run if a recent plan exists. In `--thorough`, always run — drift is BLOCKING.
+Always run if a recent plan artifact exists. In `--quick` mode, drift is informational. In `--standard`, drift is informational. In `--thorough`, drift is BLOCKING.
 
 Run the scope drift script:
 
@@ -102,15 +102,15 @@ When a conflict is detected, mark it inline:
 **In `--standard` mode:** Document conflicts inline in output.
 **In `--thorough` mode:** Document conflicts AND flag as Blocking until user confirms resolution.
 
-## Save Artifact (with `--save`)
+## Save Artifact
 
-If the user invoked `/review --save`, persist using the shared script:
+Always persist the review after completing it:
 
 ```bash
 bin/save-artifact.sh review '<json with phase, mode, summary, scope_drift, findings, conflicts>'
 ```
 
-See `reference/artifact-schema.md` for the full schema.
+See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `~/.nanostack/config.json`.
 
 ## Mode Summary
 
@@ -118,7 +118,7 @@ See `reference/artifact-schema.md` for the full schema.
 |--------|-------|----------|----------|
 | Pass 1 (structural) | Correctness only | Full checklist | Full checklist + architecture |
 | Pass 2 (adversarial) | Skip | Standard | Deep + threat model |
-| Scope drift | Skip | Check if plan exists | Always, BLOCKING on drift |
+| Scope drift | Informational | Informational | BLOCKING on drift |
 | Conflict detection | Auto-resolve | Document inline | BLOCKING until resolved |
 | Output | Blocking issues only | All categories | All + rationale per finding |
 

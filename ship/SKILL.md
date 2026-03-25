@@ -110,12 +110,26 @@ gh pr create --title "Revert: {{original PR title}}" --body "Reverting due to {{
 
 Document what went wrong for the team.
 
+## Save Artifact and Generate Sprint Journal
+
+After shipping, persist the result and generate the sprint journal:
+
+```bash
+bin/save-artifact.sh ship '<json with phase, summary including pr_number, pr_url, title, status, ci_passed>'
+bin/sprint-journal.sh
+```
+
+The sprint journal reads all phase artifacts (think, plan, review, qa, security, ship) and writes a single entry to `~/.nanostack/know-how/journal/`. This happens automatically on every successful ship.
+
+The user can disable auto-saving by setting `auto_save: false` in `~/.nanostack/config.json`.
+
 ## Output
 
 After shipping, close with a summary:
 ```
 Ship: PR #42 created. CI passed. Deployed. Smoke test clean.
 Tests: 42 → 51 (+9 new). No regressions.
+Journal: ~/.nanostack/know-how/journal/2026-03-25-myproject.md
 ```
 
 Include before/after test counts when tests were added during the sprint. Quantify the improvement.

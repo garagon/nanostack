@@ -12,11 +12,11 @@ You have access to a set of composable engineering workflow skills. Each skill i
 | Skill | When to use | Modes | Key files |
 |-------|-------------|-------|-----------|
 | `/think` | Before planning — strategic product thinking, premise validation, scope decisions. | — | `think/references/forcing-questions.md`, `think/references/cognitive-patterns.md` |
-| `/plan` | Before starting any non-trivial work. Produces a scoped, actionable plan. | `--save` | `plan/templates/plan-template.md` |
-| `/review` | After code is written. Two-pass review + scope drift detection + conflict resolution. | `--quick` `--standard` `--thorough` `--save` | `review/checklist.md`, `reference/conflict-precedents.md` |
-| `/qa` | To verify code works. Browser-based testing with Playwright, plus root-cause debugging. | `--quick` `--standard` `--thorough` `--save` | `qa/bin/screenshot.sh` |
-| `/security` | Before shipping. OWASP Top 10 + STRIDE + variant analysis + conflict detection. | `--quick` `--standard` `--thorough` `--save` | `security/references/owasp-checklist.md`, `security/templates/security-report.md` |
-| `/ship` | To create PRs, merge, deploy, and verify. | — | `ship/templates/pr-template.md` |
+| `/plan` | Before starting any non-trivial work. Produces a scoped, actionable plan. | — | `plan/templates/plan-template.md` |
+| `/review` | After code is written. Two-pass review + scope drift detection + conflict resolution. | `--quick` `--standard` `--thorough` | `review/checklist.md`, `reference/conflict-precedents.md` |
+| `/qa` | To verify code works. Browser-based testing with Playwright, plus root-cause debugging. | `--quick` `--standard` `--thorough` | `qa/bin/screenshot.sh` |
+| `/security` | Before shipping. OWASP Top 10 + STRIDE + variant analysis + conflict detection. | `--quick` `--standard` `--thorough` | `security/references/owasp-checklist.md`, `security/templates/security-report.md` |
+| `/ship` | To create PRs, merge, deploy, and verify. Generates sprint journal on success. | — | `ship/templates/pr-template.md` |
 | `/guard` | When working near production, destructive operations, or sensitive systems. | — | `guard/bin/check-dangerous.sh` |
 | `/conductor` | Orchestrate parallel agent sessions through a sprint. Coordinate task claiming and artifact handoff. | `start` `claim` `complete` `status` | `conductor/bin/sprint.sh` |
 
@@ -59,7 +59,7 @@ Skills auto-suggest a mode based on the diff, but the user always decides.
 
 ## Artifact Persistence
 
-Skills can save their output with `--save` for trend tracking and cross-skill coordination:
+Skills automatically save their output to `~/.nanostack/` after every run:
 
 ```bash
 ~/.nanostack/<phase>/<timestamp>.json
@@ -68,7 +68,14 @@ Skills can save their output with `--save` for trend tracking and cross-skill co
 This enables:
 - **Scope drift detection** — `/review` compares planned vs actual files
 - **Conflict detection** — `/review` and `/security` cross-reference each other's findings
+- **Sprint journals** — `/ship` generates a journal entry from all phase artifacts
 - **Trend tracking** — Are security findings decreasing over time?
+
+Auto-saving is on by default. The user can disable it by setting `auto_save: false` in `~/.nanostack/config.json`.
+
+Artifacts are validated before saving: `save-artifact.sh` rejects invalid JSON, missing required fields (`phase`, `summary`), and phase mismatches.
+
+To discard artifacts from a bad session: `bin/discard-sprint.sh` (removes artifacts and journal entry for the current project and date).
 
 ## Conflict Resolution
 
@@ -122,7 +129,7 @@ Suggest skills when context matches — don't wait for the user to remember:
 ## Usage Rules
 
 - Start with `/think` for new products or when the "what" is unclear
-- Run `/plan` before building anything that touches more than 3 files — use `--save` for Medium/Large scope
+- Run `/plan` before building anything that touches more than 3 files
 - Run `/review` on your own code — the adversarial pass catches what you missed
 - `/security` is not optional before shipping to production
 - `/guard` is on-demand — activate it, don't leave it always on

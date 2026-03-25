@@ -124,6 +124,16 @@ Produce a clear brief for the next phase:
 Ready for: /plan
 ```
 
+## Save Artifact
+
+Always persist the think output after the handoff brief:
+
+```bash
+bin/save-artifact.sh think '<json with phase, summary including value_proposition, scope_mode, target_user, narrowest_wedge, key_risk, premise_validated>'
+```
+
+See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `~/.nanostack/config.json`.
+
 ## Gotchas
 
 - **Don't skip the diagnostic to "save time."** The diagnostic IS the time savings — it prevents building the wrong thing.
