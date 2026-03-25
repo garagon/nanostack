@@ -198,20 +198,22 @@ Full version in [`ZEN.md`](ZEN.md).
 
 ## Know-how
 
-Most AI coding tools are stateless. Every session starts from zero. Nanostack remembers.
+Most AI coding tools are stateless. Every session starts from zero. Nanostack builds knowledge as you work without extra commands.
 
-### Artifacts: how knowledge enters the system
+### Every skill saves automatically
 
-Run any skill with `--save` and it writes structured JSON to `~/.nanostack/`:
+Every skill persists its output to `~/.nanostack/` after every run. You don't add flags. It just happens.
 
 ```
-/plan --save       →  ~/.nanostack/plan/20260325-143000.json
-/review --save     →  ~/.nanostack/review/20260325-150000.json
-/qa --save         →  ~/.nanostack/qa/20260325-151500.json
-/security --save   →  ~/.nanostack/security/20260325-152000.json
+/think     →  ~/.nanostack/think/20260325-140000.json
+/plan      →  ~/.nanostack/plan/20260325-143000.json
+/review    →  ~/.nanostack/review/20260325-150000.json
+/qa        →  ~/.nanostack/qa/20260325-151500.json
+/security  →  ~/.nanostack/security/20260325-152000.json
+/ship      →  ~/.nanostack/ship/20260325-160000.json
 ```
 
-Each artifact captures the full output of that phase. A `/review --save` produces:
+A review artifact captures everything: findings, scope drift, conflicts resolved.
 
 ```json
 {
@@ -226,63 +228,65 @@ Each artifact captures the full output of that phase. A `/review --save` produce
 }
 ```
 
-Full schema in [`reference/artifact-schema.md`](reference/artifact-schema.md).
+Full schema in [`reference/artifact-schema.md`](reference/artifact-schema.md). To disable, set `auto_save: false` in `~/.nanostack/config.json`.
 
-### Cross-skill intelligence
+### Skills read each other
 
-Skills read each other's artifacts. This happens automatically when artifacts exist.
+`/review` automatically finds the most recent `/plan` artifact and checks scope drift: did you touch files outside the plan? Did you skip files that were in it?
 
-`/review` finds the most recent `/plan` artifact and checks scope drift:
+```
+/plan     →  saves planned_files list
+/review   →  finds plan, compares against git diff, reports:
+              "drift_detected: src/unplanned.ts out of scope, tests/auth.test.ts missing"
+```
+
+`/security` automatically finds the most recent `/review` artifact and detects conflicts. `/review` says "add detail to error messages." `/security` says "don't expose internals." The resolution gets matched against [10 built-in precedents](reference/conflict-precedents.md) and recorded.
+
+```
+/review   →  saves "REV-003: error messages too vague"
+/security →  finds review, detects conflict, resolves:
+              "structured errors: code + generic msg to user, details to logs"
+```
+
+This happens in all modes. No flags needed. If an artifact exists, the next skill reads it.
+
+### Sprint journal on /ship
+
+When you run `/ship` and the PR lands, it automatically generates a sprint journal:
+
+```
+/ship  →  saves PR data
+       →  runs bin/sprint-journal.sh
+       →  writes ~/.nanostack/know-how/journal/2026-03-25-myproject.md
+```
+
+The journal reads every phase artifact from the sprint and writes one file with the full decision trail: what `/think` reframed, what `/plan` scoped, what `/review` found, how conflicts were resolved, what `/security` graded.
+
+### Analytics and learnings
+
+Two optional scripts for when you want to see patterns across sprints:
 
 ```bash
-bin/find-artifact.sh plan 2     # find plan artifact from last 2 days for this project
-bin/scope-drift.sh              # compare planned files vs actual git changes
+bin/analytics.sh --obsidian    # dashboard with phase counts and security trends
+bin/capture-learning.sh "..."  # append a learning to the knowledge base
 ```
 
-```json
-{ "status": "drift_detected", "out_of_scope_files": ["src/unplanned.ts"], "missing_files": ["tests/auth.test.ts"] }
-```
+### Discard a bad session
 
-`/security` finds the most recent `/review` artifact and detects conflicts. `/review` says "add detail to error messages." `/security` says "don't expose internals." Both are right. The resolution gets recorded in the artifact and matches against [10 built-in precedents](reference/conflict-precedents.md). New precedents accumulate as you work.
-
-### Knowledge extraction
-
-Three scripts turn raw artifacts into something you can read and search:
-
-**Sprint journals.** One entry per sprint with the full decision trail.
+If a sprint went wrong (agent hallucinated findings, aborted halfway, bad data), discard it:
 
 ```bash
-bin/sprint-journal.sh
-# → ~/.nanostack/know-how/journal/2026-03-25-myproject.md
+bin/discard-sprint.sh                     # discard all artifacts from today for this project
+bin/discard-sprint.sh --phase review      # discard only review artifacts
+bin/discard-sprint.sh --date 2026-03-24   # discard artifacts from a specific date
+bin/discard-sprint.sh --dry-run           # show what would be deleted without deleting
 ```
 
-Reads every artifact from the current sprint. Writes what `/think` reframed, what `/plan` scoped, what `/review` found, how conflicts were resolved, what `/security` graded, what `/ship` deployed. One file, one sprint, everything connected.
-
-**Analytics.** Phase counts, intensity modes, security trends across sprints.
-
-```bash
-bin/analytics.sh --obsidian
-# → ~/.nanostack/know-how/dashboard.md
-```
-
-After a few months you can see patterns: are security grades improving? Is scope drift happening less? Are you using `--thorough` more often on auth changes?
-
-**Learnings.** Things that surprised you during a sprint.
-
-```bash
-bin/capture-learning.sh "scope drift happened because we forgot to update the plan after changing the API contract"
-# → appends to ~/.nanostack/know-how/learnings/ongoing.md
-```
+This removes artifacts and the journal entry. Analytics recalculate on next run.
 
 ### The Obsidian vault
 
-Open `~/.nanostack/know-how/` as an Obsidian vault. Sprint journals link to conflict precedents. The dashboard links to recent journals. Learnings reference the sprint where they happened. Graph view shows how everything connects.
-
-### Why this matters
-
-After ten sprints you have a decision log. After fifty you have institutional knowledge that survives context switches, onboarding and team changes. You can answer questions like "why did we choose structured error codes over verbose messages" by tracing back to the sprint where the conflict was resolved.
-
-No other AI coding tool does this. They forget everything between sessions. Nanostack doesn't. Every sprint makes the next one better.
+Open `~/.nanostack/know-how/` in Obsidian. Sprint journals link to conflict precedents. The dashboard links to journals. Graph view shows how sprints, conflicts and learnings connect over time.
 
 ## Privacy
 

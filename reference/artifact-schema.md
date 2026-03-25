@@ -98,7 +98,8 @@ All artifacts share this base structure:
     "tests_passed": 11,
     "tests_failed": 1,
     "bugs_found": 1,
-    "bugs_fixed": 1
+    "bugs_fixed": 1,
+    "wtf_likelihood": 15
   },
   "findings": [
     {

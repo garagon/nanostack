@@ -76,17 +76,17 @@ If none of these apply (pure backend, CLI, library), skip this section.
 
 Present the plan to the user. Wait for explicit approval before executing. If the user modifies the plan, update it before proceeding.
 
-### 7. Save Artifact (with `--save`)
+### 7. Save Artifact
 
-If the user invoked `/plan --save`, persist the plan for scope drift detection and trend tracking:
+Always persist the plan after presenting it to the user:
 
 ```bash
 bin/save-artifact.sh plan '<json with phase, summary including planned_files array>'
 ```
 
-The `planned_files` list is critical — `/review` uses it for scope drift detection via `bin/scope-drift.sh`. See `reference/artifact-schema.md` for the full schema.
+The `planned_files` list is critical. `/review` uses it for scope drift detection via `bin/scope-drift.sh`. See `reference/artifact-schema.md` for the full schema.
 
-**Always suggest `--save` for Medium and Large scope plans.** Small scope plans rarely need scope tracking.
+The user can disable auto-saving by setting `auto_save: false` in `~/.nanostack/config.json`.
 
 ## Gotchas
 

@@ -189,7 +189,7 @@ Always close with **What's solid**: 2-3 specific things the codebase does well o
 
 ## Conflict Detection
 
-**In `--thorough` mode only.** Check for conflicts with prior `/review` findings:
+Always check for conflicts with prior `/review` findings if a review artifact exists:
 
 ```bash
 bin/find-artifact.sh review 30
@@ -201,13 +201,19 @@ Read `reference/conflict-precedents.md` for known conflict patterns. When detect
 **Conflicts with:** REV-003 → RESOLUTION: structured errors (code + generic msg to user, details to logs)
 ```
 
-## Save Artifact (with `--save`)
+In `--quick` mode, apply default precedence (security > review) without documenting.
+In `--standard` mode, document conflicts inline.
+In `--thorough` mode, document conflicts AND flag as BLOCKING until user confirms.
+
+## Save Artifact
+
+Always persist the security audit after completing it:
 
 ```bash
 bin/save-artifact.sh security '<json with phase, mode, summary, findings, conflicts>'
 ```
 
-See `reference/artifact-schema.md` for the full schema.
+See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `~/.nanostack/config.json`.
 
 ## Mode Summary
 
@@ -216,7 +222,7 @@ See `reference/artifact-schema.md` for the full schema.
 | OWASP scope | A01-A03 only | Full A01-A10 | Full + variant analysis |
 | STRIDE | Skip | Per component | Per component + attack trees |
 | Dependencies | `npm audit` only | Full scan | Full + license check |
-| Conflict detection | Skip | Skip | Cross-reference /review |
+| Conflict detection | Auto-resolve | Document inline | BLOCKING until resolved |
 | Tentative findings | Skip | Skip | Report as TENTATIVE |
 | Confidence gate | 9/10 | 7/10 | 3/10 |
 
