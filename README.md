@@ -2,7 +2,7 @@
 
 Minimal AI coding agent team skills for the full engineering workflow. Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan).
 
-Other tools help you write code faster. Nanostack questions what you're building before you build it. It tells you "that's a 3-week project, but this version ships today" and it's usually right. Then it plans, reviews, tests, audits security, and ships. One person does the work of a full team.
+Other tools help you write code faster. Nanostack questions what you're building before you build it. It tells you "that's a 3-week project, but this version ships today" and it's usually right. Then it plans, reviews, tests, audits security and ships. One person does the work of a full team.
 
 **8 skills. Any agent. Zero dependencies. Zero build step.**
 
@@ -73,7 +73,7 @@ Each skill feeds into the next. `/plan` writes an artifact that `/review` reads 
 | `/think` | **CEO / Founder** | Start here. Six forcing questions that reframe your product before you write code. Challenges premises, checks your ambition level, finds the narrowest wedge. |
 | `/plan` | **Eng Manager** | Scope, steps, files, risks, architecture checkpoint. Enforces product standards on frontend (shadcn/ui, SEO, LLM discoverability). |
 | `/review` | **Staff Engineer** | Two-pass code review: structural then adversarial. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan. |
-| `/qa` | **QA Lead** | Test your code, find bugs, fix them, re-verify. Browser, API, CLI, and debug modes. `--report-only` for findings without fixes. |
+| `/qa` | **QA Lead** | Test your code, find bugs, fix them, re-verify. Browser, API, CLI and debug modes. `--report-only` for findings without fixes. |
 | `/security` | **Security Engineer** | Auto-detects your stack, scans secrets, injection, auth, CI/CD, AI/LLM vulnerabilities. Graded report (A-F). Every finding includes the fix. |
 | `/ship` | **Release Engineer** | Pre-flight checks, PR creation, CI monitoring, post-deploy verification with error rate threshold. Rollback plan included. |
 
@@ -86,7 +86,7 @@ Each skill feeds into the next. `/plan` writes an artifact that `/review` reads 
 
 ### Intensity modes
 
-Not every change needs a full audit. `/review`, `/qa`, and `/security` support three modes:
+Not every change needs a full audit. `/review`, `/qa` and `/security` support three modes:
 
 | Mode | Flag | When to use |
 |------|------|-------------|
@@ -141,7 +141,7 @@ You said "security scanner." The agent said "you're building a prevention gate" 
 
 Nanostack works well with one agent. It gets interesting with three running at once.
 
-`/conductor` coordinates multiple sessions. Each agent claims a phase, executes it, and the next agent picks up the artifact. Review, QA, and security run in parallel because they all depend on build, not on each other.
+`/conductor` coordinates multiple sessions. Each agent claims a phase, executes it and the next agent picks up the artifact. Review, QA and security run in parallel because they all depend on build, not on each other.
 
 ```
 /think → /plan → build ─┬─ /review   (Agent A) ─┐
@@ -202,17 +202,17 @@ Most AI coding tools are stateless. Every session starts from zero. Your agent d
 
 Nanostack remembers.
 
-Every sprint produces structured artifacts — JSON from each phase, saved to `~/.nanostack/`. The know-how system turns those artifacts into a knowledge base that gets more useful the more you use it.
+Every sprint produces structured artifacts: JSON from each phase, saved to `~/.nanostack/`. The know-how system turns those artifacts into a knowledge base that gets more useful the more you use it.
 
 ### What gets captured
 
 **Sprint journals.** One entry per sprint with the full decision trail: what `/think` reframed, what `/plan` scoped, what `/review` found, what `/security` graded, what `/ship` deployed.
 
-**Conflict precedents.** When `/review` says "add detail to errors" and `/security` says "don't expose internals," the resolution gets recorded ([10 built-in](reference/conflict-precedents.md)). Next time the same tension appears, it's resolved instantly — not debated again. New precedents accumulate as you work.
+**Conflict precedents.** When `/review` says "add detail to errors" and `/security` says "don't expose internals," the resolution gets recorded ([10 built-in](reference/conflict-precedents.md)). Next time the same tension appears, it's resolved instantly. Not debated again. New precedents accumulate as you work.
 
 **Learnings.** Things that surprised you. Patterns you noticed. Decisions you'd make differently. Captured in the moment, searchable later.
 
-**Analytics.** Phase counts, intensity modes, security score trends. See how your process changes over time — are you running more thorough reviews? Is scope drift decreasing? Are security grades improving?
+**Analytics.** Phase counts, intensity modes, security score trends. See how your process changes over time. Are you running more thorough reviews? Is scope drift decreasing? Are security grades improving?
 
 ### The Obsidian vault
 
@@ -224,13 +224,13 @@ bin/analytics.sh --obsidian    # generate dashboard with phase counts and trends
 bin/capture-learning.sh "..."  # capture a learning from a sprint
 ```
 
-Open `~/.nanostack/know-how/` in Obsidian and switch to graph view. Sprints, conflicts, and learnings are linked — you can trace any decision back to the sprint where it happened.
+Open `~/.nanostack/know-how/` in Obsidian and switch to graph view. Sprints, conflicts and learnings are linked. You can trace any decision back to the sprint where it happened.
 
 ### Why this matters
 
-After ten sprints you have a decision log that shows how your team thinks. After fifty you have institutional knowledge that survives context switches, onboarding, and team changes. The data tells you where your process is strong and where it's weak.
+After ten sprints you have a decision log that shows how your team thinks. After fifty you have institutional knowledge that survives context switches, onboarding and team changes. The data tells you where your process is strong and where it's weak.
 
-No other AI coding tool does this. They help you write code today and forget everything tomorrow. Nanostack doesn't — every sprint makes the next one better.
+No other AI coding tool does this. They help you write code today and forget everything tomorrow. Nanostack doesn't. Every sprint makes the next one better.
 
 ## Privacy
 
