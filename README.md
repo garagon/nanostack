@@ -151,6 +151,48 @@ Nanostack works well with one agent. It gets interesting with three running at o
 
 No daemon. No message queue. Just `mkdir` for atomic locking, JSON for state, symlinks for artifact handoff.
 
+## Guard
+
+AI agents make mistakes. They run `rm -rf` when they mean `rm -r`, force push to main when they mean to push to a branch, pipe untrusted URLs to shell. `/guard` catches these before they execute.
+
+### Three tiers
+
+Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude-code-auto-mode), guard evaluates every command through three tiers:
+
+**Tier 1: Allowlist.** Commands like `git status`, `ls`, `cat`, `jq` skip all checks. They can't cause damage.
+
+**Tier 2: In-project.** Operations that only touch files inside the current git repo pass through. If the agent writes a bad file, you revert it. Version control is the safety net.
+
+**Tier 3: Pattern matching.** Everything else is checked against block and warn rules. 28 block rules cover mass deletion, history destruction, database drops, production deploys, remote code execution, security degradation and safety bypasses. 9 warn rules cover operations that need attention but not blocking.
+
+### Deny-and-continue
+
+When guard blocks a command, it doesn't just say "no." It suggests a safer alternative:
+
+```
+BLOCKED [G-007] Force push overwrites remote history
+Category: history-destruction
+Command: git push --force origin main
+
+Safer alternative: git push --force-with-lease (safer, fails if remote changed)
+```
+
+The agent reads this and retries with the safer command. No manual intervention needed.
+
+### Configurable rules
+
+All rules live in [`guard/rules.json`](guard/rules.json). Each rule has an ID, regex pattern, category, description and (for block rules) a safer alternative. Add your own:
+
+```json
+{
+  "id": "G-100",
+  "pattern": "terraform destroy",
+  "category": "infra-destruction",
+  "description": "Destroy all Terraform-managed infrastructure",
+  "alternative": "terraform plan -destroy first to review what would be removed"
+}
+```
+
 ## Install
 
 ```bash
