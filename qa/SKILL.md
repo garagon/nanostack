@@ -132,8 +132,13 @@ See `reference/artifact-schema.md` for the full schema. The user can disable aut
 
 ## Next Step
 
-After QA is complete and the artifact is saved, tell the user what's next:
+After QA is complete and the artifact is saved:
 
+**If AUTOPILOT is active and tests pass:** Proceed to `/ship`. Show: `Autopilot: qa passed (X tests, 0 failed). Running /ship...`
+
+**If AUTOPILOT is active but tests fail:** Stop and ask the user. Show failures and wait.
+
+**Otherwise:** Tell the user:
 > QA complete. Remaining steps:
 > - `/review` to run code review (if not done yet)
 > - `/security` to audit for vulnerabilities (if not done yet)

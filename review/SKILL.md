@@ -124,8 +124,13 @@ See `reference/artifact-schema.md` for the full schema. The user can disable aut
 
 ## Next Step
 
-After the review is complete and the artifact is saved, tell the user what's next in the sprint:
+After the review is complete and the artifact is saved:
 
+**If AUTOPILOT is active and no blocking issues found:** Proceed directly to the next pending skill (`/security` or `/qa`). Show: `Autopilot: review complete (X findings, 0 blocking). Running /security...`
+
+**If AUTOPILOT is active but blocking issues found:** Stop and ask the user to resolve. Show the blocking issues and wait. After resolution, continue autopilot.
+
+**Otherwise:** Tell the user:
 > Review complete. Remaining steps:
 > - `/security` to audit for vulnerabilities (if not done yet)
 > - `/qa` to test that everything works (if not done yet)

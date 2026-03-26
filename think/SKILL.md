@@ -1,6 +1,6 @@
 ---
 name: think
-description: Use before planning when you need strategic clarity — product discovery, scope decisions, premise validation. Applies YC-grade product thinking to challenge assumptions and find the narrowest valuable wedge. Triggers on /think, /office-hours, /ceo-review.
+description: Use before planning when you need strategic clarity — product discovery, scope decisions, premise validation. Applies YC-grade product thinking to challenge assumptions and find the narrowest valuable wedge. Supports --autopilot to run the full sprint automatically after approval. Triggers on /think, /office-hours, /ceo-review.
 ---
 
 # /think — Strategic Product Thinking
@@ -152,11 +152,23 @@ See `reference/artifact-schema.md` for the full schema. The user can disable aut
 
 ## Next Step
 
-After the Think Summary and artifact are saved, tell the user:
+After the Think Summary and artifact are saved:
+
+**If `--autopilot` was used (or the user said "autopilot", "run everything", "ship it end to end"):**
+
+Tell the user:
+
+> Autopilot active. Proceeding with the full sprint: /nano-plan, build, /review, /qa, /security, /ship. I'll only stop for blocking issues or product questions I can't answer.
+
+Then proceed directly to `/nano-plan` without waiting. Set `AUTOPILOT=true` in your context and carry it through every subsequent skill.
+
+**Otherwise (default):**
+
+Tell the user:
 
 > Ready for `/nano-plan`. Say `/nano-plan` to create the implementation plan, or adjust the brief first.
 
-Do NOT proceed to planning automatically. Wait for the user to invoke `/nano-plan`.
+Wait for the user to invoke `/nano-plan`.
 
 ## Gotchas
 
