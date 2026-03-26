@@ -145,8 +145,8 @@ Nanostack works well with one agent. It gets interesting with three running at o
 
 ```
 /think → /nano-plan → build ─┬─ /review   (Agent A) ─┐
-                        ├─ /qa       (Agent B)  ├─ /ship
-                        └─ /security (Agent C) ─┘
+                              ├─ /qa       (Agent B)  ├─ /ship
+                              └─ /security (Agent C) ─┘
 ```
 
 No daemon. No message queue. Just `mkdir` for atomic locking, JSON for state, symlinks for artifact handoff.
@@ -221,6 +221,13 @@ cd ~/nanostack && ./setup --host kiro
 Run from anywhere. Pulls latest, shows what changed, re-runs setup if needed.
 
 No build step. Skills use symlinks. Changes take effect immediately.
+
+### Requirements
+
+- macOS or Linux
+- [jq](https://jqlang.github.io/jq/) for artifact processing (`brew install jq` or `apt install jq`)
+- Git
+- One of: Claude Code, OpenAI Codex, Amazon Kiro
 
 ## The Zen of Nanostack
 
@@ -351,13 +358,13 @@ Find it: `lsof -ti:3000`. Kill it: `kill $(lsof -ti:3000)`.
 Dependencies not finished. Run `conductor/bin/sprint.sh status` to check.
 
 **Skills seem outdated.**
-Run `bin/upgrade.sh` to pull latest and re-run setup.
+Run `~/.claude/skills/nanostack/bin/upgrade.sh` to pull latest and re-run setup.
 
 ## Uninstall
 
 ```bash
 # Claude Code
-cd ~/.claude/skills && rm -f think plan review qa security ship guard conductor && rm -rf nanostack
+cd ~/.claude/skills && rm -f think nano-plan review qa security ship guard conductor && rm -rf nanostack
 
 # Codex
 rm -rf ~/.codex/skills/nanostack*
