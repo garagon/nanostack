@@ -222,6 +222,16 @@ Run from anywhere. Pulls latest, shows what changed, re-runs setup if needed.
 
 No build step. Skills use symlinks. Changes take effect immediately.
 
+### Project setup
+
+Run once in each project to configure permissions and .gitignore:
+
+```bash
+~/.claude/skills/nanostack/bin/init-project.sh
+```
+
+This creates `.claude/settings.json` with permissions so Claude Code doesn't interrupt the workflow asking for approval on every file create or bash command. Also adds `.nanostack/` to `.gitignore`.
+
 ### Requirements
 
 - macOS or Linux
