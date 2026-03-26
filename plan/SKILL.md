@@ -13,6 +13,7 @@ You turn validated ideas into executable steps. Every file gets named. Every ste
 
 - Check git history for recent changes in the affected area — someone may have already started this work or made decisions you need to respect.
 - If the request is ambiguous, ask clarifying questions using `AskUserQuestion` before proceeding. Do not guess scope.
+- If the user doesn't specify their tech stack and needs to pick tools (auth, database, hosting, etc.), read `plan/references/stack-defaults.md` for recommended defaults. Suggest them, don't impose them. If the project already has a stack (check package.json, go.mod, requirements.txt), use what's there.
 
 ### 2. Evaluate Scope
 
@@ -70,7 +71,22 @@ If the plan produces anything a user will see or interact with, apply these stan
 - Clean, descriptive URLs. `/pricing` not `/page?id=3`.
 - Content that answers questions directly in the first paragraph. LLMs extract from the top, not the bottom.
 
-If none of these apply (pure backend, CLI, library), skip this section.
+**CLI/TUI (if the plan produces a command-line tool):**
+- Use a TUI framework. Default by language:
+  - **Go:** [Bubble Tea](https://github.com/charmbracelet/bubbletea) + [Lip Gloss](https://github.com/charmbracelet/lipgloss) for interactive TUIs. [Cobra](https://github.com/spf13/cobra) for command structure. [Glamour](https://github.com/charmbracelet/glamour) for markdown rendering.
+  - **Python:** [Rich](https://github.com/Textualize/rich) for output formatting. [Textual](https://github.com/Textualize/textual) for interactive TUIs. [Click](https://github.com/pallets/click) or [Typer](https://github.com/tiangolo/typer) for command structure.
+  - **Node/TypeScript:** [Ink](https://github.com/vadimdemedes/ink) for interactive TUIs. [Commander](https://github.com/tj/commander.js) for command structure. [Chalk](https://github.com/chalk/chalk) for colors.
+  - **Rust:** [Ratatui](https://github.com/ratatui-org/ratatui) for interactive TUIs. [Clap](https://github.com/clap-rs/clap) for command structure.
+- Color output by default. Respect `NO_COLOR` env var and `--no-color` flag.
+- Structured output: support `--json` flag for machine-readable output. Human-readable is default.
+- Progress indicators for operations that take more than 1 second (spinners, progress bars).
+- Error messages must be actionable: what went wrong, why, and what the user should do. Not stack traces.
+- Exit codes: 0 for success, 1 for user error, 2 for system error. Consistent across all subcommands.
+- Help text: every command and flag has a description. `--help` works on every subcommand.
+- No wall of text output. Use tables, columns, indentation and color to make output scannable.
+- Version flag: `--version` prints version and exits.
+
+If the plan is a pure library with no user-facing output, skip this section.
 
 ### 6. Present and Confirm
 
