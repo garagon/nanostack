@@ -38,12 +38,12 @@ if [ "$BEFORE" = "$AFTER" ]; then
   exit 0
 fi
 
-# Show what changed
-COMMITS=$(git log --oneline "$BEFORE".."$AFTER" | wc -l | tr -d ' ')
+# Show what changed (--no-pager prevents opening less/vim)
+COMMITS=$(git --no-pager log --oneline "$BEFORE".."$AFTER" | wc -l | tr -d ' ')
 echo ""
 echo "Updated: $COMMITS new commits"
 echo ""
-git log --oneline "$BEFORE".."$AFTER"
+git --no-pager log --oneline "$BEFORE".."$AFTER"
 
 # Check if setup needs re-run (new skills or setup changes)
 CHANGED=$(git diff --name-only "$BEFORE".."$AFTER")
