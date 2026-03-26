@@ -70,12 +70,12 @@ Each skill feeds into the next. `/nano-plan` writes an artifact that `/review` r
 
 | Skill | Your specialist | What they do |
 |-------|----------------|--------------|
-| `/think` | **CEO / Founder** | Start here. Six forcing questions that reframe your product before you write code. Challenges premises, checks your ambition level, finds the narrowest wedge. |
-| `/nano-plan` | **Eng Manager** | Scope, steps, files, risks, architecture checkpoint. Enforces product standards on frontend (shadcn/ui, SEO, LLM discoverability). |
-| `/review` | **Staff Engineer** | Two-pass code review: structural then adversarial. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan. |
-| `/qa` | **QA Lead** | Test your code, find bugs, fix them, re-verify. Browser, API, CLI and debug modes. `--report-only` for findings without fixes. |
-| `/security` | **Security Engineer** | Auto-detects your stack, scans secrets, injection, auth, CI/CD, AI/LLM vulnerabilities. Graded report (A-F). Every finding includes the fix. |
-| `/ship` | **Release Engineer** | Pre-flight checks, PR creation, CI monitoring, post-deploy verification with error rate threshold. Rollback plan included. |
+| `/think` | **CEO / Founder** | Three intensity modes: Founder (full pushback), Startup (challenges scope, respects pain) and Builder (minimal pushback). Six forcing questions including manual delivery test and community validation. `--autopilot` runs the full sprint after approval. |
+| `/nano-plan` | **Eng Manager** | Auto-generates product specs (Medium scope) or product + technical specs (Large scope) before implementation steps. Product standards for web (shadcn/ui), CLI/TUI (Bubble Tea, Rich, Ink, Ratatui). Stack defaults with CLI preference for beginners. |
+| `/review` | **Staff Engineer** | Two-pass code review: structural then adversarial. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan. Cross-references `/security` with 10 conflict precedents. |
+| `/qa` | **QA Lead** | Functional testing + Visual QA. Takes screenshots and analyzes UI against product standards. Browser, API, CLI and debug modes. WTF heuristic stops before fixes cause regressions. |
+| `/security` | **Security Engineer** | Auto-detects your stack, scans secrets, injection, auth, CI/CD, AI/LLM vulnerabilities. Graded report (A-F). Cross-references `/review` for conflict detection. Every finding includes the fix. |
+| `/ship` | **Release Engineer** | Pre-flight + repo quality checks (broken links, stale refs, writing quality). PR creation, CI monitoring, post-deploy verification. Auto-generates sprint journal. Rollback plan included. |
 
 ### Power tools
 
@@ -93,6 +93,20 @@ Not every change needs a full audit. `/review`, `/qa` and `/security` support th
 | **Quick** | `--quick` | Typos, config, docs. Only report the obvious. |
 | **Standard** | (default) | Normal features and bug fixes. |
 | **Thorough** | `--thorough` | Auth, payments, infra. Flag everything suspicious. |
+
+### Specs by scope
+
+`/nano-plan` generates specs automatically based on project complexity:
+
+| Scope | What you get |
+|-------|-------------|
+| **Small** (1-3 files) | Implementation steps only |
+| **Medium** (4-10 files) | Product spec + implementation steps |
+| **Large** (10+ files) | Product spec + technical spec + implementation steps |
+
+The product spec covers: problem, solution, user stories, acceptance criteria, user flow, edge cases, out of scope. The technical spec adds: architecture, data model, API contracts, integrations, technical decisions, security considerations, migration/rollback.
+
+Specs are presented for approval before implementation. If the spec is wrong, everything downstream is wrong.
 
 ## See it work: full sprint
 
@@ -136,6 +150,34 @@ You:    /ship
 ```
 
 You said "security scanner." The agent said "you're building a prevention gate" because it listened to your pain, not your feature request. Six commands, start to shipped.
+
+## Autopilot
+
+Discuss the idea, approve the brief, walk away. The agent runs the full sprint:
+
+```
+/think --autopilot
+```
+
+`/think` is interactive: the agent asks questions, you answer, you align on the brief. After you approve, everything else runs automatically:
+
+```
+/nano-plan → build → /review → /security → /qa → /ship
+```
+
+Autopilot only stops if:
+- `/review` finds blocking issues that need your decision
+- `/security` finds critical or high vulnerabilities
+- `/qa` tests fail
+- A product question comes up the agent can't answer from context
+
+Between steps the agent shows status:
+```
+Autopilot: build complete. Running /review...
+Autopilot: review clean (5 findings, 0 blocking). Running /security...
+Autopilot: security grade A. Running /qa...
+Autopilot: qa passed (12 tests, 0 failed). Running /ship...
+```
 
 ## Parallel sprints
 
