@@ -18,7 +18,7 @@ Each skill folder contains an `agents/openai.yaml` for OpenAI-compatible agent d
 
 ## Know-how Pipeline
 
-Skills automatically save artifacts to `~/.nanostack/` and cross-reference each other. `/ship` generates a sprint journal. The vault at `~/.nanostack/know-how/` works as an Obsidian vault. Run `bin/discard-sprint.sh` to clean up bad sessions.
+Skills automatically save artifacts to `.nanostack/` and cross-reference each other. `/ship` generates a sprint journal. The vault at `.nanostack/know-how/` works as an Obsidian vault. Run `bin/discard-sprint.sh` to clean up bad sessions.
 
 ## Usage
 

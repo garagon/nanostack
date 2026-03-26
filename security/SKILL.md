@@ -22,7 +22,7 @@ Auto-suggest:
 
 **Thorough-only features:**
 - **Variant analysis:** When a finding is VERIFIED, search the entire codebase for the same pattern. One confirmed SQL injection means there may be more.
-- **Conflict detection:** Cross-reference with `/review` artifacts in `~/.nanostack/review/` for contradictions.
+- **Conflict detection:** Cross-reference with `/review` artifacts in `.nanostack/review/` for contradictions.
 - **TENTATIVE findings:** Below confidence gate but worth noting. Mark as `TENTATIVE: <description>`.
 
 ## Setup (first run per project)
@@ -213,7 +213,7 @@ Always persist the security audit after completing it:
 bin/save-artifact.sh security '<json with phase, mode, summary, findings, conflicts>'
 ```
 
-See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `~/.nanostack/config.json`.
+See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.
 
 ## Mode Summary
 

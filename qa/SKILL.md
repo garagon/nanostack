@@ -118,7 +118,7 @@ Always persist the QA results after completing the run:
 bin/save-artifact.sh qa '<json with phase, mode, summary including wtf_likelihood, findings>'
 ```
 
-See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `~/.nanostack/config.json`.
+See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.
 
 ## Mode Summary
 

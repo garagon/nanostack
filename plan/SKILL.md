@@ -102,7 +102,7 @@ bin/save-artifact.sh plan '<json with phase, summary including planned_files arr
 
 The `planned_files` list is critical. `/review` uses it for scope drift detection via `bin/scope-drift.sh`. See `reference/artifact-schema.md` for the full schema.
 
-The user can disable auto-saving by setting `auto_save: false` in `~/.nanostack/config.json`.
+The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.
 
 ## Next Step
 

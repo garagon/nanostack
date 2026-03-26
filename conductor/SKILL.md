@@ -7,7 +7,7 @@ description: Orchestrate parallel agent sessions through a sprint. Coordinates t
 
 Coordinate multiple agent sessions working on the same project. Each agent claims a task, executes it, produces an artifact, and the next agent picks up where it left off.
 
-**No daemon. No service. No IPC.** Just atomic file operations on `~/.nanostack/conductor/`.
+**No daemon. No service. No IPC.** Just atomic file operations on `.nanostack/conductor/`.
 
 ## How it works
 
@@ -57,7 +57,7 @@ Note: `review`, `qa`, and `security` can run **in parallel** — they all depend
 conductor/bin/sprint.sh start [--phases "think,plan,build,review,qa,security,ship"]
 ```
 
-Creates `~/.nanostack/conductor/<sprint_id>/` with the phase graph. Default is the full workflow.
+Creates `.nanostack/conductor/<sprint_id>/` with the phase graph. Default is the full workflow.
 
 ### Claim a phase
 
@@ -97,13 +97,13 @@ Release a claim without completing. Use when an agent encounters a blocker.
 ## Filesystem Protocol
 
 ```
-~/.nanostack/conductor/
+.nanostack/conductor/
 └── <sprint_id>/
     ├── sprint.json              # Sprint definition + metadata
     ├── think/
     │   ├── lock                 # Contains: {"agent":"claude","claimed_at":"...","pid":1234}
     │   ├── done                 # Exists = phase complete. Contains: {"completed_at":"...","artifact":"..."}
-    │   └── artifact.json → ...  # Symlink to the actual artifact in ~/.nanostack/think/
+    │   └── artifact.json → ...  # Symlink to the actual artifact in .nanostack/think/
     ├── plan/
     │   ├── lock
     │   └── ...

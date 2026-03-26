@@ -59,10 +59,10 @@ Skills auto-suggest a mode based on the diff, but the user always decides.
 
 ## Artifact Persistence
 
-Skills automatically save their output to `~/.nanostack/` after every run:
+Skills automatically save their output to `.nanostack/` after every run:
 
 ```bash
-~/.nanostack/<phase>/<timestamp>.json
+.nanostack/<phase>/<timestamp>.json
 ```
 
 This enables:
@@ -71,7 +71,7 @@ This enables:
 - **Sprint journals** — `/ship` generates a journal entry from all phase artifacts
 - **Trend tracking** — Are security findings decreasing over time?
 
-Auto-saving is on by default. The user can disable it by setting `auto_save: false` in `~/.nanostack/config.json`.
+Auto-saving is on by default. The user can disable it by setting `auto_save: false` in `.nanostack/config.json`.
 
 Artifacts are validated before saving: `save-artifact.sh` rejects invalid JSON, missing required fields (`phase`, `summary`), and phase mismatches.
 
@@ -89,7 +89,7 @@ Read `reference/conflict-precedents.md` for known conflict patterns and pre-defi
 
 ## Project Config
 
-On first use in a project, run `bin/init-config.sh --interactive` to create `~/.nanostack/config.json`. This stores:
+On first use in a project, run `bin/init-config.sh --interactive` to create `.nanostack/config.json`. This stores:
 
 - **Installed agents** — auto-detected (claude, codex, kiro)
 - **Detected stack** — node, go, python, docker

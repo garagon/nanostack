@@ -110,7 +110,7 @@ Always persist the review after completing it:
 bin/save-artifact.sh review '<json with phase, mode, summary, scope_drift, findings, conflicts>'
 ```
 
-See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `~/.nanostack/config.json`.
+See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.
 
 ## Mode Summary
 

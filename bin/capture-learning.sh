@@ -4,7 +4,10 @@
 # Or: capture-learning.sh (reads from stdin)
 set -e
 
-KNOW_HOW="$HOME/.nanostack/know-how"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/store-path.sh"
+
+KNOW_HOW="$NANOSTACK_STORE/know-how"
 LEARNINGS_FILE="$KNOW_HOW/learnings/ongoing.md"
 DATE=$(date +"%Y-%m-%d")
 PROJECT=$(basename "$(pwd)")

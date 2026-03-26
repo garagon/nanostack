@@ -251,15 +251,15 @@ Most AI coding tools are stateless. Every session starts from zero. Nanostack bu
 
 ### Every skill saves automatically
 
-Every skill persists its output to `~/.nanostack/` after every run. You don't add flags. It just happens.
+Every skill persists its output to `.nanostack/` after every run. You don't add flags. It just happens.
 
 ```
-/think     →  ~/.nanostack/think/20260325-140000.json
-/nano-plan →  ~/.nanostack/plan/20260325-143000.json
-/review    →  ~/.nanostack/review/20260325-150000.json
-/qa        →  ~/.nanostack/qa/20260325-151500.json
-/security  →  ~/.nanostack/security/20260325-152000.json
-/ship      →  ~/.nanostack/ship/20260325-160000.json
+/think     →  .nanostack/think/20260325-140000.json
+/nano-plan →  .nanostack/plan/20260325-143000.json
+/review    →  .nanostack/review/20260325-150000.json
+/qa        →  .nanostack/qa/20260325-151500.json
+/security  →  .nanostack/security/20260325-152000.json
+/ship      →  .nanostack/ship/20260325-160000.json
 ```
 
 A review artifact captures everything: findings, scope drift, conflicts resolved.
@@ -277,7 +277,7 @@ A review artifact captures everything: findings, scope drift, conflicts resolved
 }
 ```
 
-Full schema in [`reference/artifact-schema.md`](reference/artifact-schema.md). To disable, set `auto_save: false` in `~/.nanostack/config.json`.
+Full schema in [`reference/artifact-schema.md`](reference/artifact-schema.md). To disable, set `auto_save: false` in `.nanostack/config.json`.
 
 ### Skills read each other
 
@@ -306,7 +306,7 @@ When you run `/ship` and the PR lands, it automatically generates a sprint journ
 ```
 /ship  →  saves PR data
        →  runs bin/sprint-journal.sh
-       →  writes ~/.nanostack/know-how/journal/2026-03-25-myproject.md
+       →  writes .nanostack/know-how/journal/2026-03-25-myproject.md
 ```
 
 The journal reads every phase artifact from the sprint and writes one file with the full decision trail: what `/think` reframed, what `/nano-plan` scoped, what `/review` found, how conflicts were resolved, what `/security` graded.
@@ -335,11 +335,11 @@ This removes artifacts and the journal entry. Analytics recalculate on next run.
 
 ### The Obsidian vault
 
-Open `~/.nanostack/know-how/` in Obsidian. Sprint journals link to conflict precedents. The dashboard links to journals. Graph view shows how sprints, conflicts and learnings connect over time.
+Open `.nanostack/know-how/` in Obsidian. Sprint journals link to conflict precedents. The dashboard links to journals. Graph view shows how sprints, conflicts and learnings connect over time.
 
 ## Privacy
 
-All data stays on your machine in `~/.nanostack/`. No remote calls. No telemetry.
+All data stays on your machine in `.nanostack/`. No remote calls. No telemetry.
 
 Run `bin/analytics.sh` to see your own usage: which skills you run, how often, in what mode. Reads local artifacts only.
 
