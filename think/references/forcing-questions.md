@@ -22,7 +22,7 @@ These questions are designed to be uncomfortable. If they're easy to answer, eit
 **Follow-up probes:**
 - How much time/money are people currently spending on this problem?
 - If you took away their current solution, what would they say?
-- Can you name 3 specific people who would use this tomorrow?
+- Can you name 10 specific people who have this problem? Not personas. Names. If you can't name 10, the problem is either too broad or you're not close enough to the community.
 
 ---
 
@@ -50,11 +50,13 @@ These questions are designed to be uncomfortable. If they're easy to answer, eit
 - "Oncall engineers at startups with <50 employees who get paged at 3am"
 - "Solo founders doing their own bookkeeping before they can afford an accountant"
 - A specific person with a name who said "yes, I'd use that today"
+- You can list 10 real people in the community who struggle with this
 
 **Red flags:**
 - "Developers" — too broad. Which developers? What stack? What company size?
 - "Enterprise companies" — who at the enterprise? The CTO? A platform engineer? A PM?
 - Can't name a specific person or company — the target is imaginary
+- You don't belong to the community you're building for — you're guessing instead of observing
 
 **Why this matters:**
 If nobody would use a broken v1, your v1 scope is wrong. Either narrow the audience or narrow the feature set until someone desperate emerges.
@@ -77,6 +79,8 @@ If nobody would use a broken v1, your v1 scope is wrong. Either narrow the audie
 - If your wedge serves more than 1 user persona, it's too wide
 
 **The test:** Can you describe the wedge in one sentence without using the word "and"?
+
+**Manual delivery test:** Could you deliver this wedge by hand to one person today? No code, just you doing the work. If you can't describe the manual process (trigger, steps, tools, what you deliver), you don't understand the problem well enough to automate it. Build the process first, then the product.
 
 ---
 

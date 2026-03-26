@@ -140,5 +140,6 @@ See `reference/artifact-schema.md` for the full schema. The user can disable aut
 - **Don't confuse conviction with evidence.** The user being excited about an idea is not validation. Who else is excited? Who would pay?
 - **Don't expand scope when reducing is the right call.** More features ≠ better product. The best v1s do one thing exceptionally well.
 - **"Search Before Building" is literal.** Before proposing to build anything, search for existing solutions. The best code is the code you don't write.
+- **"Processize before you productize."** If the user can't describe how they'd deliver the value by hand (no code), they don't understand the problem well enough to automate it. The manual process comes first.
 - **Don't let this become a planning session.** /think produces a brief, not a plan. If you're writing implementation steps, you've gone too far. Hand off to /plan.
 - **Don't let the user think small by habit.** An AI agent builds a web app as fast as a bash script. If the user defaults to "just a CLI" when a real product would serve them better, say so. The narrowest wedge should be narrow in scope, not narrow in ambition.
