@@ -118,7 +118,24 @@ The user can disable auto-saving by setting `auto_save: false` in `.nanostack/co
 
 ## Next Step
 
-After the user approves the plan and you finish building, tell the user:
+After the user approves the plan and you finish building:
+
+**If AUTOPILOT is active:**
+
+Proceed directly to `/review`. After review completes, run `/security`. After security, run `/qa`. After all three pass, run `/ship`. Only stop if:
+- `/review` finds **blocking** issues that need user decision
+- `/security` finds **critical** vulnerabilities
+- A product question comes up that you can't answer from context
+
+Between each step, show a brief status:
+> Autopilot: build complete. Running /review...
+> Autopilot: review clean. Running /security...
+> Autopilot: security grade A. Running /qa...
+> Autopilot: qa passed. Running /ship...
+
+**Otherwise (default):**
+
+Tell the user:
 
 > Build complete. Next steps in the sprint:
 > - `/review` to run a two-pass code review with scope drift detection
@@ -127,7 +144,7 @@ After the user approves the plan and you finish building, tell the user:
 >
 > These three can run in any order. After all pass, `/ship` to create the PR.
 
-Do NOT run `/review`, `/qa`, or `/security` automatically. Wait for the user to invoke each one.
+Wait for the user to invoke each one.
 
 ## Gotchas
 
