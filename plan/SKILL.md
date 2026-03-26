@@ -1,5 +1,5 @@
 ---
-name: plan
+name: nano-plan
 description: Use when starting non-trivial work (touching 3+ files, new features, refactors, bug investigations). Produces a scoped, actionable implementation plan before any code is written. Triggers on /nano-plan.
 ---
 
