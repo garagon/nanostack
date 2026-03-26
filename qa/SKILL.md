@@ -130,6 +130,15 @@ See `reference/artifact-schema.md` for the full schema. The user can disable aut
 | Regression tests | Skip | If fixing a bug | Full regression suite |
 | WTF threshold | 20% | 20% | 20% |
 
+## Next Step
+
+After QA is complete and the artifact is saved, tell the user what's next:
+
+> QA complete. Remaining steps:
+> - `/review` to run code review (if not done yet)
+> - `/security` to audit for vulnerabilities (if not done yet)
+> - `/ship` to create the PR (after review, security and qa pass)
+
 ## Gotchas
 
 - **Don't test in production.** Always verify you're hitting a local/staging environment.
