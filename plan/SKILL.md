@@ -88,6 +88,19 @@ The `planned_files` list is critical. `/review` uses it for scope drift detectio
 
 The user can disable auto-saving by setting `auto_save: false` in `~/.nanostack/config.json`.
 
+## Next Step
+
+After the user approves the plan and you finish building, tell the user:
+
+> Build complete. Next steps in the sprint:
+> - `/review` to run a two-pass code review with scope drift detection
+> - `/security` to audit for vulnerabilities
+> - `/qa` to test that everything works
+>
+> These three can run in any order. After all pass, `/ship` to create the PR.
+
+Do NOT run `/review`, `/qa`, or `/security` automatically. Wait for the user to invoke each one.
+
 ## Gotchas
 
 - **Don't plan in a vacuum.** The #1 failure mode is planning without reading the code first.

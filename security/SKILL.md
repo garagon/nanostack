@@ -226,6 +226,15 @@ See `reference/artifact-schema.md` for the full schema. The user can disable aut
 | Tentative findings | Skip | Skip | Report as TENTATIVE |
 | Confidence gate | 9/10 | 7/10 | 3/10 |
 
+## Next Step
+
+After the security audit is complete and the artifact is saved, tell the user what's next:
+
+> Security audit complete. Remaining steps:
+> - `/review` to run code review (if not done yet)
+> - `/qa` to test that everything works (if not done yet)
+> - `/ship` to create the PR (after review, security and qa pass)
+
 ## Gotchas
 
 - **If you find zero vulnerabilities, say so.** A clean audit is a valid result. Don't manufacture findings to justify the scan.
