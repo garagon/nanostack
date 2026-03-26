@@ -1,14 +1,24 @@
 #!/usr/bin/env bash
 # upgrade.sh — Update nanostack to latest version
-# Usage: bin/upgrade.sh
+# Usage: ~/.claude/skills/nanostack/bin/upgrade.sh (from anywhere)
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# Find nanostack directory
+if [ -f "$(dirname "$0")/../setup" ]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+elif [ -d "$HOME/.claude/skills/nanostack/.git" ]; then
+  SCRIPT_DIR="$HOME/.claude/skills/nanostack"
+elif [ -f "$HOME/.nanostack/setup.json" ]; then
+  SCRIPT_DIR=$(jq -r '.source' "$HOME/.nanostack/setup.json" 2>/dev/null)
+else
+  echo "Error: can't find nanostack. Is it installed?" >&2
+  exit 1
+fi
+
 cd "$SCRIPT_DIR"
 
-# Check we're in a git repo
 if [ ! -d .git ]; then
-  echo "Error: not a git repository. Run this from the nanostack directory." >&2
+  echo "Error: not a git repository at $SCRIPT_DIR" >&2
   exit 1
 fi
 
