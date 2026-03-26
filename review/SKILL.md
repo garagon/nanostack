@@ -122,6 +122,15 @@ See `reference/artifact-schema.md` for the full schema. The user can disable aut
 | Conflict detection | Auto-resolve | Document inline | BLOCKING until resolved |
 | Output | Blocking issues only | All categories | All + rationale per finding |
 
+## Next Step
+
+After the review is complete and the artifact is saved, tell the user what's next in the sprint:
+
+> Review complete. Remaining steps:
+> - `/security` to audit for vulnerabilities (if not done yet)
+> - `/qa` to test that everything works (if not done yet)
+> - `/ship` to create the PR (after review, security and qa pass)
+
 ## Gotchas
 
 - **If you find zero issues, say so.** Don't manufacture findings to look thorough. "This looks correct and well-structured" is a valid review.

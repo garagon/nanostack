@@ -150,6 +150,14 @@ bin/save-artifact.sh think '<json with phase, summary including value_propositio
 
 See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `~/.nanostack/config.json`.
 
+## Next Step
+
+After the Think Summary and artifact are saved, tell the user:
+
+> Ready for `/nano-plan`. Say `/nano-plan` to create the implementation plan, or adjust the brief first.
+
+Do NOT proceed to planning automatically. Wait for the user to invoke `/nano-plan`.
+
 ## Gotchas
 
 - **Don't skip the diagnostic to "save time."** The diagnostic IS the time savings — it prevents building the wrong thing.
