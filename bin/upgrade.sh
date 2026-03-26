@@ -3,6 +3,9 @@
 # Usage: ~/.claude/skills/nanostack/bin/upgrade.sh (from anywhere)
 set -e
 
+# Disable git pager globally for this script
+export GIT_PAGER=cat
+
 # Find nanostack directory
 if [ -f "$(dirname "$0")/../setup" ]; then
   SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
