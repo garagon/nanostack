@@ -36,7 +36,7 @@ All artifacts share this base structure:
 }
 ```
 
-### /plan
+### /nano-plan
 
 ```json
 {
