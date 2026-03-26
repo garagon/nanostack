@@ -1,21 +1,25 @@
 # Nanostack
 
-Nanostack is a set of AI coding agent skills for the full engineering workflow. It works with Claude Code, OpenAI Codex, Amazon Kiro, and any agent that reads SKILL.md files.
+Nanostack is a set of AI coding agent skills for the full engineering workflow. It works with Claude Code, OpenAI Codex, Amazon Kiro and any agent that reads SKILL.md files.
 
 ## What it does
 
-Nanostack gives an AI coding agent a structured sprint process: think, plan, build, review, test, secure, ship. Each skill acts as a specialist (CEO, engineer, QA lead, security auditor) that challenges assumptions, catches bugs, and enforces quality before code reaches production.
+Nanostack gives an AI coding agent a structured sprint process: think, plan, build, review, test, secure, ship. Each skill acts as a specialist (CEO, engineer, QA lead, security auditor) that finds the right problem, scopes the solution, catches bugs and enforces quality before code reaches production.
 
 ## Skills
 
-- /think: Strategic product thinking. Challenges the user's framing, finds the narrowest valuable wedge, applies forcing questions before code is written.
+- /think: Strategic product thinking. Three intensity modes: Founder (full pushback for experienced entrepreneurs), Startup (challenges scope but respects pain points), Builder (minimal pushback, focus on simplest solution). Six forcing questions including manual delivery test and community validation.
 - /plan: Implementation planning. Scope, steps, files, risks, architecture checkpoint, product standards (shadcn/ui, SEO, LLM SEO).
-- /review: Two-pass code review. Structural correctness then adversarial edge-case hunting. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift.
-- /qa: Quality assurance. Browser, API, CLI, and debug testing. Fixes bugs with atomic commits. Stops when further fixes would introduce regressions.
-- /security: Security audit. Auto-detects stack, scans for secrets, injection, auth flaws, CI/CD misconfigs, AI/LLM vulnerabilities. Graded report (A-F).
-- /ship: Ship to production. Pre-flight checks, PR creation, CI monitoring, post-deploy verification, rollback plan.
-- /guard: On-demand safety guardrails. Warns before destructive commands. Locks edits to specific directories.
-- /conductor: Multi-agent sprint orchestrator. Coordinates parallel sessions through claim/complete protocol.
+- /review: Two-pass code review. Structural correctness then adversarial edge-case hunting. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan artifact.
+- /qa: Quality assurance. Browser, API, CLI and debug testing. Fixes bugs with atomic commits. WTF heuristic stops when further fixes would introduce regressions.
+- /security: Security audit. Auto-detects stack, scans for secrets, injection, auth flaws, CI/CD misconfigs, AI/LLM vulnerabilities. Graded report (A-F). Cross-references /review findings for conflict detection.
+- /ship: Ship to production. Pre-flight checks, PR creation, CI monitoring, post-deploy verification, rollback plan. Generates sprint journal automatically.
+- /guard: Three-tier safety. Tier 1: allowlist of safe commands. Tier 2: in-project operations pass (reviewable via git). Tier 3: pattern matching against 28 block rules and 9 warn rules. Blocked commands get a safer alternative. Rules configurable in guard/rules.json.
+- /conductor: Multi-agent sprint orchestrator. Coordinates parallel sessions through claim/complete protocol with atomic file locking.
+
+## Know-how
+
+Skills automatically save structured artifacts to ~/.nanostack/ after every run. Skills cross-reference each other: /review reads /plan for scope drift, /security reads /review for conflict detection. /ship generates a sprint journal from all phase artifacts. The know-how vault at ~/.nanostack/know-how/ works as an Obsidian vault with linked journals, analytics dashboards and learnings. Bad sessions can be discarded with bin/discard-sprint.sh.
 
 ## Install
 
@@ -25,8 +29,11 @@ cd ~/.claude/skills/nanostack && ./setup
 ## Key differentiators
 
 - Questions what you're building before you build it (not just a coding assistant)
-- Structured sprint: think → plan → build → review → qa → security → ship
-- Cross-skill coordination: scope drift detection, conflict resolution between review and security findings
+- Calibrated intensity: full pushback for founders, respectful diagnostic for users with clear pain
+- Structured sprint: think, plan, build, review, qa, security, ship
+- Cross-skill coordination: scope drift detection, conflict resolution with 10 built-in precedents
+- Know-how pipeline: artifacts auto-save, skills cross-reference, sprint journals generate on ship
+- Three-tier guard with deny-and-continue (suggests safer alternatives)
 - Product standards enforced at planning time (shadcn/ui, SEO, LLM SEO)
 - Zero dependencies, zero build step, works with any AI coding agent
 - Privacy: no telemetry, no remote calls, all data stays local
