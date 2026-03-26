@@ -19,7 +19,7 @@ Nanostack gives an AI coding agent a structured sprint process: think, plan, bui
 
 ## Know-how
 
-Skills automatically save structured artifacts to ~/.nanostack/ after every run. Skills cross-reference each other: /review reads /nano-plan for scope drift, /security reads /review for conflict detection. /ship generates a sprint journal from all phase artifacts. The know-how vault at ~/.nanostack/know-how/ works as an Obsidian vault with linked journals, analytics dashboards and learnings. Bad sessions can be discarded with bin/discard-sprint.sh.
+Skills automatically save structured artifacts to .nanostack/ after every run. Skills cross-reference each other: /review reads /nano-plan for scope drift, /security reads /review for conflict detection. /ship generates a sprint journal from all phase artifacts. The know-how vault at .nanostack/know-how/ works as an Obsidian vault with linked journals, analytics dashboards and learnings. Bad sessions can be discarded with bin/discard-sprint.sh.
 
 ## Install
 

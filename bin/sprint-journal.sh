@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # sprint-journal.sh — Generate an Obsidian journal entry from sprint artifacts
 # Usage: sprint-journal.sh [--project <name>]
-# Reads ~/.nanostack/ artifacts and writes to ~/.nanostack/know-how/journal/<date>-<project>.md
+# Reads .nanostack/ artifacts and writes to .nanostack/know-how/journal/<date>-<project>.md
 set -e
 
-STORE="$HOME/.nanostack"
-KNOW_HOW="$HOME/.nanostack/know-how"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/store-path.sh"
+
+STORE="$NANOSTACK_STORE"
+KNOW_HOW="$NANOSTACK_STORE/know-how"
 PROJECT_NAME="${2:-$(basename "$(pwd)")}"
 DATE=$(date -u +"%Y-%m-%d")
 MONTH=$(date -u +"%Y-%m")

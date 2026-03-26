@@ -4,7 +4,10 @@
 # Commands: start, claim, complete, abort, status, clean
 set -e
 
-CONDUCTOR_DIR="$HOME/.nanostack/conductor"
+SCRIPT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+source "$SCRIPT_DIR/bin/lib/store-path.sh"
+
+CONDUCTOR_DIR="$NANOSTACK_STORE/conductor"
 PROJECT="$(pwd)"
 PROJECT_HASH=$(echo -n "$PROJECT" | shasum -a 256 | cut -c1-12)
 

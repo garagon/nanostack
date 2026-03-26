@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # analytics.sh — Local usage stats from your nanostack artifacts
 # Usage: analytics.sh [--month YYYY-MM] [--json]
-# No remote calls. Reads ~/.nanostack/ only.
+# No remote calls. Reads .nanostack/ only.
 set -e
 
-STORE="$HOME/.nanostack"
-KNOW_HOW="$HOME/.nanostack/know-how"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/store-path.sh"
+
+STORE="$NANOSTACK_STORE"
+KNOW_HOW="$NANOSTACK_STORE/know-how"
 MONTH="${2:-$(date +"%Y-%m")}"
 JSON_OUTPUT=false
 OBSIDIAN_OUTPUT=false

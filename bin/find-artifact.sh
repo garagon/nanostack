@@ -5,9 +5,12 @@
 # Returns: path to most recent artifact, or empty + exit 1 if none found
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/store-path.sh"
+
 PHASE="${1:?Usage: find-artifact.sh <phase> [max-age-days]}"
 MAX_AGE="${2:-30}"
-STORE="$HOME/.nanostack/$PHASE"
+STORE="$NANOSTACK_STORE/$PHASE"
 PROJECT="$(pwd)"
 
 [ -d "$STORE" ] || exit 1

@@ -5,7 +5,10 @@
 # With --interactive: prompts user via stdout questions (for agent to parse)
 set -e
 
-CONFIG="$HOME/.nanostack/config.json"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/store-path.sh"
+
+CONFIG="$NANOSTACK_STORE/config.json"
 
 # If config exists, output it and exit
 if [ -f "$CONFIG" ]; then
@@ -20,7 +23,7 @@ if [ "$1" != "--interactive" ]; then
 fi
 
 # Interactive mode — create config directory
-mkdir -p "$HOME/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
 
 # Detect installed agents
 AGENTS="[]"

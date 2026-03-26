@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# save-artifact.sh — Save a skill artifact to ~/.nanostack/<phase>/
+# save-artifact.sh — Save a skill artifact to .nanostack/<phase>/
 # Usage: save-artifact.sh <phase> <json-string>
 # Example: save-artifact.sh review '{"phase":"review","summary":{"blocking":0}}'
 # Validates JSON has required fields before saving. Fails on invalid input.
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/store-path.sh"
+
 PHASE="${1:?Usage: save-artifact.sh <phase> <json>}"
 JSON="${2:?Missing JSON argument}"
-STORE="$HOME/.nanostack/$PHASE"
+STORE="$NANOSTACK_STORE/$PHASE"
 VALID_PHASES="think plan review qa security ship"
 
 # Validate phase name

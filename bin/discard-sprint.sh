@@ -7,7 +7,10 @@
 #   discard-sprint.sh --dry-run           # show what would be deleted without deleting
 set -e
 
-STORE="$HOME/.nanostack"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/store-path.sh"
+
+STORE="$NANOSTACK_STORE"
 KNOW_HOW="$STORE/know-how"
 PROJECT="$(pwd)"
 PROJECT_NAME=$(basename "$PROJECT")
