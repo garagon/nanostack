@@ -15,7 +15,14 @@ You get code from "done" to "verified in production" in one pass. You own the fu
 
 ### 1. Pre-flight Check
 
-Run `ship/bin/pre-ship-check.sh` first. It checks for uncommitted changes, missing tests, staged secrets, and committing on main. If it reports warnings, address them before proceeding.
+Run both checks before proceeding:
+
+```bash
+ship/bin/pre-ship-check.sh    # uncommitted changes, missing tests, staged secrets, branch check
+ship/bin/quality-check.sh     # broken README links, stale references, writing quality, secrets in diff
+```
+
+If either reports errors, fix them before proceeding. Warnings are informational but should be reviewed.
 
 Then verify:
 
@@ -109,6 +116,35 @@ gh pr create --title "Revert: {{original PR title}}" --body "Reverting due to {{
 ```
 
 Document what went wrong for the team.
+
+### 6. Repo Quality Standards
+
+Before creating the PR, verify these standards. The public repo is the face of the project.
+
+**README:**
+- All internal links resolve (check every `[text](path)` reference)
+- No stale command names or paths from previous versions
+- No AI writing tells: em dashes, en dashes, Oxford commas
+- Examples are accurate and runnable
+- Install instructions work on a clean machine
+
+**PR quality:**
+- Title under 70 characters, starts with a verb
+- Body explains what changed and why, not just what files were touched
+- Test plan is specific enough that someone else could verify it
+- No "Generated with" badges or AI attribution
+
+**Commit quality:**
+- Commit messages explain the why, not just the what
+- One concern per commit when possible
+- No AI attribution in commit messages
+
+**Repo hygiene:**
+- No secrets in the diff (API keys, tokens, passwords)
+- No large binary files committed
+- .gitignore covers editor files, OS files, build artifacts
+
+`ship/bin/quality-check.sh` automates the checks it can. Use your judgment for the rest.
 
 ## Save Artifact and Generate Sprint Journal
 

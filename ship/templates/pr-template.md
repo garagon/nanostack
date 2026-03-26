@@ -22,5 +22,3 @@
 <!-- How to undo this change if something goes wrong -->
 Revert this PR's merge commit.
 
----
-🤖 Generated with [Nanostack](https://github.com/garagon/nanostack) `/ship`
