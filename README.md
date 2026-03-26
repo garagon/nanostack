@@ -44,7 +44,7 @@ Agent:  I'm going to push back on "notifications." You said users open
         push notifications, but now you have data, not a guess.
 
 You:    Makes sense. Let's do the dot.
-You:    /plan
+You:    /nano-plan
         [3 steps, 2 files, product standards: shadcn/ui + Tailwind]
 
 You:    [builds it]
@@ -63,15 +63,15 @@ You said "notifications." The agent said "your users have a freshness problem" a
 Nanostack is a process, not a collection of tools. The skills run in the order a sprint runs:
 
 ```
-/think → /plan → build → /review → /qa → /security → /ship
+/think → /nano-plan → build → /review → /qa → /security → /ship
 ```
 
-Each skill feeds into the next. `/plan` writes an artifact that `/review` reads for scope drift detection. `/review` catches conflicts with `/security` findings. `/ship` verifies everything is clean before creating the PR. Nothing falls through the cracks because every step knows what came before it.
+Each skill feeds into the next. `/nano-plan` writes an artifact that `/review` reads for scope drift detection. `/review` catches conflicts with `/security` findings. `/ship` verifies everything is clean before creating the PR. Nothing falls through the cracks because every step knows what came before it.
 
 | Skill | Your specialist | What they do |
 |-------|----------------|--------------|
 | `/think` | **CEO / Founder** | Start here. Six forcing questions that reframe your product before you write code. Challenges premises, checks your ambition level, finds the narrowest wedge. |
-| `/plan` | **Eng Manager** | Scope, steps, files, risks, architecture checkpoint. Enforces product standards on frontend (shadcn/ui, SEO, LLM discoverability). |
+| `/nano-plan` | **Eng Manager** | Scope, steps, files, risks, architecture checkpoint. Enforces product standards on frontend (shadcn/ui, SEO, LLM discoverability). |
 | `/review` | **Staff Engineer** | Two-pass code review: structural then adversarial. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan. |
 | `/qa` | **QA Lead** | Test your code, find bugs, fix them, re-verify. Browser, API, CLI and debug modes. `--report-only` for findings without fixes. |
 | `/security` | **Security Engineer** | Auto-detects your stack, scans secrets, injection, auth, CI/CD, AI/LLM vulnerabilities. Graded report (A-F). Every finding includes the fix. |
@@ -120,7 +120,7 @@ Agent:  I'm going to push back on "security scanner." A scanner finds
         pre-deploy. Ship tomorrow. The full scanner is a 3-month project.
 
 You:    That makes sense. Let's start with S3.
-You:    /plan
+You:    /nano-plan
         [5 steps, 4 files, risks listed, out-of-scope explicit]
 
 You:    [builds the feature]
@@ -144,7 +144,7 @@ Nanostack works well with one agent. It gets interesting with three running at o
 `/conductor` coordinates multiple sessions. Each agent claims a phase, executes it and the next agent picks up the artifact. Review, QA and security run in parallel because they all depend on build, not on each other.
 
 ```
-/think → /plan → build ─┬─ /review   (Agent A) ─┐
+/think → /nano-plan → build ─┬─ /review   (Agent A) ─┐
                         ├─ /qa       (Agent B)  ├─ /ship
                         └─ /security (Agent C) ─┘
 ```
@@ -248,7 +248,7 @@ Every skill persists its output to `~/.nanostack/` after every run. You don't ad
 
 ```
 /think     →  ~/.nanostack/think/20260325-140000.json
-/plan      →  ~/.nanostack/plan/20260325-143000.json
+/nano-plan →  ~/.nanostack/plan/20260325-143000.json
 /review    →  ~/.nanostack/review/20260325-150000.json
 /qa        →  ~/.nanostack/qa/20260325-151500.json
 /security  →  ~/.nanostack/security/20260325-152000.json
@@ -274,10 +274,10 @@ Full schema in [`reference/artifact-schema.md`](reference/artifact-schema.md). T
 
 ### Skills read each other
 
-`/review` automatically finds the most recent `/plan` artifact and checks scope drift: did you touch files outside the plan? Did you skip files that were in it?
+`/review` automatically finds the most recent `/nano-plan` artifact and checks scope drift: did you touch files outside the plan? Did you skip files that were in it?
 
 ```
-/plan     →  saves planned_files list
+/nano-plan     →  saves planned_files list
 /review   →  finds plan, compares against git diff, reports:
               "drift_detected: src/unplanned.ts out of scope, tests/auth.test.ts missing"
 ```
@@ -302,7 +302,7 @@ When you run `/ship` and the PR lands, it automatically generates a sprint journ
        →  writes ~/.nanostack/know-how/journal/2026-03-25-myproject.md
 ```
 
-The journal reads every phase artifact from the sprint and writes one file with the full decision trail: what `/think` reframed, what `/plan` scoped, what `/review` found, how conflicts were resolved, what `/security` graded.
+The journal reads every phase artifact from the sprint and writes one file with the full decision trail: what `/think` reframed, what `/nano-plan` scoped, what `/review` found, how conflicts were resolved, what `/security` graded.
 
 ### Analytics and learnings
 
