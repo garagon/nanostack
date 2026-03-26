@@ -215,10 +215,10 @@ cd ~/nanostack && ./setup --host kiro
 ### Update
 
 ```bash
-bin/upgrade.sh
+~/.claude/skills/nanostack/bin/upgrade.sh
 ```
 
-Shows what changed, re-runs setup if needed. Or just `git pull`.
+Run from anywhere. Pulls latest, shows what changed, re-runs setup if needed.
 
 No build step. Skills use symlinks. Changes take effect immediately.
 

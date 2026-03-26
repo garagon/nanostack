@@ -19,9 +19,14 @@ NANOSTACK_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 SKILLS_DIR="$(dirname "$NANOSTACK_DIR")"
 SKILLS=(think nano-plan review qa security ship guard conductor)
-# Map skill names to directories (when they differ)
-declare -A SKILL_DIRS
-SKILL_DIRS[nano-plan]=plan
+
+# Map skill name to directory (when they differ)
+skill_dir() {
+  case "$1" in
+    nano-plan) echo "plan" ;;
+    *) echo "$1" ;;
+  esac
+}
 
 # sed -i portability (BSD vs GNU)
 if sed --version >/dev/null 2>&1; then
@@ -120,7 +125,8 @@ install_claude() {
 
   for skill in "${SKILLS[@]}"; do
     local target="$skills_dir/$skill"
-    local dir="${SKILL_DIRS[$skill]:-$skill}"
+    local dir
+    dir=$(skill_dir "$skill")
     # Only create symlink if it doesn't exist as a real directory
     if [ -L "$target" ] || [ ! -e "$target" ]; then
       ln -snf "nanostack/$dir" "$target"
@@ -250,8 +256,7 @@ for skill in "${SKILLS[@]}"; do
   echo "  /$skill"
 done
 echo ""
-echo "Workflow: /think → /plan → build → /review → /qa → /security → /ship"
+echo "Workflow: /think → /nano-plan → build → /review → /qa → /security → /ship"
 echo "Safety:   /guard (activate on-demand)"
 echo ""
-echo "Configure: run bin/init-config.sh --interactive in any project"
-echo "Update:    cd $(basename "$NANOSTACK_DIR") && git pull"
+echo "Update:    ~/.claude/skills/nanostack/bin/upgrade.sh"
