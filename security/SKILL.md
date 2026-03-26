@@ -228,8 +228,13 @@ See `reference/artifact-schema.md` for the full schema. The user can disable aut
 
 ## Next Step
 
-After the security audit is complete and the artifact is saved, tell the user what's next:
+After the security audit is complete and the artifact is saved:
 
+**If AUTOPILOT is active and no critical/high findings:** Proceed to next pending skill (`/qa` or `/ship`). Show: `Autopilot: security grade X (0 critical, 0 high). Running /qa...`
+
+**If AUTOPILOT is active but critical or high findings found:** Stop and ask the user to review. Show the findings and wait. After resolution, continue autopilot.
+
+**Otherwise:** Tell the user:
 > Security audit complete. Remaining steps:
 > - `/review` to run code review (if not done yet)
 > - `/qa` to test that everything works (if not done yet)
