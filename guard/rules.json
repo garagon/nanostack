@@ -1,0 +1,298 @@
+{
+  "schema_version": "1",
+  "tiers": {
+    "allowlist": {
+      "description": "Always safe. Skip all checks.",
+      "commands": [
+        "git status",
+        "git log",
+        "git diff",
+        "git branch",
+        "git show",
+        "git stash list",
+        "git remote -v",
+        "git fetch",
+        "ls",
+        "pwd",
+        "cat",
+        "head",
+        "tail",
+        "wc",
+        "grep",
+        "rg",
+        "find",
+        "which",
+        "echo",
+        "date",
+        "whoami",
+        "env",
+        "printenv",
+        "node --version",
+        "npm list",
+        "go version",
+        "python --version",
+        "jq"
+      ]
+    },
+    "block": {
+      "description": "Always blocked. Suggest alternative.",
+      "rules": [
+        {
+          "id": "G-001",
+          "pattern": "rm -rf /",
+          "category": "mass-deletion",
+          "description": "Root filesystem deletion",
+          "alternative": "Specify the exact directory to remove"
+        },
+        {
+          "id": "G-002",
+          "pattern": "rm -rf ~",
+          "category": "mass-deletion",
+          "description": "Home directory deletion",
+          "alternative": "Specify the exact directory to remove"
+        },
+        {
+          "id": "G-003",
+          "pattern": "rm -rf \\.",
+          "category": "mass-deletion",
+          "description": "Current directory recursive deletion",
+          "alternative": "Remove specific files or subdirectories"
+        },
+        {
+          "id": "G-004",
+          "pattern": "rm -rf \\*",
+          "category": "mass-deletion",
+          "description": "Wildcard recursive deletion",
+          "alternative": "Remove specific files by name"
+        },
+        {
+          "id": "G-005",
+          "pattern": "find .* -delete",
+          "category": "mass-deletion",
+          "description": "Find and mass delete",
+          "alternative": "Use find with -print first, review, then delete specific matches"
+        },
+        {
+          "id": "G-006",
+          "pattern": "find .* -exec rm",
+          "category": "mass-deletion",
+          "description": "Find and exec remove",
+          "alternative": "Use find with -print first, review, then delete specific matches"
+        },
+        {
+          "id": "G-007",
+          "pattern": "git push --force",
+          "category": "history-destruction",
+          "description": "Force push overwrites remote history",
+          "alternative": "git push --force-with-lease (safer, fails if remote changed)"
+        },
+        {
+          "id": "G-008",
+          "pattern": "git push.*-f ",
+          "category": "history-destruction",
+          "description": "Force push (short flag)",
+          "alternative": "git push --force-with-lease"
+        },
+        {
+          "id": "G-009",
+          "pattern": "git push.*-f$",
+          "category": "history-destruction",
+          "description": "Force push (short flag at end)",
+          "alternative": "git push --force-with-lease"
+        },
+        {
+          "id": "G-010",
+          "pattern": "git reset --hard",
+          "category": "history-destruction",
+          "description": "Hard reset discards all uncommitted changes",
+          "alternative": "git stash (saves changes) or git reset --soft (keeps changes staged)"
+        },
+        {
+          "id": "G-011",
+          "pattern": "git clean -fd",
+          "category": "history-destruction",
+          "description": "Remove all untracked files and directories",
+          "alternative": "git clean -fdn (dry run first to see what would be deleted)"
+        },
+        {
+          "id": "G-012",
+          "pattern": "git checkout -- \\.",
+          "category": "history-destruction",
+          "description": "Discard all unstaged changes",
+          "alternative": "git stash (saves changes) or git checkout specific files"
+        },
+        {
+          "id": "G-013",
+          "pattern": "git branch -D",
+          "category": "history-destruction",
+          "description": "Force delete branch regardless of merge status",
+          "alternative": "git branch -d (only deletes if fully merged)"
+        },
+        {
+          "id": "G-014",
+          "pattern": "DROP TABLE",
+          "category": "database-destruction",
+          "description": "Drop database table",
+          "alternative": "Back up the table first, or use a migration that can be rolled back"
+        },
+        {
+          "id": "G-015",
+          "pattern": "DROP DATABASE",
+          "category": "database-destruction",
+          "description": "Drop entire database",
+          "alternative": "Back up the database first"
+        },
+        {
+          "id": "G-016",
+          "pattern": "TRUNCATE ",
+          "category": "database-destruction",
+          "description": "Truncate table removes all rows",
+          "alternative": "DELETE with a WHERE clause for targeted removal"
+        },
+        {
+          "id": "G-017",
+          "pattern": "kubectl delete",
+          "category": "infra-destruction",
+          "description": "Delete Kubernetes resources",
+          "alternative": "kubectl delete with --dry-run=client first to preview"
+        },
+        {
+          "id": "G-018",
+          "pattern": "docker system prune",
+          "category": "infra-destruction",
+          "description": "Remove all unused Docker resources",
+          "alternative": "docker system prune --dry-run first, or prune specific resources"
+        },
+        {
+          "id": "G-019",
+          "pattern": "docker volume prune",
+          "category": "infra-destruction",
+          "description": "Remove all unused Docker volumes (data loss)",
+          "alternative": "docker volume ls to review, then remove specific volumes"
+        },
+        {
+          "id": "G-020",
+          "pattern": "prod.*deploy",
+          "category": "production-access",
+          "description": "Production deployment detected",
+          "alternative": "Deploy to staging first and verify"
+        },
+        {
+          "id": "G-021",
+          "pattern": "deploy.*prod",
+          "category": "production-access",
+          "description": "Production deployment detected",
+          "alternative": "Deploy to staging first and verify"
+        },
+        {
+          "id": "G-022",
+          "pattern": "--env.*production",
+          "category": "production-access",
+          "description": "Production environment access",
+          "alternative": "Use staging environment for testing"
+        },
+        {
+          "id": "G-023",
+          "pattern": "curl.*\\| *sh",
+          "category": "remote-code-execution",
+          "description": "Piping remote content to shell",
+          "alternative": "Download the script first, review it, then run it"
+        },
+        {
+          "id": "G-024",
+          "pattern": "curl.*\\| *bash",
+          "category": "remote-code-execution",
+          "description": "Piping remote content to bash",
+          "alternative": "Download the script first, review it, then run it"
+        },
+        {
+          "id": "G-025",
+          "pattern": "wget.*\\| *sh",
+          "category": "remote-code-execution",
+          "description": "Piping remote download to shell",
+          "alternative": "Download the script first, review it, then run it"
+        },
+        {
+          "id": "G-026",
+          "pattern": "chmod 777",
+          "category": "security-degradation",
+          "description": "World-writable permissions",
+          "alternative": "chmod 755 (executable) or chmod 644 (read-only) depending on need"
+        },
+        {
+          "id": "G-027",
+          "pattern": "--no-verify",
+          "category": "safety-bypass",
+          "description": "Skipping git hooks",
+          "alternative": "Fix the hook issue instead of bypassing"
+        },
+        {
+          "id": "G-028",
+          "pattern": "--skip-checks",
+          "category": "safety-bypass",
+          "description": "Skipping safety checks",
+          "alternative": "Fix the check failure instead of bypassing"
+        }
+      ]
+    },
+    "warn": {
+      "description": "Potentially risky. Warn but allow.",
+      "rules": [
+        {
+          "id": "W-001",
+          "pattern": "rm -r ",
+          "category": "deletion",
+          "description": "Recursive deletion"
+        },
+        {
+          "id": "W-002",
+          "pattern": "git rebase",
+          "category": "history-rewrite",
+          "description": "Rebase rewrites commit history"
+        },
+        {
+          "id": "W-003",
+          "pattern": "git merge",
+          "category": "history-rewrite",
+          "description": "Merge operation"
+        },
+        {
+          "id": "W-004",
+          "pattern": "git stash drop",
+          "category": "deletion",
+          "description": "Drop stash entry (not recoverable)"
+        },
+        {
+          "id": "W-005",
+          "pattern": "chown -R",
+          "category": "permission-change",
+          "description": "Recursive ownership change"
+        },
+        {
+          "id": "W-006",
+          "pattern": "npm publish",
+          "category": "public-release",
+          "description": "Publishing to npm registry"
+        },
+        {
+          "id": "W-007",
+          "pattern": "cargo publish",
+          "category": "public-release",
+          "description": "Publishing to crates.io"
+        },
+        {
+          "id": "W-008",
+          "pattern": "pip.*upload",
+          "category": "public-release",
+          "description": "Publishing to PyPI"
+        },
+        {
+          "id": "W-009",
+          "pattern": "docker rm -f",
+          "category": "infra-modification",
+          "description": "Force remove running container"
+        }
+      ]
+    }
+  }
+}

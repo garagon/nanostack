@@ -86,15 +86,29 @@ When the user says `/unfreeze` or `/guard unfreeze`:
 
 ## The Check Script
 
-`guard/bin/check-dangerous.sh` receives the Bash command as input and exits non-zero if the command matches a dangerous pattern. The hook system calls this automatically on every Bash tool use while /guard is active.
+`guard/bin/check-dangerous.sh` uses a three-tier permission system inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude-code-auto-mode):
 
-The script checks for:
-- Force operations (--force, -f with destructive commands)
-- Mass deletion (rm -rf, find -delete)
-- Git history destruction (reset --hard, push --force, rebase on shared branches)
-- Database destruction (DROP, TRUNCATE, DELETE without WHERE)
-- Container/infra destruction (kubectl delete, docker rm)
-- Production environment access (production, prod in connection strings)
+**Tier 1: Allowlist.** Commands like `git status`, `ls`, `cat`, `jq` skip all checks. Safe by definition.
+
+**Tier 2: In-project.** Operations that only touch files inside the current git repo pass through. They're reviewable via version control.
+
+**Tier 3: Pattern matching.** Everything else is checked against block and warn rules in `guard/rules.json`.
+
+When a command is blocked, guard suggests a safer alternative instead of just failing:
+
+```
+BLOCKED [G-007] Force push overwrites remote history
+Category: history-destruction
+Command: git push --force origin main
+
+Safer alternative: git push --force-with-lease (safer, fails if remote changed)
+```
+
+### Configurable rules
+
+Rules live in `guard/rules.json`. 28 block rules and 9 warn rules ship by default across 7 categories: mass-deletion, history-destruction, database-destruction, infra-destruction, production-access, remote-code-execution, security-degradation, safety-bypass.
+
+Users can add custom rules by editing `guard/rules.json`. Each rule has an ID, regex pattern, category, description, and (for block rules) a safer alternative.
 
 ## Gotchas
 

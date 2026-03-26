@@ -81,7 +81,7 @@ Each skill feeds into the next. `/plan` writes an artifact that `/review` reads 
 
 | Skill | What it does |
 |-------|-------------|
-| `/guard` | On-demand safety guardrails. Warns before destructive commands. `/freeze` locks edits to one directory. Activate when touching prod. |
+| `/guard` | Three-tier safety: allowlist, in-project bypass, pattern matching with 28 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
 | `/conductor` | Orchestrate parallel agent sessions through a sprint. Agents claim phases, resolve dependencies, hand off artifacts. No daemon, just atomic file ops. |
 
 ### Intensity modes

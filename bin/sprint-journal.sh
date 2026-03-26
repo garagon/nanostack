@@ -7,8 +7,8 @@ set -e
 STORE="$HOME/.nanostack"
 KNOW_HOW="$HOME/.nanostack/know-how"
 PROJECT_NAME="${2:-$(basename "$(pwd)")}"
-DATE=$(date +"%Y-%m-%d")
-MONTH=$(date +"%Y-%m")
+DATE=$(date -u +"%Y-%m-%d")
+MONTH=$(date -u +"%Y-%m")
 JOURNAL_DIR="$KNOW_HOW/journal"
 JOURNAL_FILE="$JOURNAL_DIR/$DATE-$PROJECT_NAME.md"
 
