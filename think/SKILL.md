@@ -35,7 +35,11 @@ This skill runs BEFORE `/nano-plan`. Think answers WHAT and WHY. Plan answers HO
 
 ### Phase 1: Context Gathering
 
-Understand the landscape, then determine the mode. Ask using `AskUserQuestion` if unclear:
+Understand the landscape, then determine the mode.
+
+**If the user didn't provide an idea or problem** (e.g. they just said `/think` or `/think --autopilot` with no context), simply ask in your response: "What do you want to build?" Do NOT use `AskUserQuestion` for this. Just ask in plain text and wait for their reply.
+
+Determine the mode from the user's description:
 
 - **Founder mode**: Experienced entrepreneur stress-testing an idea. Wants to be challenged hard. Applies full YC diagnostic with maximum pushback. Use when the user explicitly asks for a tough review or says something like "tear this apart."
 - **Startup mode** (default for product ideas): Building a product for users/customers. Applies YC diagnostic. Challenges scope and approach but respects stated pain points.
