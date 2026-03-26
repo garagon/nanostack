@@ -19,15 +19,27 @@ You turn validated ideas into executable steps. Every file gets named. Every ste
 
 Classify the work:
 
-| Scope | Criteria | Plan depth |
-|-------|----------|------------|
-| **Small** | 1-3 files, single concern, clear path | Bullet-point plan, skip risk analysis |
-| **Medium** | 4-10 files, multiple concerns, some unknowns | Full plan with risks and alternatives |
-| **Large** | 10+ files, cross-cutting, architectural impact | Full plan + phased execution + checkpoints |
+| Scope | Criteria | Output |
+|-------|----------|--------|
+| **Small** | 1-3 files, single concern, clear path | Implementation steps only |
+| **Medium** | 4-10 files, multiple concerns, some unknowns | Product spec + implementation steps + risks |
+| **Large** | 10+ files, cross-cutting, architectural impact | Product spec + technical spec + implementation steps + phased execution |
 
 For **small** scope: produce a brief plan and move on. Do not over-plan trivial work.
 
-### 3. Write the Plan
+### 3. Specs (Medium/Large scope only)
+
+Before writing implementation steps, produce the specs that define what you're building. Skip this for Small scope.
+
+**Medium scope: Product Spec only.**
+Use `plan/templates/product-spec.md`. Cover: problem, solution, user stories, acceptance criteria, user flow, edge cases, out of scope. Keep it to 1-2 pages. This is what the team reads to understand what "done" looks like.
+
+**Large scope: Product Spec + Technical Spec.**
+Also use `plan/templates/technical-spec.md`. Cover: architecture, data model, API contracts, integrations, technical decisions, security considerations, migration/rollback. This is what the team reads to understand how the system works.
+
+Present the specs to the user before writing implementation steps. Specs are the contract. If the spec is wrong, the plan will be wrong and the code will be wrong. Get alignment here.
+
+### 4. Write the Implementation Plan
 
 Use the template at `plan/templates/plan-template.md` as your output structure. Fill in every section that applies to the scope level.
 
@@ -37,7 +49,7 @@ Key requirements:
 - **Each step must be independently verifiable** — how will you know it worked?
 - **Identify what you do NOT know** — unknowns are more valuable than knowns in a plan
 
-### 4. Architecture Checkpoint (Medium/Large scope only)
+### 5. Architecture Checkpoint (Medium/Large scope only)
 
 Before presenting, validate the plan against these engineering concerns:
 
@@ -49,7 +61,7 @@ Before presenting, validate the plan against these engineering concerns:
 
 Skip this for Small scope — it's overkill for a 3-file change.
 
-### 5. Product Standards (if the plan includes user-facing output)
+### 6. Product Standards (if the plan includes user-facing output)
 
 If the plan produces anything a user will see or interact with, apply these standards. They are not optional. A product built with an AI agent should look and feel better than one built without it.
 
@@ -88,11 +100,11 @@ If the plan produces anything a user will see or interact with, apply these stan
 
 If the plan is a pure library with no user-facing output, skip this section.
 
-### 6. Present and Confirm
+### 7. Present and Confirm
 
 Present the plan to the user. Wait for explicit approval before executing. If the user modifies the plan, update it before proceeding.
 
-### 7. Save Artifact
+### 8. Save Artifact
 
 Always persist the plan after presenting it to the user:
 
