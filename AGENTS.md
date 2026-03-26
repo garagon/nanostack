@@ -8,7 +8,7 @@ Each skill folder contains an `agents/openai.yaml` for OpenAI-compatible agent d
 | Skill | Directory | Description |
 |-------|-----------|-------------|
 | think | `think/` | Strategic product thinking. Three modes (Founder/Startup/Builder) with calibrated intensity. YC-grade forcing questions, CEO cognitive patterns, manual delivery test. |
-| plan | `plan/` | Implementation planning. Scope assessment, step-by-step plans with verification, product standards. |
+| nano-plan | `plan/` | Implementation planning. Scope assessment, step-by-step plans with verification, product standards. |
 | review | `review/` | Two-pass code review. Structural then adversarial. Scope drift detection against plan. Conflict detection with /security. |
 | qa | `qa/` | Quality assurance. Browser, API, CLI and debug testing with Playwright. WTF heuristic. |
 | security | `security/` | Security audit. OWASP Top 10, STRIDE, dependency scanning. Cross-references /review for conflicts. Graded report (A-F). |

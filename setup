@@ -18,7 +18,10 @@ set -e
 NANOSTACK_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 SKILLS_DIR="$(dirname "$NANOSTACK_DIR")"
-SKILLS=(think plan review qa security ship guard conductor)
+SKILLS=(think nano-plan review qa security ship guard conductor)
+# Map skill names to directories (when they differ)
+declare -A SKILL_DIRS
+SKILL_DIRS[nano-plan]=plan
 
 # sed -i portability (BSD vs GNU)
 if sed --version >/dev/null 2>&1; then
@@ -117,9 +120,10 @@ install_claude() {
 
   for skill in "${SKILLS[@]}"; do
     local target="$skills_dir/$skill"
+    local dir="${SKILL_DIRS[$skill]:-$skill}"
     # Only create symlink if it doesn't exist as a real directory
     if [ -L "$target" ] || [ ! -e "$target" ]; then
-      ln -snf "nanostack/$skill" "$target"
+      ln -snf "nanostack/$dir" "$target"
       linked+=("$skill")
     fi
   done
