@@ -44,7 +44,7 @@ Agent:  I'm going to push back on "notifications." You said users open
         push notifications, but now you have data, not a guess.
 
 You:    Makes sense. Let's do the dot.
-You:    /nano-plan
+You:    /nano
         [3 steps, 2 files, product standards: shadcn/ui + Tailwind]
 
 You:    [builds it]
@@ -63,15 +63,15 @@ You said "notifications." The agent said "your users have a freshness problem" a
 Nanostack is a process, not a collection of tools. The skills run in the order a sprint runs:
 
 ```
-/think → /nano-plan → build → /review → /qa → /security → /ship
+/think → /nano → build → /review → /qa → /security → /ship
 ```
 
-Each skill feeds into the next. `/nano-plan` writes an artifact that `/review` reads for scope drift detection. `/review` catches conflicts with `/security` findings. `/ship` verifies everything is clean before creating the PR. Nothing falls through the cracks because every step knows what came before it.
+Each skill feeds into the next. `/nano` writes an artifact that `/review` reads for scope drift detection. `/review` catches conflicts with `/security` findings. `/ship` verifies everything is clean before creating the PR. Nothing falls through the cracks because every step knows what came before it.
 
 | Skill | Your specialist | What they do |
 |-------|----------------|--------------|
 | `/think` | **CEO / Founder** | Three intensity modes: Founder (full pushback), Startup (challenges scope, respects pain) and Builder (minimal pushback). Six forcing questions including manual delivery test and community validation. `--autopilot` runs the full sprint after approval. |
-| `/nano-plan` | **Eng Manager** | Auto-generates product specs (Medium scope) or product + technical specs (Large scope) before implementation steps. Product standards for web (shadcn/ui), CLI/TUI (Bubble Tea, Rich, Ink, Ratatui). Stack defaults with CLI preference for beginners. |
+| `/nano` | **Eng Manager** | Auto-generates product specs (Medium scope) or product + technical specs (Large scope) before implementation steps. Product standards for web (shadcn/ui), CLI/TUI (Bubble Tea, Rich, Ink, Ratatui). Stack defaults with CLI preference for beginners. |
 | `/review` | **Staff Engineer** | Two-pass code review: structural then adversarial. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan. Cross-references `/security` with 10 conflict precedents. |
 | `/qa` | **QA Lead** | Functional testing + Visual QA. Takes screenshots and analyzes UI against product standards. Browser, API, CLI and debug modes. WTF heuristic stops before fixes cause regressions. |
 | `/security` | **Security Engineer** | Auto-detects your stack, scans secrets, injection, auth, CI/CD, AI/LLM vulnerabilities. Graded report (A-F). Cross-references `/review` for conflict detection. Every finding includes the fix. |
@@ -96,7 +96,7 @@ Not every change needs a full audit. `/review`, `/qa` and `/security` support th
 
 ### Specs by scope
 
-`/nano-plan` generates specs automatically based on project complexity:
+`/nano` generates specs automatically based on project complexity:
 
 | Scope | What you get |
 |-------|-------------|
@@ -134,7 +134,7 @@ Agent:  I'm going to push back on "security scanner." A scanner finds
         pre-deploy. Ship tomorrow. The full scanner is a 3-month project.
 
 You:    That makes sense. Let's start with S3.
-You:    /nano-plan
+You:    /nano
         [5 steps, 4 files, risks listed, out-of-scope explicit]
 
 You:    [builds the feature]
@@ -162,7 +162,7 @@ Discuss the idea, approve the brief, walk away. The agent runs the full sprint:
 `/think` is interactive: the agent asks questions, you answer, you align on the brief. After you approve, everything else runs automatically:
 
 ```
-/nano-plan → build → /review → /security → /qa → /ship
+/nano → build → /review → /security → /qa → /ship
 ```
 
 Autopilot only stops if:
@@ -186,7 +186,7 @@ Nanostack works well with one agent. It gets interesting with three running at o
 `/conductor` coordinates multiple sessions. Each agent claims a phase, executes it and the next agent picks up the artifact. Review, QA and security run in parallel because they all depend on build, not on each other.
 
 ```
-/think → /nano-plan → build ─┬─ /review   (Agent A) ─┐
+/think → /nano → build ─┬─ /review   (Agent A) ─┐
                               ├─ /qa       (Agent B)  ├─ /ship
                               └─ /security (Agent C) ─┘
 ```
@@ -307,7 +307,7 @@ Every skill persists its output to `.nanostack/` after every run. You don't add 
 
 ```
 /think     →  .nanostack/think/20260325-140000.json
-/nano-plan →  .nanostack/plan/20260325-143000.json
+/nano →  .nanostack/plan/20260325-143000.json
 /review    →  .nanostack/review/20260325-150000.json
 /qa        →  .nanostack/qa/20260325-151500.json
 /security  →  .nanostack/security/20260325-152000.json
@@ -333,10 +333,10 @@ Full schema in [`reference/artifact-schema.md`](reference/artifact-schema.md). T
 
 ### Skills read each other
 
-`/review` automatically finds the most recent `/nano-plan` artifact and checks scope drift: did you touch files outside the plan? Did you skip files that were in it?
+`/review` automatically finds the most recent `/nano` artifact and checks scope drift: did you touch files outside the plan? Did you skip files that were in it?
 
 ```
-/nano-plan     →  saves planned_files list
+/nano     →  saves planned_files list
 /review   →  finds plan, compares against git diff, reports:
               "drift_detected: src/unplanned.ts out of scope, tests/auth.test.ts missing"
 ```
@@ -361,7 +361,7 @@ When you run `/ship` and the PR lands, it automatically generates a sprint journ
        →  writes .nanostack/know-how/journal/2026-03-25-myproject.md
 ```
 
-The journal reads every phase artifact from the sprint and writes one file with the full decision trail: what `/think` reframed, what `/nano-plan` scoped, what `/review` found, how conflicts were resolved, what `/security` graded.
+The journal reads every phase artifact from the sprint and writes one file with the full decision trail: what `/think` reframed, what `/nano` scoped, what `/review` found, how conflicts were resolved, what `/security` graded.
 
 ### Analytics and learnings
 
@@ -416,7 +416,7 @@ Run `~/.claude/skills/nanostack/bin/upgrade.sh` to pull latest and re-run setup.
 
 ```bash
 # Claude Code
-cd ~/.claude/skills && rm -f think nano-plan review qa security ship guard conductor && rm -rf nanostack
+cd ~/.claude/skills && rm -f think nano review qa security ship guard conductor && rm -rf nanostack
 
 # Codex
 rm -rf ~/.codex/skills/nanostack*

@@ -9,7 +9,7 @@ Nanostack gives an AI coding agent a structured sprint process: think, plan, bui
 ## Skills
 
 - /think: Strategic product thinking. Three intensity modes: Founder (full pushback for experienced entrepreneurs), Startup (challenges scope but respects pain points), Builder (minimal pushback, focus on simplest solution). Six forcing questions including manual delivery test and community validation.
-- /nano-plan: Implementation planning. Scope, steps, files, risks, architecture checkpoint, product standards (shadcn/ui, SEO, LLM SEO).
+- /nano: Implementation planning. Scope, steps, files, risks, architecture checkpoint, product standards (shadcn/ui, SEO, LLM SEO).
 - /review: Two-pass code review. Structural correctness then adversarial edge-case hunting. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan artifact.
 - /qa: Quality assurance. Browser, API, CLI and debug testing. Fixes bugs with atomic commits. WTF heuristic stops when further fixes would introduce regressions.
 - /security: Security audit. Auto-detects stack, scans for secrets, injection, auth flaws, CI/CD misconfigs, AI/LLM vulnerabilities. Graded report (A-F). Cross-references /review findings for conflict detection.
@@ -19,7 +19,7 @@ Nanostack gives an AI coding agent a structured sprint process: think, plan, bui
 
 ## Know-how
 
-Skills automatically save structured artifacts to .nanostack/ after every run. Skills cross-reference each other: /review reads /nano-plan for scope drift, /security reads /review for conflict detection. /ship generates a sprint journal from all phase artifacts. The know-how vault at .nanostack/know-how/ works as an Obsidian vault with linked journals, analytics dashboards and learnings. Bad sessions can be discarded with bin/discard-sprint.sh.
+Skills automatically save structured artifacts to .nanostack/ after every run. Skills cross-reference each other: /review reads /nano for scope drift, /security reads /review for conflict detection. /ship generates a sprint journal from all phase artifacts. The know-how vault at .nanostack/know-how/ works as an Obsidian vault with linked journals, analytics dashboards and learnings. Bad sessions can be discarded with bin/discard-sprint.sh.
 
 ## Install
 
