@@ -4,7 +4,9 @@ Minimal AI coding agent team skills for the full engineering workflow. Inspired 
 
 Other tools help you write code faster. Nanostack questions what you're building before you build it. It tells you "that's a 3-week project, but this version ships today" and it's usually right. Then it plans, reviews, tests, audits security and ships. One person does the work of a full team.
 
-**8 skills. Any agent. Zero dependencies. Zero build step.**
+**8 skills. 5 agents. Zero dependencies. Zero build step.**
+
+Works with Claude Code, Cursor, OpenAI Codex, OpenCode and Gemini CLI.
 
 ## Quick start
 
@@ -236,6 +238,14 @@ All rules live in [`guard/rules.json`](guard/rules.json). Each rule has an ID, r
 ```
 
 ## Install
+
+**Quick install (any agent):**
+
+```bash
+npx skills add garagon/nanostack
+```
+
+**Per agent:**
 
 ```bash
 # Claude Code (recommended)
