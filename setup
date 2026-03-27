@@ -18,12 +18,12 @@ set -e
 NANOSTACK_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 SKILLS_DIR="$(dirname "$NANOSTACK_DIR")"
-SKILLS=(think nano-plan review qa security ship guard conductor)
+SKILLS=(think nano review qa security ship guard conductor)
 
 # Map skill name to directory (when they differ)
 skill_dir() {
   case "$1" in
-    nano-plan) echo "plan" ;;
+    nano) echo "plan" ;;
     *) echo "$1" ;;
   esac
 }
@@ -256,7 +256,7 @@ for skill in "${SKILLS[@]}"; do
   echo "  /$skill"
 done
 echo ""
-echo "Workflow: /think → /nano-plan → build → /review → /qa → /security → /ship"
+echo "Workflow: /think → /nano → build → /review → /qa → /security → /ship"
 echo "Safety:   /guard (activate on-demand)"
 echo ""
 echo "Per-project setup (run once in each project):"
