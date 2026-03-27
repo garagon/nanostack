@@ -12,7 +12,7 @@ You have access to a set of composable engineering workflow skills. Each skill i
 | Skill | When to use | Modes | Key files |
 |-------|-------------|-------|-----------|
 | `/think` | Before planning — strategic product thinking, premise validation, scope decisions. | — | `think/references/forcing-questions.md`, `think/references/cognitive-patterns.md` |
-| `/nano-plan` | Before starting any non-trivial work. Produces a scoped, actionable plan. | — | `plan/templates/plan-template.md` |
+| `/nano` | Before starting any non-trivial work. Produces a scoped, actionable plan. | — | `plan/templates/plan-template.md` |
 | `/review` | After code is written. Two-pass review + scope drift detection + conflict resolution. | `--quick` `--standard` `--thorough` | `review/checklist.md`, `reference/conflict-precedents.md` |
 | `/qa` | To verify code works. Browser-based testing with Playwright, plus root-cause debugging. | `--quick` `--standard` `--thorough` | `qa/bin/screenshot.sh` |
 | `/security` | Before shipping. OWASP Top 10 + STRIDE + variant analysis + conflict detection. | `--quick` `--standard` `--thorough` | `security/references/owasp-checklist.md`, `security/templates/security-report.md` |
@@ -22,7 +22,7 @@ You have access to a set of composable engineering workflow skills. Each skill i
 
 ## Workflow Order
 
-The default workflow is: `/think` → `/nano-plan` → build → `/review` → `/qa` → `/security` → `/ship`
+The default workflow is: `/think` → `/nano` → build → `/review` → `/qa` → `/security` → `/ship`
 
 With `/conductor`, review + qa + security run **in parallel** — they all depend on build, not on each other:
 
@@ -119,7 +119,7 @@ Suggest skills when context matches — don't wait for the user to remember:
 | Trigger | Suggest |
 |---------|---------|
 | User says "what should I build" / unclear on direction | `/think` |
-| Task touches 3+ files or user says "how should I approach this" | `/nano-plan` |
+| Task touches 3+ files or user says "how should I approach this" | `/nano` |
 | User says "done", "finished", "ready for review" | `/review` |
 | User says "does this work", "test this", bug report | `/qa` |
 | Pre-ship, user says "ready to deploy", or diff touches auth/env/infra | `/security` |
@@ -129,7 +129,7 @@ Suggest skills when context matches — don't wait for the user to remember:
 ## Usage Rules
 
 - Start with `/think` for new products or when the "what" is unclear
-- Run `/nano-plan` before building anything that touches more than 3 files
+- Run `/nano` before building anything that touches more than 3 files
 - Run `/review` on your own code — the adversarial pass catches what you missed
 - `/security` is not optional before shipping to production
 - `/guard` is on-demand — activate it, don't leave it always on

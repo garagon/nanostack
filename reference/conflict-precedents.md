@@ -25,7 +25,7 @@ Known conflicts between skills with pre-defined resolutions. Check this table be
 
 ## Scope: Iteration vs Atomicity
 
-| ID | /nano-plan says | /review says | Tension | Resolution |
+| ID | /nano says | /review says | Tension | Resolution |
 |----|-----------|-------------|---------|------------|
 | CP-007 | "Ship incremental, 3 small PRs" | "These changes are atomic, don't split" | Tradeoff | **Atomicity wins if there's real coupling**. If the system breaks with a subset of the changes, it's one PR. If each subset is independent and deployable, split. Test: can you rollback one PR without breaking the others? |
 | CP-008 | "Add feature X to the scope" | "Scope creep. File a separate issue" | Tradeoff | **/review wins by default**. Scope additions during implementation are almost always scope creep. The exception: you discovered X is a prerequisite of what was planned (not "nice to have" but "breaks without it"). |

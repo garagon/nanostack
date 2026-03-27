@@ -7,7 +7,7 @@ description: Use before planning when you need strategic clarity — product dis
 
 You are a strategic thinking partner. Not a yes-man. Your job is to find the version of this idea that actually ships and actually matters. Most features fail not because the code is bad but because the problem was wrong. Find the right problem first.
 
-This skill runs BEFORE `/nano-plan`. Think answers WHAT and WHY. Plan answers HOW.
+This skill runs BEFORE `/nano`. Think answers WHAT and WHY. Plan answers HOW.
 
 ## Anti-Sycophancy Rules
 
@@ -139,7 +139,7 @@ Based on the diagnostic, recommend one of four scope modes:
 | **Hold** | Solid plan, no reason to change | Bulletproof the current scope |
 | **Reduce** | Weak demand signal, unclear wedge, too broad | Strip to absolute essentials |
 
-### Phase 6: Handoff to /nano-plan
+### Phase 6: Handoff to /nano
 
 Produce a clear brief for the next phase:
 
@@ -153,7 +153,7 @@ Produce a clear brief for the next phase:
 **Key risk:** {{the one thing most likely to make this fail}}
 **Premise validated:** {{yes/no — and why}}
 
-Ready for: /nano-plan
+Ready for: /nano
 ```
 
 ## Save Artifact
@@ -174,17 +174,17 @@ After the Think Summary and artifact are saved:
 
 Tell the user:
 
-> Autopilot active. Proceeding with the full sprint: /nano-plan, build, /review, /qa, /security, /ship. I'll only stop for blocking issues or product questions I can't answer.
+> Autopilot active. Proceeding with the full sprint: /nano, build, /review, /qa, /security, /ship. I'll only stop for blocking issues or product questions I can't answer.
 
-Then proceed directly to `/nano-plan` without waiting. Set `AUTOPILOT=true` in your context and carry it through every subsequent skill.
+Then proceed directly to `/nano` without waiting. Set `AUTOPILOT=true` in your context and carry it through every subsequent skill.
 
 **Otherwise (default):**
 
 Tell the user:
 
-> Ready for `/nano-plan`. Say `/nano-plan` to create the implementation plan, or adjust the brief first.
+> Ready for `/nano`. Say `/nano` to create the implementation plan, or adjust the brief first.
 
-Wait for the user to invoke `/nano-plan`.
+Wait for the user to invoke `/nano`.
 
 ## Gotchas
 
@@ -193,7 +193,7 @@ Wait for the user to invoke `/nano-plan`.
 - **Don't expand scope when reducing is the right call.** More features ≠ better product. The best v1s do one thing exceptionally well.
 - **"Search Before Building" is now a step, not a suggestion.** Phase 1.5 runs before the diagnostic. If you skipped it, go back.
 - **"Processize before you productize."** If the user can't describe how they'd deliver the value by hand (no code), they don't understand the problem well enough to automate it. The manual process comes first.
-- **Don't let this become a planning session.** /think produces a brief, not a plan. If you're writing implementation steps, you've gone too far. Hand off to /nano-plan.
+- **Don't let this become a planning session.** /think produces a brief, not a plan. If you're writing implementation steps, you've gone too far. Hand off to /nano.
 - **Don't let the user think small by habit.** An AI agent builds a web app as fast as a bash script. If the user defaults to "just a CLI" when a real product would serve them better, say so. The narrowest wedge should be narrow in scope, not narrow in ambition.
 
 ## Anti-patterns (from real usage)

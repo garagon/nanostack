@@ -136,7 +136,7 @@ One agent, one sprint. Same as today — the conductor just adds visibility:
 
 ```
 You:  /conductor start
-You:  /think → /nano-plan → build → /review → /qa → /security → /ship
+You:  /think → /nano → build → /review → /qa → /security → /ship
       [each phase auto-claims and auto-completes]
 ```
 
@@ -146,7 +146,7 @@ One build, then fan out review + qa + security in parallel:
 
 ```
 Terminal 1:  /conductor start
-Terminal 1:  /think → /nano-plan → build
+Terminal 1:  /think → /nano → build
 Terminal 1:  /review
 
 Terminal 2:  /qa              # claims qa (build.done exists)
@@ -161,7 +161,7 @@ Terminal 1:  /ship            # waits until review + qa + security all done
 Multiple developers, each running their own agent:
 
 ```
-Dev A (claude):   /think → /nano-plan
+Dev A (claude):   /think → /nano
 Dev B (codex):    build (claims after plan.done)
 Dev A (claude):   /review (claims after build.done)
 Dev C (kiro):     /security (claims after build.done, parallel with review)
