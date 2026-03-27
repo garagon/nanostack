@@ -406,6 +406,22 @@ This removes artifacts and the journal entry. Analytics recalculate on next run.
 
 Open `.nanostack/know-how/` in Obsidian. Sprint journals link to conflict precedents. The dashboard links to journals. Graph view shows how sprints, conflicts and learnings connect over time.
 
+## Build on nanostack
+
+Nanostack is a platform. Build your own skill set on top of it for any domain.
+
+Register custom phases in `.nanostack/config.json`:
+
+```json
+{ "custom_phases": ["audience", "campaign", "measure"] }
+```
+
+Your skills use the same infrastructure: `save-artifact.sh` persists artifacts, `find-artifact.sh` reads them, skills cross-reference each other. The sprint journal, analytics and Obsidian vault work with custom phases.
+
+A marketing team builds `/audience` and `/campaign`. A data team builds `/explore` and `/model`. A design team builds `/wireframe` and `/usability`. All compose with nanostack's `/think` for ideation, `/review` for quality and `/ship` for delivery.
+
+Full guide: [`EXTENDING.md`](EXTENDING.md).
+
 ## Privacy
 
 All data stays on your machine in `.nanostack/`. No remote calls. No telemetry.
