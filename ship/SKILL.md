@@ -219,3 +219,11 @@ These were discovered from shipping real PRs:
 - **Pushing directly to main.** Every change should go through a PR regardless of size. Clean history, reviewable changes.
 - **Not reading CONTRIBUTING.md.** Every project has different rules. Some require video evidence, some require specific naming conventions, some have line limits. Read the rules before writing the PR.
 - **CI checks that only maintainers resolve.** Label checks, CLA checks, approval gates. These will fail on your PR and there's nothing you can do. Know which checks you own and which you don't.
+
+## Next Step
+
+After shipping, the sprint is complete. Tell the user:
+
+> Sprint complete. PR created. Journal generated at .nanostack/know-how/journal/.
+>
+> Run `bin/analytics.sh` to see trends across sprints.
