@@ -46,9 +46,32 @@ git rebase origin/main  # preferred for clean history
 git merge origin/main   # if rebase would be messy
 ```
 
-### 2. Create PR
+### 2. PR Preview (mandatory stop)
 
-Use the template at `ship/templates/pr-template.md` for the PR body.
+Before creating the PR, show the user a full preview. This is a mandatory stop because after creation it's public.
+
+```
+## PR Preview
+
+**Title:** {{title}}
+**Branch:** {{branch}} → {{base}}
+**Files changed:** {{count}}
+
+### Summary
+{{1-3 bullets of what changed and why}}
+
+### Changes
+{{file list with one-line description each}}
+
+### Test plan
+{{how to verify}}
+```
+
+Wait for user approval. Only proceed after explicit confirmation. If the user adjusts something, update the preview and ask again.
+
+### 3. Create PR
+
+After approval, use the template at `ship/templates/pr-template.md` for the PR body.
 
 ```bash
 gh pr create \
@@ -70,7 +93,7 @@ EOF
 - Test plan: how to verify this works
 - Link to related issues/tickets
 
-### 3. Monitor CI
+### 4. Monitor CI
 
 After creating the PR, check CI status:
 
@@ -84,7 +107,7 @@ If CI fails:
 - Do not retry without understanding the failure
 - If a test is genuinely flaky (not caused by your change), note it in the PR
 
-### 4. Post-Merge Verification
+### 5. Post-Merge Verification
 
 After the PR is merged:
 
@@ -105,7 +128,7 @@ If the project has a staging/production URL, run a **post-deploy checklist:**
 
 If any check fails: **stop and rollback** before debugging. A broken prod is worse than a reverted feature.
 
-### 5. Rollback Plan
+### 6. Rollback Plan
 
 If something goes wrong after deploy:
 
@@ -117,7 +140,7 @@ gh pr create --title "Revert: {{original PR title}}" --body "Reverting due to {{
 
 Document what went wrong for the team.
 
-### 6. Repo Quality Standards
+### 7. Repo Quality Standards
 
 Before creating the PR, verify these standards. The public repo is the face of the project.
 
@@ -178,3 +201,13 @@ Include before/after test counts when tests were added during the sprint. Quanti
 - **Don't deploy on Friday afternoons.** Unless you want to debug on Saturday morning. If the user insists, note the risk.
 - **One PR = one concern.** If your PR does two unrelated things, split it. The review will be faster and the rollback will be cleaner.
 - **Draft PRs are useful.** If the code isn't ready for review but you want CI to run, create a draft: `gh pr create --draft`
+
+## Anti-patterns (from real usage)
+
+These were discovered from shipping real PRs:
+
+- **Creating PRs without checking existing work.** Submitted a PR to FastAPI without realizing 8 other PRs existed for the same issue, including one the maintainer preferred. Always search first.
+- **Skipping PR Preview.** A PR went out with "Fixes #4060" as the only body text. The project required What/Why/Before-After/Tests/AI disclosure. PR Preview catches this.
+- **Pushing directly to main.** Every change should go through a PR regardless of size. Clean history, reviewable changes.
+- **Not reading CONTRIBUTING.md.** Every project has different rules. Some require video evidence, some require specific naming conventions, some have line limits. Read the rules before writing the PR.
+- **CI checks that only maintainers resolve.** Label checks, CLA checks, approval gates. These will fail on your PR and there's nothing you can do. Know which checks you own and which you don't.
