@@ -29,7 +29,9 @@ mkdir -p "$NANOSTACK_STORE"
 AGENTS="[]"
 command -v claude >/dev/null 2>&1 && AGENTS=$(echo "$AGENTS" | jq '. + ["claude"]')
 command -v codex >/dev/null 2>&1 && AGENTS=$(echo "$AGENTS" | jq '. + ["codex"]')
-{ command -v kiro-cli >/dev/null 2>&1 || command -v kiro >/dev/null 2>&1; } && AGENTS=$(echo "$AGENTS" | jq '. + ["kiro"]')
+command -v cursor >/dev/null 2>&1 && AGENTS=$(echo "$AGENTS" | jq '. + ["cursor"]')
+command -v opencode >/dev/null 2>&1 && AGENTS=$(echo "$AGENTS" | jq '. + ["opencode"]')
+command -v gemini >/dev/null 2>&1 && AGENTS=$(echo "$AGENTS" | jq '. + ["gemini"]')
 
 # Detect project context from current directory
 PROJECT_NAME=$(basename "$(pwd)")

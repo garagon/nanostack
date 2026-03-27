@@ -164,7 +164,7 @@ Multiple developers, each running their own agent:
 Dev A (claude):   /think → /nano
 Dev B (codex):    build (claims after plan.done)
 Dev A (claude):   /review (claims after build.done)
-Dev C (kiro):     /security (claims after build.done, parallel with review)
+Dev C (opencode):     /security (claims after build.done, parallel with review)
 Dev A (claude):   /ship (claims after review.done + security.done)
 ```
 
