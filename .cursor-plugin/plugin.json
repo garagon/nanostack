@@ -1,0 +1,8 @@
+{
+  "name": "nanostack",
+  "description": "Minimal AI coding agent team skills for the full engineering workflow",
+  "version": "0.2.0",
+  "license": "Apache-2.0",
+  "skills": "../",
+  "keywords": ["skills", "engineering-workflow", "code-review", "security", "planning"]
+}

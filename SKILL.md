@@ -91,7 +91,7 @@ Read `reference/conflict-precedents.md` for known conflict patterns and pre-defi
 
 On first use in a project, run `bin/init-config.sh --interactive` to create `.nanostack/config.json`. This stores:
 
-- **Installed agents** — auto-detected (claude, codex, kiro)
+- **Installed agents** — auto-detected (claude, codex, cursor, opencode, gemini)
 - **Detected stack** — node, go, python, docker
 - **Preferences** — default intensity mode, auto-save, conflict precedence
 

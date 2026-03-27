@@ -246,9 +246,17 @@ cd ~/.claude/skills/nanostack && ./setup
 git clone https://github.com/garagon/nanostack.git ~/nanostack
 cd ~/nanostack && ./setup --host codex
 
-# Amazon Kiro
+# Cursor
 git clone https://github.com/garagon/nanostack.git ~/nanostack
-cd ~/nanostack && ./setup --host kiro
+cd ~/nanostack && ./setup --host cursor
+
+# OpenCode
+git clone https://github.com/garagon/nanostack.git ~/nanostack
+cd ~/nanostack && ./setup --host opencode
+
+# Gemini CLI
+git clone https://github.com/garagon/nanostack.git ~/nanostack
+cd ~/nanostack && ./setup --host gemini
 
 # Auto-detect all installed agents
 ./setup --host auto
@@ -279,7 +287,7 @@ This creates `.claude/settings.json` with permissions so Claude Code doesn't int
 - macOS or Linux
 - [jq](https://jqlang.github.io/jq/) for artifact processing (`brew install jq` or `apt install jq`)
 - Git
-- One of: Claude Code, OpenAI Codex, Amazon Kiro
+- One of: Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI
 
 ## The Zen of Nanostack
 
@@ -419,10 +427,16 @@ Run `~/.claude/skills/nanostack/bin/upgrade.sh` to pull latest and re-run setup.
 cd ~/.claude/skills && rm -f think nano review qa security ship guard conductor && rm -rf nanostack
 
 # Codex
-rm -rf ~/.codex/skills/nanostack*
+rm -rf ~/.agents/skills/nanostack*
 
-# Kiro
-rm -rf ~/.kiro/skills/nanostack
+# Cursor
+rm -f .cursor/rules/nanostack.md
+
+# OpenCode
+rm -rf ~/.agents/skills/nanostack
+
+# Gemini CLI
+gemini extensions uninstall nanostack
 ```
 
 ## License

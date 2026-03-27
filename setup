@@ -48,7 +48,7 @@ while [ $# -gt 0 ]; do
 Usage: ./setup [OPTIONS]
 
 Options:
-  --host <agent>    Target: claude (default), codex, kiro, auto
+  --host <agent>    Target: claude (default), codex, cursor, opencode, gemini, auto
   --local           Install to .claude/skills/ in current working directory
   --help            Show this help
 
@@ -70,15 +70,14 @@ HELP
 done
 
 case "$HOST" in
-  claude|codex|kiro|auto) ;;
-  *) echo "Unknown --host: $HOST (expected claude, codex, kiro, or auto)" >&2; exit 1 ;;
+  claude|codex|cursor|opencode|gemini|auto) ;;
+  *) echo "Unknown --host: $HOST (expected claude, codex, cursor, opencode, gemini, or auto)" >&2; exit 1 ;;
 esac
 
 # --local override
 if [ "$LOCAL_INSTALL" -eq 1 ]; then
   SKILLS_DIR="$(pwd)/.claude/skills"
   mkdir -p "$SKILLS_DIR"
-  # Clone or symlink nanostack into local skills
   NANOSTACK_LOCAL="$SKILLS_DIR/nanostack"
   if [ ! -e "$NANOSTACK_LOCAL" ]; then
     ln -snf "$SOURCE_DIR" "$NANOSTACK_LOCAL"
@@ -90,21 +89,29 @@ fi
 # ─── Auto-detect agents ──────────────────────────────────────
 INSTALL_CLAUDE=0
 INSTALL_CODEX=0
-INSTALL_KIRO=0
+INSTALL_CURSOR=0
+INSTALL_OPENCODE=0
+INSTALL_GEMINI=0
 
 if [ "$HOST" = "auto" ]; then
   command -v claude >/dev/null 2>&1 && INSTALL_CLAUDE=1
   command -v codex >/dev/null 2>&1 && INSTALL_CODEX=1
-  command -v kiro-cli >/dev/null 2>&1 && INSTALL_KIRO=1
-  command -v kiro >/dev/null 2>&1 && INSTALL_KIRO=1
+  command -v cursor >/dev/null 2>&1 && INSTALL_CURSOR=1
+  command -v opencode >/dev/null 2>&1 && INSTALL_OPENCODE=1
+  command -v gemini >/dev/null 2>&1 && INSTALL_GEMINI=1
   # Default to claude if nothing detected
-  [ "$INSTALL_CLAUDE" -eq 0 ] && [ "$INSTALL_CODEX" -eq 0 ] && [ "$INSTALL_KIRO" -eq 0 ] && INSTALL_CLAUDE=1
+  TOTAL=$((INSTALL_CLAUDE + INSTALL_CODEX + INSTALL_CURSOR + INSTALL_OPENCODE + INSTALL_GEMINI))
+  [ "$TOTAL" -eq 0 ] && INSTALL_CLAUDE=1
 elif [ "$HOST" = "claude" ]; then
   INSTALL_CLAUDE=1
 elif [ "$HOST" = "codex" ]; then
   INSTALL_CODEX=1
-elif [ "$HOST" = "kiro" ]; then
-  INSTALL_KIRO=1
+elif [ "$HOST" = "cursor" ]; then
+  INSTALL_CURSOR=1
+elif [ "$HOST" = "opencode" ]; then
+  INSTALL_OPENCODE=1
+elif [ "$HOST" = "gemini" ]; then
+  INSTALL_GEMINI=1
 fi
 
 # ─── Claude Code ──────────────────────────────────────────────
@@ -165,30 +172,46 @@ install_codex() {
   fi
 }
 
-# ─── Amazon Kiro ──────────────────────────────────────────────
-# Copies SKILL.md files with path rewriting (Kiro doesn't follow symlinks well)
-install_kiro() {
-  local kiro_skills="${HOME}/.kiro/skills"
-  local kiro_root="$kiro_skills/nanostack"
-  mkdir -p "$kiro_root"
+# ─── Cursor ───────────────────────────────────────────────────
+# Creates .cursor/rules/ with skill references
+install_cursor() {
+  local cursor_rules=".cursor/rules"
+  mkdir -p "$cursor_rules"
 
-  # Copy root files
-  sed -e 's|~/.claude/skills/nanostack|~/.kiro/skills/nanostack|g' \
-      -e 's|\.claude/skills|.kiro/skills|g' \
-      "$SOURCE_DIR/SKILL.md" > "$kiro_root/SKILL.md"
-  cp "$SOURCE_DIR/AGENTS.md" "$kiro_root/AGENTS.md"
+  # Create a rule that loads nanostack skills
+  cat > "$cursor_rules/nanostack.md" << CURSORRULE
+---
+description: "Nanostack engineering workflow skills"
+alwaysApply: true
+---
 
-  for skill in "${SKILLS[@]}"; do
-    local target="$kiro_root/$skill"
-    rm -rf "$target"
-    cp -r "$SOURCE_DIR/$skill" "$target"
-    # Rewrite paths
-    while IFS= read -r mdfile; do
-      sed_inplace -e 's|~/.claude/skills/nanostack|~/.kiro/skills/nanostack|g' "$mdfile"
-    done < <(find "$target" -name "*.md")
-  done
+You have access to nanostack skills. Read SKILL.md files in ~/.claude/skills/nanostack/ for instructions.
 
-  find "$kiro_root" -path "*/bin/*" -type f -exec chmod +x {} \;
+Available: /think, /nano, /review, /qa, /security, /ship, /guard, /conductor
+Workflow: /think → /nano → build → /review → /qa → /security → /ship
+CURSORRULE
+
+  echo "  Created $cursor_rules/nanostack.md"
+}
+
+# ─── OpenCode ─────────────────────────────────────────────────
+# Symlinks into ~/.agents/skills/ (OpenCode scans this natively)
+install_opencode() {
+  local agents_skills="${HOME}/.agents/skills"
+  mkdir -p "$agents_skills"
+
+  local agents_root="$agents_skills/nanostack"
+  if [ -L "$agents_root" ] || [ ! -e "$agents_root" ]; then
+    ln -snf "$SOURCE_DIR" "$agents_root"
+    echo "  Linked $agents_root → $SOURCE_DIR"
+  fi
+}
+
+# ─── Gemini CLI ───────────────────────────────────────────────
+# Installs as Gemini extension
+install_gemini() {
+  echo "  Gemini CLI: run 'gemini extensions install $SOURCE_DIR' to install"
+  echo "  Or for development: 'gemini extensions link $SOURCE_DIR'"
 }
 
 # ─── Config ──────────────────────────────────────────────────
@@ -200,7 +223,9 @@ write_setup_config() {
   local agents="[]"
   [ "$INSTALL_CLAUDE" -eq 1 ] && agents=$(echo "$agents" | jq '. + ["claude"]')
   [ "$INSTALL_CODEX" -eq 1 ] && agents=$(echo "$agents" | jq '. + ["codex"]')
-  [ "$INSTALL_KIRO" -eq 1 ] && agents=$(echo "$agents" | jq '. + ["kiro"]')
+  [ "$INSTALL_CURSOR" -eq 1 ] && agents=$(echo "$agents" | jq '. + ["cursor"]')
+  [ "$INSTALL_OPENCODE" -eq 1 ] && agents=$(echo "$agents" | jq '. + ["opencode"]')
+  [ "$INSTALL_GEMINI" -eq 1 ] && agents=$(echo "$agents" | jq '. + ["gemini"]')
 
   jq -n \
     --arg src "$SOURCE_DIR" \
@@ -239,10 +264,20 @@ if [ "$INSTALL_CODEX" -eq 1 ]; then
   echo "  skills: ${HOME}/.codex/skills"
 fi
 
-if [ "$INSTALL_KIRO" -eq 1 ]; then
-  install_kiro
-  echo "nanostack ready (kiro)."
-  echo "  skills: ${HOME}/.kiro/skills/nanostack"
+if [ "$INSTALL_CURSOR" -eq 1 ]; then
+  install_cursor
+  echo "nanostack ready (cursor)."
+fi
+
+if [ "$INSTALL_OPENCODE" -eq 1 ]; then
+  install_opencode
+  echo "nanostack ready (opencode)."
+  echo "  skills: ${HOME}/.agents/skills/nanostack"
+fi
+
+if [ "$INSTALL_GEMINI" -eq 1 ]; then
+  install_gemini
+  echo "nanostack ready (gemini)."
 fi
 
 # Save installation config

@@ -1,6 +1,6 @@
 # Nanostack
 
-Nanostack is a set of AI coding agent skills for the full engineering workflow. It works with Claude Code, OpenAI Codex, Amazon Kiro and any agent that reads SKILL.md files.
+Nanostack is a set of AI coding agent skills for the full engineering workflow. It works with Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI and any agent that reads SKILL.md files.
 
 ## What it does
 
