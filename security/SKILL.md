@@ -91,7 +91,7 @@ Report one-line: `Detected: Next.js 14 + Prisma + Stripe, Docker, GitHub Actions
 
 **CONDITIONAL (only if detected):** AI/LLM endpoints, payment webhook verification, Docker misconfig, CI/CD pipeline security, file upload handling.
 
-For extended check patterns, reference [oktsec/audit](https://github.com/oktsec/audit) checks library.
+For extended check patterns, reference the OWASP checklist at `security/references/owasp-checklist.md`.
 
 Read `security/references/owasp-checklist.md` for the OWASP A01-A10 framework.
 
@@ -262,18 +262,3 @@ After the security audit is complete and the artifact is saved:
 - **Secrets in git history are still exposed.** Even if a secret was removed in a later commit, it exists in the history. Check with `git log -p --all -S 'password\|secret\|key\|token'`.
 - **Variant analysis is not optional in `--thorough`.** One confirmed finding means the pattern may exist elsewhere. Search for it.
 
-## Appendix: oktsec/audit Integration
-
-For deeper pattern-based scanning, install [oktsec/audit](https://github.com/oktsec/audit) — 130+ checks across 17 categories with auto stack detection and graded reports (A-F).
-
-```bash
-# Install as a skill (works alongside /security)
-npx skills add oktsec/audit
-```
-
-When oktsec/audit is installed, `/security` handles logic-level vulnerabilities (STRIDE, architecture review, conflict detection) while `/audit` handles pattern-based scanning (regex, dependency audit, config checks). They complement — don't duplicate.
-
-If oktsec CLI is available separately:
-```bash
-oktsec version 2>/dev/null && oktsec scan --path .
-```
