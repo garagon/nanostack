@@ -75,7 +75,7 @@ After functional tests pass, take screenshots of every key state and analyze the
 6. **Responsive**: Does the layout work at mobile width or does it break/overflow?
 7. **Dark mode**: If dark mode is enabled, are there contrast issues, invisible borders, or text that blends into the background?
 
-**Cross-reference against `/nano-plan` product standards.** If the plan said "shadcn/ui + Tailwind" and the output looks like raw HTML with inline styles, that's a finding.
+**Cross-reference against `/nano` product standards.** If the plan said "shadcn/ui + Tailwind" and the output looks like raw HTML with inline styles, that's a finding.
 
 **Report visual findings as QA findings:**
 ```

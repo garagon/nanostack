@@ -31,7 +31,7 @@ for file in $CHANGED; do
       # Check for common stale patterns
       if grep -qn '/plan[^-]' "$PROJECT_ROOT/$file" 2>/dev/null; then
         LINE=$(grep -n '/plan[^-]' "$PROJECT_ROOT/$file" | head -1 | cut -d: -f1)
-        WARNINGS="${WARNINGS}STALE_REF: $file:$LINE may reference old '/plan' (should be '/nano-plan')\n"
+        WARNINGS="${WARNINGS}STALE_REF: $file:$LINE may reference old '/plan' (should be '/nano')\n"
       fi
       ;;
   esac

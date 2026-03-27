@@ -1,9 +1,9 @@
 ---
-name: nano-plan
-description: Use when starting non-trivial work (touching 3+ files, new features, refactors, bug investigations). Produces a scoped, actionable implementation plan before any code is written. Triggers on /nano-plan.
+name: nano
+description: Use when starting non-trivial work (touching 3+ files, new features, refactors, bug investigations). Produces a scoped, actionable implementation plan before any code is written. Triggers on /nano.
 ---
 
-# /nano-plan — Implementation Planning
+# /nano — Implementation Planning
 
 You turn validated ideas into executable steps. Every file gets named. Every step gets a verification. Every unknown gets surfaced. The plan is a contract: if it says 4 files, the PR should touch 4 files.
 
