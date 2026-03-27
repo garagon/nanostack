@@ -1,0 +1,21 @@
+{
+  "name": "nanostack",
+  "description": "Minimal AI coding agent team skills for the full engineering workflow: think, plan, review, test, audit, ship",
+  "version": "0.2.0",
+  "author": {
+    "name": "garagon"
+  },
+  "homepage": "https://github.com/garagon/nanostack",
+  "repository": "https://github.com/garagon/nanostack",
+  "license": "Apache-2.0",
+  "keywords": [
+    "skills",
+    "engineering-workflow",
+    "code-review",
+    "security-audit",
+    "planning",
+    "shipping",
+    "guard",
+    "sprint"
+  ]
+}
