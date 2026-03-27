@@ -265,8 +265,7 @@ git clone https://github.com/garagon/nanostack.git ~/nanostack
 cd ~/nanostack && ./setup --host opencode
 
 # Gemini CLI
-git clone https://github.com/garagon/nanostack.git ~/nanostack
-cd ~/nanostack && ./setup --host gemini
+gemini extensions install https://github.com/garagon/nanostack
 
 # Auto-detect all installed agents
 ./setup --host auto
@@ -446,7 +445,7 @@ rm -f .cursor/rules/nanostack.md
 rm -rf ~/.agents/skills/nanostack
 
 # Gemini CLI
-gemini extensions uninstall nanostack
+gemini extensions remove nanostack
 ```
 
 ## License

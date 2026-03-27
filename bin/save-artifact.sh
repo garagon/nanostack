@@ -11,7 +11,16 @@ source "$SCRIPT_DIR/lib/store-path.sh"
 PHASE="${1:?Usage: save-artifact.sh <phase> <json>}"
 JSON="${2:?Missing JSON argument}"
 STORE="$NANOSTACK_STORE/$PHASE"
-VALID_PHASES="think plan review qa security ship"
+CORE_PHASES="think plan review qa security ship"
+
+# Load custom phases from config if exists
+CUSTOM_PHASES=""
+CONFIG="$NANOSTACK_STORE/config.json"
+if [ -f "$CONFIG" ]; then
+  CUSTOM_PHASES=$(jq -r '.custom_phases // [] | join(" ")' "$CONFIG" 2>/dev/null || echo "")
+fi
+
+VALID_PHASES="$CORE_PHASES $CUSTOM_PHASES"
 
 # Validate phase name
 case " $VALID_PHASES " in
