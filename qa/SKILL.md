@@ -57,6 +57,14 @@ Use Playwright directly — do not install a custom browser daemon. Use `qa/bin/
 
 After functional tests pass, take screenshots of every key state and analyze the UI visually. This is not optional for web apps. A feature that works but looks broken is broken.
 
+**Read the plan artifact first:**
+
+```bash
+bin/find-artifact.sh plan 2
+```
+
+If the plan specifies product standards (shadcn/ui, Tailwind, dark mode, specific component library), use those as your checklist. Don't guess what the UI should look like. The plan defines the spec. If the plan said "shadcn/ui + Tailwind" and the output uses raw CSS, that's a finding.
+
 **Take screenshots of:**
 - Home/landing page
 - Main feature in empty state (no data)

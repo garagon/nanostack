@@ -27,7 +27,17 @@ Auto-suggest:
 
 ## Setup (first run per project)
 
-First read project config: `bin/init-config.sh`. Use `detected` to scope which checks to run (skip Python checks in a Go project). Use `preferences.conflict_precedence` for cross-skill conflicts.
+**Read the plan artifact** if one exists:
+
+```bash
+bin/find-artifact.sh plan 2
+```
+
+If found:
+- **`planned_files[]`** → focus your audit on these files and their dependencies. Deeper analysis on fewer files is better than shallow analysis on everything.
+- **`risks[]`** → treat each planned risk as a security hypothesis to verify. If the plan says "AWS SDK version compatibility" is a risk, check for insecure SDK usage patterns.
+
+Then read project config: `bin/init-config.sh`. Use `detected` to scope which checks to run (skip Python checks in a Go project). Use `preferences.conflict_precedence` for cross-skill conflicts.
 
 Then check if `security/config.json` exists. If not, ask the user to classify the project:
 

@@ -24,6 +24,14 @@ ship/bin/quality-check.sh     # broken README links, stale references, writing q
 
 If either reports errors, fix them before proceeding. Warnings are informational but should be reviewed.
 
+**Verify review findings were resolved:**
+
+```bash
+bin/find-artifact.sh review 2
+```
+
+If a review artifact exists, check that all **blocking** findings have been addressed. For each blocking finding, verify the code at the reported file and line no longer has the issue. If a blocking finding is still present, do NOT proceed. Flag it.
+
 Then verify:
 
 ```bash
