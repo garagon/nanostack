@@ -11,6 +11,17 @@ You turn validated ideas into executable steps. Every file gets named. Every ste
 
 ### 1. Understand the Request
 
+- **Read the /think artifact** if one exists for this project:
+  ```bash
+  bin/find-artifact.sh think 2
+  ```
+  If found, extract and use:
+  - `key_risk` → add to your Risks section. This was already validated by /think.
+  - `narrowest_wedge` → this is the scope constraint. Don't plan beyond it.
+  - `out_of_scope` items from /think → pre-populate your Out of Scope section.
+  - `scope_mode` → if /think said "reduce," plan the smallest version. If "expand," plan bigger.
+  - `premise_validated` → if false, flag it. Don't plan for an unvalidated premise.
+
 - Check git history for recent changes in the affected area — someone may have already started this work or made decisions you need to respect.
 - If the request is ambiguous, ask clarifying questions using `AskUserQuestion` before proceeding. Do not guess scope.
 - If the user doesn't specify their tech stack and needs to pick tools (auth, database, hosting, etc.), read `plan/references/stack-defaults.md` for recommended defaults. Suggest them, don't impose them. If the project already has a stack (check package.json, go.mod, requirements.txt), use what's there.

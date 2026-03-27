@@ -30,7 +30,20 @@ Auto-suggest logic (recommend, don't enforce):
 
 Calibrate depth by diff size: **Small** (< 100 lines, quick pass) / **Medium** (100-500, full two-pass) / **Large** (500+, full + architecture).
 
-## Step 0: Scope Drift Check
+## Step 0: Read Plan Context
+
+Find the plan artifact and extract context for the review:
+
+```bash
+bin/find-artifact.sh plan 2
+```
+
+If found, read these fields:
+- **`planned_files[]`** → used by scope drift check (below)
+- **`risks[]`** → create a risk checklist. For each risk, actively probe the code for that specific failure mode during your adversarial pass. These risks were identified during planning and should be verified.
+- **`out_of_scope[]`** → verify none of these were implemented. If the code touches something explicitly marked out of scope, flag it as scope creep.
+
+## Step 0.5: Scope Drift Check
 
 Always run if a recent plan artifact exists. In `--quick` mode, drift is informational. In `--standard`, drift is informational. In `--thorough`, drift is BLOCKING.
 
