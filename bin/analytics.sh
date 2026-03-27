@@ -18,7 +18,7 @@ OBSIDIAN_OUTPUT=false
 [ "$2" = "--obsidian" ] && OBSIDIAN_OUTPUT=true
 
 if [ ! -d "$STORE" ]; then
-  echo "No nanostack data found. Run skills with --save to start tracking."
+  echo "No nanostack data found. Artifacts auto-save after each skill run."
   exit 0
 fi
 
@@ -125,7 +125,7 @@ fi
 
 echo ""
 if [ "$TOTAL" -eq 0 ]; then
-  echo "  No data yet. Run skills with --save to start tracking."
+  echo "  No data yet. Artifacts auto-save after each skill run."
 fi
 
 # Obsidian dashboard output
