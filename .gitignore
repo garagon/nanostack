@@ -8,3 +8,13 @@ node_modules/
 *.log
 docs/
 fetched-skills/
+
+# nanoresearch state (never commit)
+research.jsonl
+research.md
+research.ideas.md
+research.log
+research.checkpoint.json
+
+# Nanostack artifacts (project-local)
+.nanostack/
