@@ -30,8 +30,8 @@ detect_agent() {
     echo "claude"
   elif [ -n "${CODEX_SESSION_ID:-}" ]; then
     echo "codex"
-  elif [ -n "${KIRO_SESSION_ID:-}" ]; then
-    echo "kiro"
+  elif [ -n "${OPENCODE_SESSION_ID:-}" ]; then
+    echo "opencode"
   else
     echo "agent-$(whoami)"
   fi
