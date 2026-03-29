@@ -1,12 +1,33 @@
-# Nanostack
+<p align="center">
+  <strong>Nanostack</strong> - Engineering workflow for AI coding agents
+</p>
 
-Minimal AI coding agent team skills for the full engineering workflow. Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan).
+<p align="center">
+  Other tools help you write code faster. Nanostack questions what you're building before you build it.<br>
+  One person does the work of a full engineering team.
+</p>
 
-Other tools help you write code faster. Nanostack questions what you're building before you build it. It tells you "that's a 3-week project, but this version ships today" and it's usually right. Then it plans, reviews, tests, audits security and ships. One person does the work of a full team.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="https://github.com/garagon/nanostack/stargazers"><img src="https://img.shields.io/github/stars/garagon/nanostack?style=flat" alt="GitHub Stars"></a>
+  <a href="https://skills.sh/garagon/nanostack"><img src="https://img.shields.io/badge/skills.sh-available-brightgreen" alt="skills.sh"></a>
+</p>
 
-**8 skills. 5 agents. Zero dependencies. Zero build step.**
+<p align="center">
+  <a href="#install">Install</a> &middot;
+  <a href="#the-sprint">The Sprint</a> &middot;
+  <a href="#autopilot">Autopilot</a> &middot;
+  <a href="#guard">Guard</a> &middot;
+  <a href="#know-how">Know-how</a> &middot;
+  <a href="#build-on-nanostack">Extend</a> &middot;
+  <a href="#contributing">Contributing</a>
+</p>
 
-Works with Claude Code, Cursor, OpenAI Codex, OpenCode and Gemini CLI.
+---
+
+Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). 8 skills. Zero dependencies. Zero build step.
+
+Works with Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp and Cline.
 
 ## Quick start
 
