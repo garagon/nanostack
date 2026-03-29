@@ -330,10 +330,14 @@ Run once in each project to configure permissions and .gitignore. Requires git c
 
 This creates `.claude/settings.json` with permissions so Claude Code doesn't interrupt the workflow asking for approval on every file create or bash command. Also adds `.nanostack/` to `.gitignore`.
 
+### Windows
+
+Requires [Git for Windows](https://git-scm.com/downloads/win) which includes Git Bash. Claude Code uses Git Bash internally, so the setup script and all bin/ scripts work without changes. Alternatively use WSL or `npx skills add`.
+
 ### Requirements
 
-- macOS or Linux
-- [jq](https://jqlang.github.io/jq/) for artifact processing (`brew install jq` or `apt install jq`)
+- macOS, Linux or Windows (Git Bash or WSL)
+- [jq](https://jqlang.github.io/jq/) for artifact processing (`brew install jq`, `apt install jq`, or `choco install jq`)
 - Git
 - One of: Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp, Cline
 
