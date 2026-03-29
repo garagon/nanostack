@@ -1,11 +1,7 @@
 <h1 align="center">Nanostack</h1>
 <p align="center">
-  Engineering workflow for AI coding agents
-</p>
-
-<p align="center">
-  Nanostack turns your AI agent into an engineering team that challenges<br>
-  scope, plans, reviews, tests, audits, and ships. One sprint. Minutes, not weeks.
+  Your AI agent writes code. Nanostack makes it think, plan, review, test, audit and ship.<br>
+  One sprint. Minutes, not weeks.
 </p>
 
 <p align="center">
