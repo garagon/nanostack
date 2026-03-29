@@ -38,11 +38,14 @@ fi
 # ─── Parse flags ──────────────────────────────────────────────
 HOST="claude"
 LOCAL_INSTALL=0
+RENAMES=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --host)  [ -z "${2:-}" ] && echo "Missing value for --host" >&2 && exit 1; HOST="$2"; shift 2 ;;
     --host=*) HOST="${1#--host=}"; shift ;;
     --local) LOCAL_INSTALL=1; shift ;;
+    --rename) [ -z "${2:-}" ] && echo "Missing value for --rename" >&2 && exit 1; RENAMES="$2"; shift 2 ;;
+    --rename=*) RENAMES="${1#--rename=}"; shift ;;
     --help)
       cat <<'HELP'
 Usage: ./setup [OPTIONS]
@@ -50,6 +53,7 @@ Usage: ./setup [OPTIONS]
 Options:
   --host <agent>    Target: claude (default), codex, cursor, opencode, gemini, auto
   --local           Install to .claude/skills/ in current working directory
+  --rename <map>    Rename skills to avoid collisions (comma-separated old=new pairs)
   --help            Show this help
 
 Install methods:
@@ -62,6 +66,9 @@ Install methods:
 
   # Multi-agent
   ./setup --host auto
+
+  # Rename skills that collide with other tools
+  ./setup --rename "review=ns-review,security=ns-security"
 HELP
       exit 0
       ;;
@@ -85,6 +92,60 @@ if [ "$LOCAL_INSTALL" -eq 1 ]; then
   fi
   HOST="claude"
 fi
+
+# ─── Rename map ──────────────────────────────────────────────
+# Parse --rename "review=ns-review,security=ns-sec" into a lookup.
+# Renames persist in ~/.nanostack/setup.json so upgrade.sh reapplies them.
+# Uses a flat string "old=new old2=new2" for bash 3 compatibility (macOS).
+RENAME_PAIRS=""
+
+if [ -z "$RENAMES" ]; then
+  # Load saved renames from previous setup
+  if [ -f "$HOME/.nanostack/setup.json" ]; then
+    saved_renames=$(jq -r '.renames // {} | to_entries[] | "\(.key)=\(.value)"' "$HOME/.nanostack/setup.json" 2>/dev/null | tr '\n' ',')
+    RENAMES="${saved_renames%,}"
+  fi
+fi
+
+if [ -n "$RENAMES" ]; then
+  RENAME_PAIRS=$(echo "$RENAMES" | tr ',' ' ')
+fi
+
+# Get the public name for a skill (after renames)
+skill_public_name() {
+  local skill="$1"
+  for pair in $RENAME_PAIRS; do
+    local old="${pair%%=*}"
+    local new="${pair#*=}"
+    if [ "$old" = "$skill" ]; then
+      echo "$new"
+      return
+    fi
+  done
+  echo "$skill"
+}
+
+# Install a renamed skill: copy SKILL.md with updated name in frontmatter
+install_renamed_skill() {
+  local skill="$1"
+  local public_name="$2"
+  local target_dir="$3"
+  local dir
+  dir=$(skill_dir "$skill")
+
+  mkdir -p "$target_dir/$public_name"
+
+  # Copy SKILL.md with updated name field
+  sed "s/^name: .*/name: $public_name/" "$SOURCE_DIR/$dir/SKILL.md" > "$target_dir/$public_name/SKILL.md"
+
+  # Symlink everything else (references, templates, bin, etc.)
+  for item in "$SOURCE_DIR/$dir"/*; do
+    local basename
+    basename=$(basename "$item")
+    [ "$basename" = "SKILL.md" ] && continue
+    ln -snf "$item" "$target_dir/$public_name/$basename" 2>/dev/null || true
+  done
+}
 
 # ─── Auto-detect agents ──────────────────────────────────────
 INSTALL_CLAUDE=0
@@ -120,6 +181,7 @@ fi
 install_claude() {
   local skills_dir="$1"
   local linked=()
+  local renamed=()
 
   # Check we're inside a skills directory
   local basename
@@ -131,11 +193,28 @@ install_claude() {
   fi
 
   for skill in "${SKILLS[@]}"; do
-    local target="$skills_dir/$skill"
+    local public_name
+    public_name=$(skill_public_name "$skill")
     local dir
     dir=$(skill_dir "$skill")
-    # Only create symlink if it doesn't exist as a real directory
-    if [ -L "$target" ] || [ ! -e "$target" ]; then
+
+    # Clean up: remove old symlink with the original name if we're renaming
+    if [ "$public_name" != "$skill" ]; then
+      [ -L "$skills_dir/$skill" ] && rm -f "$skills_dir/$skill"
+    fi
+
+    local target="$skills_dir/$public_name"
+
+    # Always remove stale symlink/dir at target to recreate cleanly
+    [ -L "$target" ] && rm -f "$target"
+    [ -d "$target" ] && [ ! -L "$target" ] && rm -rf "$target"
+
+    if [ "$public_name" != "$skill" ]; then
+      # Renamed: copy SKILL.md with new name, symlink the rest
+      install_renamed_skill "$skill" "$public_name" "$skills_dir"
+      renamed+=("/$skill > /$public_name")
+    else
+      # Normal: symlink the directory
       ln -snf "nanostack/$dir" "$target"
       linked+=("$skill")
     fi
@@ -143,6 +222,9 @@ install_claude() {
 
   if [ ${#linked[@]} -gt 0 ]; then
     echo "  Linked skills: ${linked[*]}"
+  fi
+  if [ ${#renamed[@]} -gt 0 ]; then
+    echo "  Renamed skills: ${renamed[*]}"
   fi
 }
 
@@ -227,11 +309,20 @@ write_setup_config() {
   [ "$INSTALL_OPENCODE" -eq 1 ] && agents=$(echo "$agents" | jq '. + ["opencode"]')
   [ "$INSTALL_GEMINI" -eq 1 ] && agents=$(echo "$agents" | jq '. + ["gemini"]')
 
+  # Build renames JSON object
+  local renames_json="{}"
+  for pair in $RENAME_PAIRS; do
+    local old="${pair%%=*}"
+    local new="${pair#*=}"
+    renames_json=$(echo "$renames_json" | jq --arg k "$old" --arg v "$new" '. + {($k): $v}')
+  done
+
   jq -n \
     --arg src "$SOURCE_DIR" \
     --arg ver "$(git -C "$SOURCE_DIR" describe --tags 2>/dev/null || git -C "$SOURCE_DIR" rev-parse --short HEAD 2>/dev/null || echo 'unknown')" \
     --argjson agents "$agents" \
     --argjson local "$LOCAL_INSTALL" \
+    --argjson renames "$renames_json" \
     --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
     '{
       schema_version: "1",
@@ -239,6 +330,7 @@ write_setup_config() {
       version: $ver,
       agents: $agents,
       local_install: ($local == 1),
+      renames: $renames,
       installed_at: $date
     }' > "$config_dir/setup.json"
 }
@@ -288,11 +380,24 @@ echo "  config: ~/.nanostack/setup.json"
 echo ""
 echo "Available skills:"
 for skill in "${SKILLS[@]}"; do
-  echo "  /$skill"
+  pname=$(skill_public_name "$skill")
+  if [ "$pname" != "$skill" ]; then
+    echo "  /$pname (renamed from /$skill)"
+  else
+    echo "  /$skill"
+  fi
 done
 echo ""
-echo "Workflow: /think → /nano → build → /review → /qa → /security → /ship"
-echo "Safety:   /guard (activate on-demand)"
+# Build workflow line with renames applied
+w_think=$(skill_public_name "think")
+w_nano=$(skill_public_name "nano")
+w_review=$(skill_public_name "review")
+w_qa=$(skill_public_name "qa")
+w_security=$(skill_public_name "security")
+w_ship=$(skill_public_name "ship")
+w_guard=$(skill_public_name "guard")
+echo "Workflow: /$w_think → /$w_nano → build → /$w_review → /$w_qa → /$w_security → /$w_ship"
+echo "Safety:   /$w_guard (activate on-demand)"
 echo ""
 echo "Per-project setup (run once in each project):"
 echo "  ~/.claude/skills/nanostack/bin/init-project.sh"
