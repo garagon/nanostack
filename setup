@@ -46,6 +46,7 @@ while [ $# -gt 0 ]; do
     --local) LOCAL_INSTALL=1; shift ;;
     --rename) [ -z "${2:-}" ] && echo "Missing value for --rename" >&2 && exit 1; RENAMES="$2"; shift 2 ;;
     --rename=*) RENAMES="${1#--rename=}"; shift ;;
+    --list) LIST_SKILLS=1; shift ;;
     --help)
       cat <<'HELP'
 Usage: ./setup [OPTIONS]
@@ -54,6 +55,8 @@ Options:
   --host <agent>    Target: claude (default), codex, cursor, opencode, gemini, auto
   --local           Install to .claude/skills/ in current working directory
   --rename <map>    Rename skills to avoid collisions (comma-separated old=new pairs)
+  --rename reset    Restore all skills to their original names
+  --list            Show installed skills and their current names
   --help            Show this help
 
 Install methods:
@@ -68,13 +71,60 @@ Install methods:
   ./setup --host auto
 
   # Rename skills that collide with other tools
-  ./setup --rename "review=ns-review,security=ns-security"
+  ./setup --rename "review=nano-review,security=nano-security"
+
+  # See current skill names
+  ./setup --list
+
+  # Restore original names
+  ./setup --rename reset
 HELP
       exit 0
       ;;
     *) shift ;;
   esac
 done
+
+# Handle --list (show skills and exit)
+if [ "${LIST_SKILLS:-0}" -eq 1 ]; then
+  echo "Nanostack Skills"
+  echo "================"
+  # Load saved renames
+  if [ -f "$HOME/.nanostack/setup.json" ]; then
+    saved=$(jq -r '.renames // {} | to_entries[] | "\(.key)=\(.value)"' "$HOME/.nanostack/setup.json" 2>/dev/null | tr '\n' ' ')
+  fi
+  for skill in "${SKILLS[@]}"; do
+    renamed=""
+    for pair in $saved; do
+      old="${pair%%=*}"
+      new="${pair#*=}"
+      if [ "$old" = "$skill" ]; then
+        renamed="$new"
+        break
+      fi
+    done
+    if [ -n "$renamed" ]; then
+      echo "  /$renamed (original: /$skill)"
+    else
+      echo "  /$skill"
+    fi
+  done
+  echo ""
+  echo "To rename: ./setup --rename \"review=nano-review\""
+  echo "To reset:  ./setup --rename reset"
+  exit 0
+fi
+
+# Handle --rename reset
+if [ "$RENAMES" = "reset" ]; then
+  RENAMES=""
+  if [ -f "$HOME/.nanostack/setup.json" ]; then
+    jq '.renames = {}' "$HOME/.nanostack/setup.json" > "$HOME/.nanostack/setup.json.tmp" && \
+      mv "$HOME/.nanostack/setup.json.tmp" "$HOME/.nanostack/setup.json"
+  fi
+  echo "Renames cleared. Running setup with original names..."
+  echo ""
+fi
 
 case "$HOST" in
   claude|codex|cursor|opencode|gemini|auto) ;;
