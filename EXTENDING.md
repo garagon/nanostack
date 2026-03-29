@@ -1,116 +1,300 @@
 # Extending Nanostack
 
-Build your own skill set on top of nanostack. Add domain-specific skills that integrate with the existing sprint workflow.
+Add your own skills that plug into nanostack's workflow. Your skills save artifacts, read what other skills produced, and compose with /think, /review and /ship.
 
-## How it works
+## Example: build a /deploy skill in 5 minutes
 
-Nanostack provides the engineering workflow: think, plan, build, review, test, audit, ship. Your skill set adds domain-specific phases that plug into this workflow.
+Let's create a skill that verifies a deploy after /ship creates the PR.
 
-Example: a marketing team builds "nanomarketing" with `/audience`, `/content-plan`, `/campaign` skills. These use nanostack's `/think` for ideation and `/ship` for deployment, but add marketing-specific phases in between.
-
-## Create a new skill set
-
-### 1. Create your skill directory
+### 1. Create the skill file
 
 ```bash
-mkdir -p ~/.claude/skills/my-skillset
-cd ~/.claude/skills/my-skillset
+mkdir -p ~/.claude/skills/nanostack/deploy
 ```
 
-### 2. Create a skill
-
-Each skill is a directory with a `SKILL.md`:
-
-```
-my-skillset/
-  audience/
-    SKILL.md
-  content-plan/
-    SKILL.md
-  setup
-  README.md
-```
-
-Skill format (same as nanostack):
+Create `deploy/SKILL.md`:
 
 ```yaml
 ---
-name: audience
-description: Research and define target audience for a product or campaign. Triggers on /audience.
+name: deploy
+description: Verify deploy health after shipping. Checks endpoint status, response times and error rates. Triggers on /deploy.
 ---
 
-# /audience — Audience Research
+# /deploy - Post-deploy verification
 
-Instructions for the agent...
+After /ship creates the PR and it gets merged, verify the deploy is healthy.
+
+## Process
+
+### 1. Read the ship artifact
+
+Find what was shipped:
+
+bin/find-artifact.sh ship 2
+
+Extract: PR number, branch, deploy URL (if available).
+
+### 2. Health check
+
+Run basic verification:
+
+- Hit the main endpoint, confirm 200 status
+- Check response time is under 500ms
+- Look for error spikes in the last 5 minutes (if monitoring URL is available)
+
+### 3. Report
+
+Print a summary:
+
+Deployed: PR #123
+Endpoint: https://app.example.com
+Status: 200 OK (142ms)
+Errors: none detected
+
+If anything fails, suggest rollback steps.
 
 ## Save Artifact
 
-bin/save-artifact.sh audience '<json with phase, summary>'
+bin/save-artifact.sh deploy '<json with phase, summary including pr_number, endpoint, status_code, response_ms, errors>'
 
 ## Next Step
 
-> Ready for `/content-plan`.
+> Deploy verified. If issues appear later, run /deploy again to recheck.
 ```
 
-### 3. Register custom phases
+### 2. Register the custom phase
 
-To save artifacts for your custom phases, add them to `.nanostack/config.json`:
-
-```json
-{
-  "custom_phases": ["audience", "content-plan", "campaign"]
-}
-```
-
-Now `bin/save-artifact.sh audience '{...}'` works. Without this, only the 6 core phases (think, plan, review, qa, security, ship) are accepted.
-
-### 4. Use nanostack's infrastructure
-
-Your skills can use all of nanostack's bin/ scripts:
+So artifacts can be saved, add your phase to the project config:
 
 ```bash
-# Save an artifact for your custom phase
-bin/save-artifact.sh audience '{"phase":"audience","summary":{"target":"developers","size":"50K"}}'
-
-# Find an artifact from a previous phase
-bin/find-artifact.sh think 2
-
-# Read the project store path
-source bin/lib/store-path.sh
-echo $NANOSTACK_STORE
-
-# Generate analytics
-bin/analytics.sh --json
-
-# Capture a learning
-bin/capture-learning.sh "audience research showed X"
+# Create or update .nanostack/config.json in your project
+cat > .nanostack/config.json << 'EOF'
+{
+  "custom_phases": ["deploy"]
+}
+EOF
 ```
 
-### 5. Compose with nanostack skills
-
-Your workflow can call nanostack skills at any point:
+### 3. Use it
 
 ```
-/think → /audience → /content-plan → /nano → build → /review → /ship
+You:    /ship
+Agent:  PR #42 created. CI passed.
+
+You:    /deploy
+Agent:  Reading ship artifact... PR #42, branch feat/new-feature.
+        Checking https://app.example.com...
+        Status: 200 OK (142ms). No errors detected.
+        Deploy healthy.
 ```
 
-Skills read each other's artifacts via `bin/find-artifact.sh`. If `/audience` saves an artifact, `/content-plan` can find and read it.
+That's it. Your skill reads what /ship produced and acts on it. The artifact it saves can be read by future skills or included in the sprint journal.
+
+## How it works
+
+### Artifacts
+
+Every skill saves a JSON file to `.nanostack/<phase>/<timestamp>.json`. This is how skills communicate:
+
+```
+/think  saves →  .nanostack/think/20260329-140000.json
+/nano   saves →  .nanostack/plan/20260329-143000.json
+/review saves →  .nanostack/review/20260329-150000.json
+/deploy saves →  .nanostack/deploy/20260329-160000.json  ← your custom skill
+```
+
+### Reading other skills
+
+Use `bin/find-artifact.sh` to read what another skill produced:
+
+```bash
+# Find the most recent ship artifact (max 2 days old)
+bin/find-artifact.sh ship 2
+
+# Find the most recent review artifact (max 30 days old)
+bin/find-artifact.sh review 30
+```
+
+Returns the file path. Read it with `jq`:
+
+```bash
+ARTIFACT=$(bin/find-artifact.sh ship 2)
+PR_NUMBER=$(jq -r '.summary.pr_number' "$ARTIFACT")
+```
+
+### Saving artifacts
+
+Use `bin/save-artifact.sh` to persist your skill's output:
+
+```bash
+bin/save-artifact.sh deploy '{"phase":"deploy","summary":{"pr_number":42,"status":"healthy","response_ms":142}}'
+```
+
+The script automatically adds: timestamp, project path, git branch.
+
+### The flow
+
+```
+Your skill reads artifacts    →    Does its work    →    Saves its own artifact
+     (find-artifact.sh)                                    (save-artifact.sh)
+```
+
+Any skill can read any other skill's artifact. This is how nanostack skills cross-reference: /review reads /security findings, /security reads /review findings. Your skills work the same way.
+
+## Composing with nanostack
+
+Your skills don't replace nanostack's workflow. They extend it. Common patterns:
+
+### Before the sprint
+
+Your skill runs before /think to gather context:
+
+```
+/research-market → /think → /nano → build → /review → /ship
+```
+
+Example: a `/research-market` skill that pulls competitor data. /think reads the research artifact to make better scope decisions.
+
+### During the sprint
+
+Your skill slots into the middle:
+
+```
+/think → /nano → build → /review → /your-skill → /ship
+```
+
+Example: a `/compliance` skill that checks regulatory requirements after review but before shipping.
+
+### After the sprint
+
+Your skill runs after /ship:
+
+```
+/think → /nano → build → /review → /ship → /deploy → /monitor
+```
+
+Example: the /deploy skill above, or a `/monitor` skill that watches error rates for 24 hours.
+
+### Parallel with nanostack
+
+Your skill runs alongside /review, /qa and /security:
+
+```
+/think → /nano → build ─┬─ /review
+                        ├─ /qa
+                        ├─ /security
+                        └─ /your-skill   ← runs in parallel
+                        └─ /ship
+```
+
+Example: a `/performance` skill that runs load tests while review and security run their checks.
+
+## Examples by domain
+
+### Marketing
+
+```
+marketing/
+  audience/SKILL.md       → research target audience
+  content-plan/SKILL.md   → plan content calendar
+  campaign/SKILL.md       → design campaign structure
+```
+
+Config: `{"custom_phases": ["audience", "content-plan", "campaign"]}`
+
+Workflow: `/think → /audience → /content-plan → /nano → build → /review → /ship`
+
+/audience saves audience research. /content-plan reads it and creates a content calendar. /nano plans the implementation. Standard nanostack skills handle the rest.
+
+### DevOps
+
+```
+devops/
+  deploy/SKILL.md         → post-deploy verification
+  monitor/SKILL.md        → watch error rates after deploy
+  rollback/SKILL.md       → automated rollback on failure
+```
+
+Config: `{"custom_phases": ["deploy", "monitor", "rollback"]}`
+
+Workflow: `/ship → /deploy → /monitor`
+
+/deploy reads the ship artifact, checks endpoint health. /monitor watches for 24 hours. /rollback triggers if error rates spike.
+
+### Data Science
+
+```
+data/
+  explore/SKILL.md        → EDA and data profiling
+  hypothesis/SKILL.md     → form and test hypotheses
+  model/SKILL.md          → train and evaluate models
+  validate/SKILL.md       → statistical validation
+```
+
+Config: `{"custom_phases": ["explore", "hypothesis", "model", "validate"]}`
+
+Workflow: `/think → /explore → /hypothesis → /model → /validate → /review → /ship`
+
+Each skill saves its findings. /validate reads what /model produced and runs statistical tests. /review checks the code quality of the pipeline.
+
+### Design
+
+```
+design/
+  research/SKILL.md       → user research and personas
+  wireframe/SKILL.md      → low-fi wireframes
+  prototype/SKILL.md      → interactive prototypes
+  usability/SKILL.md      → usability testing
+```
+
+Config: `{"custom_phases": ["research", "wireframe", "prototype", "usability"]}`
+
+Workflow: `/think → /research → /wireframe → /prototype → /usability → /nano → build → /review → /ship`
+
+/think challenges the design brief. /research produces user personas. Each subsequent skill reads the previous one's artifact.
+
+## SKILL.md format
+
+Every skill needs a `SKILL.md` with this structure:
+
+```yaml
+---
+name: my-skill
+description: One line. When to use it. Triggers on /my-skill.
+---
+
+# /my-skill - Short title
+
+What this skill does in one paragraph.
+
+## Process
+
+### 1. First step
+What to do.
+
+### 2. Second step
+What to do next.
+
+## Save Artifact
+
+bin/save-artifact.sh my-skill '<json>'
+
+## Next Step
+
+> What to run next.
+```
+
+The `name` field is the slash command. The `description` is what the agent reads to decide when to trigger the skill.
 
 ## API Reference
 
 ### bin/save-artifact.sh
 
 ```bash
-bin/save-artifact.sh <phase> <json-string>
+bin/save-artifact.sh <phase> '<json>'
 ```
 
-Saves a JSON artifact to `.nanostack/<phase>/<timestamp>.json`. Validates:
-- JSON is parseable
-- Has `phase` field matching the argument
-- Has `summary` field
-- Phase is in core phases or `custom_phases` from config
-
-Automatically injects: `timestamp`, `project` path, `branch`.
+Saves to `.nanostack/<phase>/<timestamp>.json`. Validates JSON, checks phase is registered (core or custom). Adds timestamp, project, branch automatically.
 
 ### bin/find-artifact.sh
 
@@ -118,26 +302,15 @@ Automatically injects: `timestamp`, `project` path, `branch`.
 bin/find-artifact.sh <phase> [max-age-days]
 ```
 
-Returns path to the most recent artifact for the given phase and current project. Exits 1 if none found. Default max age: 30 days.
-
-### bin/lib/store-path.sh
-
-```bash
-source bin/lib/store-path.sh
-```
-
-Sets `$NANOSTACK_STORE` to the artifact directory. Priority:
-1. `NANOSTACK_STORE` env var (explicit override)
-2. `<git-root>/.nanostack` (project-local, default)
-3. `$HOME/.nanostack` (fallback if not in a git repo)
+Returns path to the most recent artifact for the phase. Default max age: 30 days. Exits 1 if not found.
 
 ### bin/sprint-journal.sh
 
 ```bash
-bin/sprint-journal.sh [--project <name>]
+bin/sprint-journal.sh
 ```
 
-Generates a journal entry from all core phase artifacts. Writes to `.nanostack/know-how/journal/<date>-<project>.md`.
+Reads all phase artifacts from today and writes a journal entry to `.nanostack/know-how/journal/`. Works with custom phases.
 
 ### bin/analytics.sh
 
@@ -145,7 +318,7 @@ Generates a journal entry from all core phase artifacts. Writes to `.nanostack/k
 bin/analytics.sh [--month YYYY-MM] [--json] [--obsidian]
 ```
 
-Usage stats from artifacts. Counts phases, intensity modes, security trends.
+Usage stats from all artifacts including custom phases.
 
 ### bin/capture-learning.sh
 
@@ -153,7 +326,7 @@ Usage stats from artifacts. Counts phases, intensity modes, security trends.
 bin/capture-learning.sh "what you learned"
 ```
 
-Appends a timestamped learning to `.nanostack/know-how/learnings/ongoing.md`.
+Appends to `.nanostack/know-how/learnings/ongoing.md`.
 
 ### bin/discard-sprint.sh
 
@@ -161,68 +334,14 @@ Appends a timestamped learning to `.nanostack/know-how/learnings/ongoing.md`.
 bin/discard-sprint.sh [--phase <name>] [--date YYYY-MM-DD] [--dry-run]
 ```
 
-Removes artifacts from a bad session. Also removes journal entry.
+Removes artifacts from a bad session. Works with custom phases.
 
-## Artifact Schema
-
-All artifacts share this base structure:
+### .nanostack/config.json
 
 ```json
 {
-  "schema_version": "1",
-  "phase": "<your-phase-name>",
-  "timestamp": "2026-03-27T14:30:00Z",
-  "project": "/absolute/path/to/repo",
-  "branch": "feature/auth",
-  "summary": {}
+  "custom_phases": ["deploy", "monitor", "rollback"]
 }
 ```
 
-The `summary` field is up to you. Design it for your domain. Other skills can read it via `find-artifact.sh` + `jq`.
-
-Full schema for core phases: [`reference/artifact-schema.md`](reference/artifact-schema.md).
-
-## Examples
-
-### Marketing skill set
-
-```
-nanomarketing/
-  audience/SKILL.md      → research target audience
-  content-plan/SKILL.md  → plan content calendar
-  campaign/SKILL.md      → design campaign structure
-  measure/SKILL.md       → track campaign metrics
-  setup                  → register skills + custom phases
-  README.md
-```
-
-Config in `.nanostack/config.json`:
-```json
-{
-  "custom_phases": ["audience", "content-plan", "campaign", "measure"]
-}
-```
-
-### Data science skill set
-
-```
-nanodata/
-  explore/SKILL.md       → EDA and data profiling
-  hypothesis/SKILL.md    → form and test hypotheses
-  model/SKILL.md         → train and evaluate models
-  validate/SKILL.md      → statistical validation
-  setup
-  README.md
-```
-
-### Design skill set
-
-```
-nanodesign/
-  research/SKILL.md      → user research and personas
-  wireframe/SKILL.md     → low-fi wireframes
-  prototype/SKILL.md     → interactive prototypes
-  usability/SKILL.md     → usability testing
-  setup
-  README.md
-```
+Register custom phases so `save-artifact.sh` accepts them. Without this, only the 6 core phases are accepted (think, plan, review, qa, security, ship).
