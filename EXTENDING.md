@@ -2,6 +2,53 @@
 
 Add your own skills that plug into nanostack's workflow. Your skills save artifacts, read what other skills produced, and compose with /think, /review and /ship.
 
+## Configure your stack
+
+nanostack has opinionated defaults for new projects (Next.js, Supabase, Drizzle, etc.). You can override any of them with your own preferences.
+
+### Auto-detect from your project
+
+```bash
+bin/init-stack.sh
+```
+
+Reads package.json, go.mod, requirements.txt and generates `.nanostack/stack.json` with your detected stack. If nothing is detected, creates a template to edit.
+
+### Global preferences (all projects)
+
+```bash
+bin/init-stack.sh --global
+```
+
+Saves to `~/.nanostack/stack.json`. Applies to every project where you don't have a project-level config.
+
+### Manual config
+
+Create `.nanostack/stack.json` in your project:
+
+```json
+{
+  "web": {
+    "framework": "Django",
+    "auth": "django-allauth",
+    "database": "PostgreSQL",
+    "orm": "Django ORM",
+    "hosting": "Railway",
+    "css": "Tailwind + daisyUI"
+  }
+}
+```
+
+Only include categories you want to override. Everything else uses nanostack defaults.
+
+### Priority order
+
+1. `.nanostack/stack.json` (project) - highest
+2. `~/.nanostack/stack.json` (user)
+3. `plan/references/stack-defaults.md` (nanostack defaults) - fallback
+
+If the project already has dependencies (package.json, go.mod, etc.), /nano uses the existing stack regardless of any config.
+
 ## Example: build a /deploy skill in 5 minutes
 
 Let's create a skill that verifies a deploy after /ship creates the PR.
