@@ -1,5 +1,6 @@
+<h1 align="center">Nanostack</h1>
 <p align="center">
-  <strong>Nanostack</strong> - Engineering workflow for AI coding agents
+  Engineering workflow for AI coding agents
 </p>
 
 <p align="center">
