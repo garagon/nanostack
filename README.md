@@ -281,6 +281,24 @@ Run from anywhere. Pulls latest, shows what changed, re-runs setup if needed.
 
 No build step. Skills use symlinks. Changes take effect immediately.
 
+### Rename skills
+
+If you have other skill sets installed (gstack, superpowers, etc.) and names collide, rename the ones that conflict:
+
+```bash
+cd ~/.claude/skills/nanostack
+./setup --rename "review=my-review,security=my-security"
+```
+
+Renames persist between updates. Other useful commands:
+
+```bash
+./setup --list           # show current skill names
+./setup --rename reset   # restore original names
+```
+
+In Codex, skills are installed with the `nanostack-` prefix by default to avoid collisions.
+
 ### Project setup
 
 Run once in each project to configure permissions and .gitignore:
