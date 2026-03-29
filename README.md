@@ -1,6 +1,6 @@
 <h1 align="center">Nanostack</h1>
 <p align="center">
-  Your AI agent writes code. Nanostack makes it think, plan, review, test, audit and ship.<br>
+  Turns your AI agent into an engineering team that challenges scope, plans, reviews, tests, audits and ships.<br>
   One sprint. Minutes, not weeks.
 </p>
 
