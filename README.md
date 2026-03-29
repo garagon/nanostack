@@ -482,6 +482,14 @@ rm -rf ~/.agents/skills/nanostack
 gemini extensions remove nanostack
 ```
 
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, project structure and PR guidelines.
+
+- [Bug reports](https://github.com/garagon/nanostack/issues/new?template=bug_report.yml)
+- [Feature requests](https://github.com/garagon/nanostack/issues/new?template=feature_request.yml)
+- Security vulnerabilities: [SECURITY.md](SECURITY.md)
+
 ## License
 
 Apache 2.0
