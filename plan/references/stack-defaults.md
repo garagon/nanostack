@@ -71,16 +71,6 @@ Do NOT force these choices. If the user says "I want to use Firebase," use Fireb
 | Validation | Pydantic v2 | Standard for FastAPI, Rust-powered, fast | msgspec for maximum performance |
 | Testing | pytest | Universal standard | No serious alternative |
 
-## Avoid (outdated or problematic)
+## User overrides
 
-- **Lucia Auth**: deprecated March 2025
-- **PlanetScale**: killed free tier, $39/mo minimum
-- **Firebase Realtime DB**: proprietary, no SQL, hard to migrate
-- **Auth0**: enterprise pricing, overkill for startups
-- **TypeORM**: stale, poor TypeScript inference
-- **Styled-components / Emotion**: incompatible with React Server Components
-- **Jest for new projects**: Vitest is 3-5x faster with compatible API
-- **Redux for new projects**: Zustand covers 90% of cases in 3KB
-- **Formik**: React Hook Form is faster and lighter
-- **Yup**: Zod won the TypeScript ecosystem
-- **Mongoose**: use Drizzle/Prisma with Postgres instead of MongoDB for relational data
+Users can override any default by creating `.nanostack/stack.json` in their project or `~/.nanostack/stack.json` globally. See [EXTENDING.md](../../EXTENDING.md) for details.

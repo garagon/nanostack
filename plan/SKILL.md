@@ -24,8 +24,13 @@ You turn validated ideas into executable steps. Every file gets named. Every ste
 
 - Check git history for recent changes in the affected area — someone may have already started this work or made decisions you need to respect.
 - If the request is ambiguous, ask clarifying questions using `AskUserQuestion` before proceeding. Do not guess scope.
-- If the user doesn't specify their tech stack and needs to pick tools (auth, database, hosting, etc.), read `plan/references/stack-defaults.md` for recommended defaults. Suggest them, don't impose them. If the project already has a stack (check package.json, go.mod, requirements.txt), use what's there.
-- **Always use the latest stable version** of every dependency. Read `plan/references/stack-defaults.md` for version checking instructions. Don't rely on versions from training data.
+- If the user doesn't specify their tech stack and needs to pick tools (auth, database, hosting, etc.), check for overrides first, then fall back to defaults:
+  1. Read `.nanostack/stack.json` if it exists (project-level preferences)
+  2. Read `~/.nanostack/stack.json` if it exists (user-level preferences)
+  3. Read `plan/references/stack-defaults.md` for anything not covered above
+  4. If the project already has a stack (check package.json, go.mod, requirements.txt), use what's there regardless of any config.
+  Suggest, don't impose. The user always has the final say.
+- **Always use the latest stable version** of every dependency. Don't rely on versions from training data.
 
 ### 2. Evaluate Scope
 
