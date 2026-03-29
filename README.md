@@ -265,7 +265,7 @@ git clone https://github.com/garagon/nanostack.git ~/nanostack
 cd ~/nanostack && ./setup --host opencode
 
 # Gemini CLI
-gemini extensions install https://github.com/garagon/nanostack
+gemini extensions install https://github.com/garagon/nanostack --consent
 
 # Auto-detect all installed agents
 ./setup --host auto
