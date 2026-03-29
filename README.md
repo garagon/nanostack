@@ -239,51 +239,54 @@ All rules live in [`guard/rules.json`](guard/rules.json). Each rule has an ID, r
 
 ## Install
 
-**Quick install (any agent):**
+### Recommended: git clone
+
+Full features including skill rename, analytics, sprint journal and project setup.
 
 ```bash
-npx skills add garagon/nanostack
-```
-
-**Per agent:**
-
-```bash
-# Claude Code (recommended)
 git clone https://github.com/garagon/nanostack.git ~/.claude/skills/nanostack
 cd ~/.claude/skills/nanostack && ./setup
-
-# OpenAI Codex
-git clone https://github.com/garagon/nanostack.git ~/nanostack
-cd ~/nanostack && ./setup --host codex
-
-# Cursor
-git clone https://github.com/garagon/nanostack.git ~/nanostack
-cd ~/nanostack && ./setup --host cursor
-
-# OpenCode
-git clone https://github.com/garagon/nanostack.git ~/nanostack
-cd ~/nanostack && ./setup --host opencode
-
-# Gemini CLI
-gemini extensions install https://github.com/garagon/nanostack --consent
-
-# Auto-detect all installed agents
-./setup --host auto
 ```
 
-### Update
+Supports Claude Code (default), Codex (`--host codex`), Cursor (`--host cursor`), OpenCode (`--host opencode`), Gemini CLI (`--host gemini`), or all at once (`--host auto`).
+
+Update:
 
 ```bash
 ~/.claude/skills/nanostack/bin/upgrade.sh
 ```
 
-Run from anywhere. Pulls latest, shows what changed, re-runs setup if needed.
+Run from anywhere. Pulls latest, shows what changed, re-runs setup if needed. No build step. Skills use symlinks. Changes take effect immediately.
 
-No build step. Skills use symlinks. Changes take effect immediately.
+### Alternative: npx skills
+
+One command, auto-detects installed agents.
+
+```bash
+npx skills add garagon/nanostack -g --full-depth
+```
+
+`-g` installs globally (available in every project, not just the current directory). `--full-depth` installs all 8 skills. Without it, only the root overview skill gets installed.
+
+Natively supports Claude Code, OpenClaw, Antigravity, Cursor, Gemini CLI, Amp, Cline and others.
+
+Update:
+
+```bash
+npx skills update
+```
+
+Note: this method copies skill files instead of linking to the git repo. Advanced features like `--rename`, `bin/analytics.sh`, sprint journal and `bin/init-project.sh` are not available through this method. For the full workflow use git clone.
+
+### Alternative: Gemini CLI extension
+
+```bash
+gemini extensions install https://github.com/garagon/nanostack --consent
+```
 
 ### Rename skills
 
-If you have other skill sets installed (gstack, superpowers, etc.) and names collide, rename the ones that conflict:
+If you have other skill sets installed (gstack, superpowers, etc.) and names collide, rename the ones that conflict. Requires git clone install.
 
 ```bash
 cd ~/.claude/skills/nanostack
@@ -297,11 +300,9 @@ Renames persist between updates. Other useful commands:
 ./setup --rename reset   # restore original names
 ```
 
-In Codex, skills are installed with the `nanostack-` prefix by default to avoid collisions.
-
 ### Project setup
 
-Run once in each project to configure permissions and .gitignore:
+Run once in each project to configure permissions and .gitignore. Requires git clone install.
 
 ```bash
 ~/.claude/skills/nanostack/bin/init-project.sh
@@ -314,7 +315,7 @@ This creates `.claude/settings.json` with permissions so Claude Code doesn't int
 - macOS or Linux
 - [jq](https://jqlang.github.io/jq/) for artifact processing (`brew install jq` or `apt install jq`)
 - Git
-- One of: Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI
+- One of: Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp, Cline
 
 ## The Zen of Nanostack
 
