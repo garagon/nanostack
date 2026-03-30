@@ -30,13 +30,22 @@ Auto-suggest logic (recommend, don't enforce):
 
 Calibrate depth by diff size: **Small** (< 100 lines, quick pass) / **Medium** (100-500, full two-pass) / **Large** (500+, full + architecture).
 
-## Step 0: Read Plan Context
+## Step 0: Read Plan Context and Past Solutions
 
 Find the plan artifact and extract context for the review:
 
 ```bash
 bin/find-artifact.sh plan 2
 ```
+
+Search for past solutions related to the files being changed:
+
+```bash
+bin/find-solution.sh --file <changed-file-path>
+bin/find-solution.sh "<relevant-keywords>"
+```
+
+If past solutions exist, check whether the current code follows the documented resolutions. If it contradicts a past solution, flag it.
 
 If found, read these fields:
 - **`planned_files[]`** → used by scope drift check (below)
