@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # find-solution.sh — Search solutions by keyword, tag, or file path
-# Usage: find-solution.sh <query> [--type bug|pattern|decision] [--tag tag] [--file path]
+# Usage: find-solution.sh <query> [--type bug|pattern|decision] [--tag tag] [--file path] [--full]
 #
-# Searches YAML frontmatter (title, tags, files) and body text.
-# Returns paths to matching solution documents, most recent first.
+# Default output: ranked summaries with title, severity, tags, files.
+# The agent reads summaries first, then loads only the relevant documents.
+# --full: return bare file paths (backward compatible, for scripts).
 # Exit 1 if no matches found.
 set -e
 
@@ -17,18 +18,20 @@ QUERY=""
 FILTER_TYPE=""
 FILTER_TAG=""
 FILTER_FILE=""
+FULL_MODE=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --type) FILTER_TYPE="$2"; shift 2 ;;
     --tag) FILTER_TAG="$2"; shift 2 ;;
     --file) FILTER_FILE="$2"; shift 2 ;;
+    --full) FULL_MODE=true; shift ;;
     *) QUERY="${QUERY:+$QUERY }$1"; shift ;;
   esac
 done
 
 [ -z "$QUERY" ] && [ -z "$FILTER_TYPE" ] && [ -z "$FILTER_TAG" ] && [ -z "$FILTER_FILE" ] && {
-  echo "Usage: find-solution.sh <query> [--type bug|pattern|decision] [--tag tag] [--file path]" >&2
+  echo "Usage: find-solution.sh <query> [--type bug|pattern|decision] [--tag tag] [--file path] [--full]" >&2
   exit 1
 }
 
@@ -38,7 +41,21 @@ done
 FILES=$(find "$SOLUTIONS_DIR" -name "*.md" -type f 2>/dev/null | sort -r)
 [ -z "$FILES" ] && exit 1
 
-MATCHES=""
+# Extract frontmatter field from a file
+get_field() {
+  local file="$1" field="$2"
+  sed -n '/^---$/,/^---$/p' "$file" | grep -i "^${field}:" | head -1 | sed "s/^${field}: *//i"
+}
+
+# Score severity: critical=4, high=3, medium=2, low=1
+severity_score() {
+  case "$1" in
+    critical) echo 4 ;; high) echo 3 ;; medium) echo 2 ;; low) echo 1 ;; *) echo 2 ;;
+  esac
+}
+
+# Collect matches with scores
+RESULTS=""
 
 while IFS= read -r filepath; do
   [ -z "$filepath" ] && continue
@@ -53,7 +70,6 @@ while IFS= read -r filepath; do
   # Filter by tag (search frontmatter)
   if [ -n "$FILTER_TAG" ] && [ "$MATCH" = true ]; then
     if ! grep -qi "tags:.*$FILTER_TAG" "$filepath" 2>/dev/null; then
-      # Also check array format
       if ! grep -qi "\"$FILTER_TAG\"" "$filepath" 2>/dev/null; then
         MATCH=false
       fi
@@ -69,8 +85,6 @@ while IFS= read -r filepath; do
 
   # Search query in title, tags, and body
   if [ -n "$QUERY" ] && [ "$MATCH" = true ]; then
-    FOUND=false
-    # Search each query word (all must match)
     ALL_WORDS_MATCH=true
     for word in $QUERY; do
       if ! grep -qi "$word" "$filepath" 2>/dev/null; then
@@ -78,19 +92,79 @@ while IFS= read -r filepath; do
         break
       fi
     done
-    [ "$ALL_WORDS_MATCH" = true ] && FOUND=true
-    [ "$FOUND" = false ] && MATCH=false
+    [ "$ALL_WORDS_MATCH" = false ] && MATCH=false
   fi
 
   if [ "$MATCH" = true ]; then
-    MATCHES="${MATCHES:+$MATCHES
-}$filepath"
+    # Extract frontmatter for scoring and display
+    TITLE=$(get_field "$filepath" "title")
+    SEVERITY=$(get_field "$filepath" "severity")
+    DATE=$(get_field "$filepath" "date")
+    TAGS=$(get_field "$filepath" "tags")
+    FM_FILES=$(get_field "$filepath" "files")
+    TYPE_DIR=$(basename "$(dirname "$filepath")")
+
+    # Score: severity + tag match density + recency
+    SCORE=$(severity_score "$SEVERITY")
+
+    # Tag density: count query words that appear in tags
+    if [ -n "$QUERY" ]; then
+      for word in $QUERY; do
+        if echo "$TAGS" | grep -qi "$word" 2>/dev/null; then
+          SCORE=$((SCORE + 1))
+        fi
+      done
+    fi
+
+    # Recency: +1 if within last 30 days
+    if [ -n "$DATE" ]; then
+      if command -v gdate >/dev/null 2>&1; then
+        DATE_CMD="gdate"
+      else
+        DATE_CMD="date"
+      fi
+      DOC_EPOCH=$($DATE_CMD -d "$DATE" +%s 2>/dev/null || echo 0)
+      NOW_EPOCH=$($DATE_CMD +%s 2>/dev/null || echo 0)
+      if [ "$DOC_EPOCH" -gt 0 ] && [ $((NOW_EPOCH - DOC_EPOCH)) -lt 2592000 ]; then
+        SCORE=$((SCORE + 1))
+      fi
+    fi
+
+    RESULTS="${RESULTS}${SCORE}|${filepath}|${TITLE}|${SEVERITY}|${DATE}|${TAGS}|${FM_FILES}|${TYPE_DIR}
+"
   fi
 done <<< "$FILES"
 
-if [ -n "$MATCHES" ]; then
-  echo "$MATCHES"
+[ -z "$RESULTS" ] && exit 1
+
+# Sort by score descending
+SORTED=$(echo "$RESULTS" | sort -t'|' -k1 -rn)
+
+# Output
+if [ "$FULL_MODE" = true ]; then
+  echo "$SORTED" | while IFS='|' read -r score path rest; do
+    echo "$path"
+  done
   exit 0
-else
-  exit 1
 fi
+
+# Summary output
+COUNT=$(echo "$SORTED" | grep -c '|')
+echo "$COUNT solutions found${QUERY:+ for \"$QUERY\"}"
+echo ""
+
+IDX=1
+echo "$SORTED" | while IFS='|' read -r score path title severity date tags fm_files type_dir; do
+  [ -z "$path" ] && continue
+  # Clean tags: remove brackets and quotes
+  clean_tags=$(echo "$tags" | tr -d '[]"' | sed 's/,  */, /g')
+  # Clean files: remove brackets and quotes
+  clean_files=$(echo "$fm_files" | tr -d '[]"' | sed 's/,  */, /g')
+
+  echo "  [$IDX] $type_dir/$(basename "$path") ($severity, $date)"
+  [ -n "$title" ] && echo "      $title"
+  [ -n "$clean_tags" ] && [ "$clean_tags" != "[]" ] && echo "      tags: $clean_tags"
+  [ -n "$clean_files" ] && [ "$clean_files" != "[]" ] && echo "      files: $clean_files"
+  echo ""
+  IDX=$((IDX + 1))
+done

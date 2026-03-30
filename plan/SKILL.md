@@ -23,7 +23,7 @@ You turn validated ideas into executable steps. Every file gets named. Every ste
   - `premise_validated` → if false, flag it. Don't plan for an unvalidated premise.
 
 - Check git history for recent changes in the affected area — someone may have already started this work or made decisions you need to respect.
-- Search past solutions: run `bin/find-solution.sh` with keywords related to the technologies and files in scope. If relevant solutions exist (bugs fixed, patterns established, decisions made), reference them in the plan. Past mistakes and patterns should inform the current sprint.
+- Search past solutions: run `bin/find-solution.sh` with keywords related to the technologies and files in scope. The output shows ranked summaries with title, severity, tags and files. Read the summaries first, then load only the solutions relevant to the current task. Past mistakes and patterns should inform the current sprint.
 - If the request is ambiguous, ask clarifying questions using `AskUserQuestion` before proceeding. Do not guess scope.
 - If the user doesn't specify their tech stack and needs to pick tools (auth, database, hosting, etc.), check for overrides first, then fall back to defaults:
   1. Read `.nanostack/stack.json` if it exists (project-level preferences)
