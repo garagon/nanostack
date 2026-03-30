@@ -276,6 +276,27 @@ install_claude() {
   if [ ${#renamed[@]} -gt 0 ]; then
     echo "  Renamed skills: ${renamed[*]}"
   fi
+
+  # Install commands to ~/.claude/commands/ (or .claude/commands/ for local)
+  local commands_dir
+  if [ "$LOCAL_INSTALL" -eq 1 ]; then
+    commands_dir="$(dirname "$skills_dir")/commands"
+  else
+    commands_dir="$HOME/.claude/commands"
+  fi
+  mkdir -p "$commands_dir"
+
+  local cmds=()
+  for cmd in "$SOURCE_DIR/commands"/*.md; do
+    [ -f "$cmd" ] || continue
+    local cmd_name
+    cmd_name=$(basename "$cmd")
+    ln -snf "$cmd" "$commands_dir/$cmd_name"
+    cmds+=("/${cmd_name%.md}")
+  done
+  if [ ${#cmds[@]} -gt 0 ]; then
+    echo "  Linked commands: ${cmds[*]}"
+  fi
 }
 
 # ─── OpenAI Codex ─────────────────────────────────────────────
