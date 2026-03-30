@@ -271,13 +271,19 @@ cd ~/.claude/skills/nanostack && ./setup
 
 Supports Claude Code (default), Codex (`--host codex`), Cursor (`--host cursor`), OpenCode (`--host opencode`), Gemini CLI (`--host gemini`), or all at once (`--host auto`).
 
-Update:
+Update from Claude Code:
+
+```
+/nano-update
+```
+
+Or from the terminal:
 
 ```bash
 ~/.claude/skills/nanostack/bin/upgrade.sh
 ```
 
-Run from anywhere. Pulls latest, shows what changed, re-runs setup if needed. No build step. Skills use symlinks. Changes take effect immediately.
+Pulls latest, shows what changed, re-runs setup if needed. Works with both git clone and npx installations.
 
 ### Alternative: npx skills
 
@@ -510,7 +516,7 @@ Find it: `lsof -ti:3000`. Kill it: `kill $(lsof -ti:3000)`.
 Dependencies not finished. Run `conductor/bin/sprint.sh status` to check.
 
 **Skills seem outdated.**
-Run `~/.claude/skills/nanostack/bin/upgrade.sh` to pull latest and re-run setup.
+Run `/nano-update` from Claude Code, or `~/.claude/skills/nanostack/bin/upgrade.sh` from the terminal.
 
 ## Uninstall
 
