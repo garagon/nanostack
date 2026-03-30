@@ -50,7 +50,7 @@ git --no-pager log --oneline "$BEFORE".."$AFTER"
 
 # Check if setup needs re-run (new skills or setup changes)
 CHANGED=$(git diff --name-only "$BEFORE".."$AFTER")
-if echo "$CHANGED" | grep -qE '^setup$|/agents/openai\.yaml$'; then
+if echo "$CHANGED" | grep -qE '^setup$|^commands/|/agents/openai\.yaml$'; then
   echo ""
   echo "Setup changed. Re-running..."
   ./setup
