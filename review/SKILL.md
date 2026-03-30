@@ -45,7 +45,7 @@ bin/find-solution.sh --file <changed-file-path>
 bin/find-solution.sh "<relevant-keywords>"
 ```
 
-If past solutions exist, check whether the current code follows the documented resolutions. If it contradicts a past solution, flag it.
+The output shows ranked summaries. Read the summaries first, then load only the solutions relevant to the current review. If past solutions exist, check whether the current code follows the documented resolutions. If it contradicts a past solution, flag it.
 
 If found, read these fields:
 - **`planned_files[]`** → used by scope drift check (below)

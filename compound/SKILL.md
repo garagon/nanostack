@@ -136,5 +136,6 @@ bin/save-artifact.sh compound '<json with phase, summary including solutions_cre
 - **Fill every section.** Empty sections are noise. If "What didn't work" is empty, either you fixed it on the first try (rare, skip the document) or you forgot to write it down.
 - **Use the exact file paths.** `src/api/webhooks/stripe.ts` is searchable. "The webhook file" is not.
 - **Tags are for search, not decoration.** Use terms someone would grep for: `stripe`, `webhooks`, `hmac`, not `payment-processing-integration`.
+- **Set severity accurately.** Solutions are ranked by severity when searched. Don't leave everything as medium.
 - **Update, don't duplicate.** If bin/find-solution.sh returns a close match, update that document.
 - **The Prevention section is the highest-value section.** A bug fix helps once. A prevention rule helps every future sprint.
