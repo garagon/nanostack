@@ -24,7 +24,7 @@
 
 ---
 
-Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). 8 skills. Zero dependencies. Zero build step.
+Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). 9 skills. Zero dependencies. Zero build step.
 
 Works with Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp and Cline.
 
@@ -103,8 +103,9 @@ Each skill feeds into the next. `/nano` writes an artifact that `/review` reads 
 
 | Skill | What it does |
 |-------|-------------|
-| `/guard` | Three-tier safety: allowlist, in-project bypass, pattern matching with 28 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
-| `/conductor` | Orchestrate parallel agent sessions through a sprint. Agents claim phases, resolve dependencies, hand off artifacts. No daemon, just atomic file ops. |
+| `/compound` | **Knowledge** | Documents solved problems after each sprint. Three types: bug (what broke + fix), pattern (reusable approach), decision (architecture choice). `/nano` and `/review` search past solutions automatically in future sprints. |
+| `/guard` | **Safety** | Three-tier safety: allowlist, in-project bypass, pattern matching with 28 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
+| `/conductor` | **Orchestrator** | Orchestrate parallel agent sessions through a sprint. Agents claim phases, resolve dependencies, hand off artifacts. No daemon, just atomic file ops. |
 
 ### Intensity modes
 
@@ -423,6 +424,29 @@ When you run `/ship` and the PR lands, it automatically generates a sprint journ
 
 The journal reads every phase artifact from the sprint and writes one file with the full decision trail: what `/think` reframed, what `/nano` scoped, what `/review` found, how conflicts were resolved, what `/security` graded.
 
+### Knowledge compounding on /compound
+
+After shipping, run `/compound` to document what you learned:
+
+```
+/compound  →  reads sprint artifacts
+           →  identifies problems solved
+           →  writes to .nanostack/know-how/solutions/bug/
+           →  writes to .nanostack/know-how/solutions/pattern/
+           →  writes to .nanostack/know-how/solutions/decision/
+```
+
+Next sprint, `/nano` automatically searches past solutions before planning. `/review` checks if current code follows documented resolutions. The knowledge compounds: every sprint makes the next one faster.
+
+Search manually:
+
+```bash
+bin/find-solution.sh "stripe webhook"        # by keyword
+bin/find-solution.sh --type bug              # by type
+bin/find-solution.sh --tag security          # by tag
+bin/find-solution.sh --file src/api/webhooks # by file
+```
+
 ### Analytics and learnings
 
 Two optional scripts for when you want to see patterns across sprints:
@@ -492,7 +516,7 @@ Run `~/.claude/skills/nanostack/bin/upgrade.sh` to pull latest and re-run setup.
 
 ```bash
 # Claude Code
-cd ~/.claude/skills && rm -f think nano review qa security ship guard conductor && rm -rf nanostack
+cd ~/.claude/skills && rm -f think nano review qa security ship guard conductor compound && rm -rf nanostack
 
 # Codex
 rm -rf ~/.agents/skills/nanostack*
