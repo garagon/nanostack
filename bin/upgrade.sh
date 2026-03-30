@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # upgrade.sh — Update nanostack to latest version
 # Usage: ~/.claude/skills/nanostack/bin/upgrade.sh (from anywhere)
+# Supports both git clone and npx skills add installations.
 set -e
 
 # Disable git pager globally for this script
@@ -20,41 +21,53 @@ fi
 
 cd "$SCRIPT_DIR"
 
-if [ ! -d .git ]; then
-  echo "Error: not a git repository at $SCRIPT_DIR" >&2
-  exit 1
-fi
+# Git clone installation: pull updates
+if [ -d .git ]; then
+  BEFORE=$(git rev-parse HEAD)
 
-BEFORE=$(git rev-parse HEAD)
+  echo "Updating nanostack..."
+  git pull --ff-only 2>&1 || {
+    echo "Error: pull failed. You may have local changes." >&2
+    echo "Run: git stash && bin/upgrade.sh && git stash pop" >&2
+    exit 1
+  }
 
-echo "Updating nanostack..."
-git pull --ff-only 2>&1 || {
-  echo "Error: pull failed. You may have local changes." >&2
-  echo "Run: git stash && bin/upgrade.sh && git stash pop" >&2
-  exit 1
-}
+  AFTER=$(git rev-parse HEAD)
 
-AFTER=$(git rev-parse HEAD)
+  if [ "$BEFORE" = "$AFTER" ]; then
+    echo "Already up to date."
+    exit 0
+  fi
 
-if [ "$BEFORE" = "$AFTER" ]; then
-  echo "Already up to date."
-  exit 0
-fi
-
-# Show what changed (--no-pager prevents opening less/vim)
-COMMITS=$(git --no-pager log --oneline "$BEFORE".."$AFTER" | wc -l | tr -d ' ')
-echo ""
-echo "Updated: $COMMITS new commits"
-echo ""
-git --no-pager log --oneline "$BEFORE".."$AFTER"
-
-# Check if setup needs re-run (new skills or setup changes)
-CHANGED=$(git diff --name-only "$BEFORE".."$AFTER")
-if echo "$CHANGED" | grep -qE '^setup$|^commands/|/agents/openai\.yaml$'; then
+  # Show what changed
+  COMMITS=$(git --no-pager log --oneline "$BEFORE".."$AFTER" | wc -l | tr -d ' ')
   echo ""
-  echo "Setup changed. Re-running..."
-  ./setup
+  echo "Updated: $COMMITS new commits"
+  echo ""
+  git --no-pager log --oneline "$BEFORE".."$AFTER"
+
+  # Check if setup needs re-run
+  CHANGED=$(git diff --name-only "$BEFORE".."$AFTER")
+  if echo "$CHANGED" | grep -qE '^setup$|^commands/|/agents/openai\.yaml$'; then
+    echo ""
+    echo "Setup changed. Re-running..."
+    ./setup
+  else
+    echo ""
+    echo "No setup changes needed."
+  fi
+
+# npx/copy installation: re-install and re-run setup
 else
-  echo ""
-  echo "No setup changes needed."
+  echo "Updating nanostack (npx)..."
+  if command -v npx >/dev/null 2>&1; then
+    npx skills add garagon/nanostack -g --full-depth 2>&1
+    echo ""
+    echo "Re-running setup..."
+    ./setup
+  else
+    echo "Error: npx not found. Install manually:" >&2
+    echo "  npx skills add garagon/nanostack -g --full-depth" >&2
+    exit 1
+  fi
 fi
