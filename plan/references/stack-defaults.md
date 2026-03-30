@@ -6,7 +6,7 @@ Do NOT force these choices. If the user says "I want to use Firebase," use Fireb
 
 ## Principles
 
-**Always use the latest stable version.** Check the docs or registry before pinning a version. Don't use outdated examples from training data. Run `npm info <pkg> version`, `pip index versions <pkg>`, or check the GitHub releases page.
+**Always use the latest stable version.** Before pinning any dependency, confirm the version is current. Don't assume versions from training data are up to date. When in doubt, check the official documentation for the tool.
 
 **Prefer tools with a CLI.** The agent works in the terminal. If a tool has a CLI, the agent can use it directly without SDK boilerplate. CLIs reduce integration code, enable local testing of webhooks and events, and work in CI/CD pipelines without extra configuration. When two tools are equivalent, pick the one with the better CLI.
 
