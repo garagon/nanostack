@@ -226,4 +226,6 @@ After shipping, the sprint is complete. Tell the user:
 
 > Sprint complete. PR created. Journal generated at .nanostack/know-how/journal/.
 >
+> Run `/compound` to document what you learned. Past solutions are found automatically by /nano and /review in future sprints.
+>
 > Run `bin/analytics.sh` to see trends across sprints.
