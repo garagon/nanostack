@@ -120,6 +120,8 @@ Apply these CEO cognitive patterns (read `think/references/cognitive-patterns.md
 - **10x vs 10%** (Grove): Is this a 10x improvement or a 10% improvement? 10% improvements don't change behavior.
 - **Narrowest wedge** (Graham): Do things that don't scale first. Serve one user perfectly before serving a million poorly.
 
+After applying the patterns, **argue the opposite**. Construct the strongest possible case that this idea should NOT be built, or that the opposite direction is better. Present it with the same conviction you used to build the case in favor. This forces real evaluation instead of confirmation bias. If the opposite argument is stronger, say so. If the original holds, it's now battle-tested.
+
 ### Phase 5: Scope Mode Selection
 
 Based on the diagnostic, recommend one of four scope modes:
