@@ -25,12 +25,12 @@ After a sprint or a significant fix, extract what you learned into structured, s
 Find what happened during this sprint:
 
 ```bash
-~/.claude/skills/nanostack/bin/find-artifact.sh think 2
-~/.claude/skills/nanostack/bin/find-artifact.sh plan 2
-~/.claude/skills/nanostack/bin/find-artifact.sh review 2
-~/.claude/skills/nanostack/bin/find-artifact.sh qa 2
-~/.claude/skills/nanostack/bin/find-artifact.sh security 2
-~/.claude/skills/nanostack/bin/find-artifact.sh ship 2
+bin/find-artifact.sh think 2
+bin/find-artifact.sh plan 2
+bin/find-artifact.sh review 2
+bin/find-artifact.sh qa 2
+bin/find-artifact.sh security 2
+bin/find-artifact.sh ship 2
 ```
 
 Not all artifacts will exist. Read what's available. Focus on:
@@ -56,9 +56,9 @@ Skip:
 Before creating a new document, search for related ones:
 
 ```bash
-~/.claude/skills/nanostack/bin/find-solution.sh "relevant keywords"
-~/.claude/skills/nanostack/bin/find-solution.sh --tag relevant-tag
-~/.claude/skills/nanostack/bin/find-solution.sh --file affected/file/path
+bin/find-solution.sh "relevant keywords"
+bin/find-solution.sh --tag relevant-tag
+bin/find-solution.sh --file affected/file/path
 ```
 
 If a closely related solution exists:
@@ -72,7 +72,7 @@ Do not create duplicates. One good document beats two partial ones.
 For each significant learning, create a document:
 
 ```bash
-~/.claude/skills/nanostack/bin/save-solution.sh <type> "<title>" "tag1,tag2,tag3"
+bin/save-solution.sh <type> "<title>" "tag1,tag2,tag3"
 ```
 
 Types:
@@ -127,7 +127,7 @@ Total solutions in project: 12
 ## Save Artifact
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh compound '<json with phase, summary including solutions_created, solutions_updated, total_solutions>'
+bin/save-artifact.sh compound '<json with phase, summary including solutions_created, solutions_updated, total_solutions>'
 ```
 
 ## Next Step
@@ -141,5 +141,5 @@ Total solutions in project: 12
 - **Use the exact file paths.** `src/api/webhooks/stripe.ts` is searchable. "The webhook file" is not.
 - **Tags are for search, not decoration.** Use terms someone would grep for: `stripe`, `webhooks`, `hmac`, not `payment-processing-integration`.
 - **Set severity accurately.** Solutions are ranked by severity when searched. Don't leave everything as medium.
-- **Update, don't duplicate.** If ~/.claude/skills/nanostack/bin/find-solution.sh returns a close match, update that document.
+- **Update, don't duplicate.** If bin/find-solution.sh returns a close match, update that document.
 - **The Prevention section is the highest-value section.** A bug fix helps once. A prevention rule helps every future sprint.

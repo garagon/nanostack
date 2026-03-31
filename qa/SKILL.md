@@ -78,7 +78,7 @@ After functional tests pass, take screenshots of every key state and analyze the
 **Read the plan artifact first:**
 
 ```bash
-~/.claude/skills/nanostack/bin/find-artifact.sh plan 2
+bin/find-artifact.sh plan 2
 ```
 
 If the plan specifies product standards (shadcn/ui, Tailwind, dark mode, specific component library), use those as your checklist. Don't guess what the UI should look like. The plan defines the spec. If the plan said "shadcn/ui + Tailwind" and the output uses raw CSS, that's a finding.
@@ -196,7 +196,7 @@ Report progress as you go. After each test group (happy path, error states, edge
 Always persist the QA results after completing the run:
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh qa '<json with phase, mode, summary including wtf_likelihood, findings>'
+bin/save-artifact.sh qa '<json with phase, mode, summary including wtf_likelihood, findings>'
 ```
 
 See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.
