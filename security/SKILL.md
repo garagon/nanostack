@@ -34,7 +34,7 @@ Auto-suggest:
 **Read the plan artifact** if one exists:
 
 ```bash
-bin/find-artifact.sh plan 2
+~/.claude/skills/nanostack/bin/find-artifact.sh plan 2
 ```
 
 If found:
@@ -206,7 +206,7 @@ Always close with **What's solid**: 2-3 specific things the codebase does well o
 Always check for conflicts with prior `/review` findings if a review artifact exists:
 
 ```bash
-bin/find-artifact.sh review 30
+~/.claude/skills/nanostack/bin/find-artifact.sh review 30
 ```
 
 Read `reference/conflict-precedents.md` for known conflict patterns. When detected, mark inline:
@@ -224,7 +224,7 @@ In `--thorough` mode, document conflicts AND flag as BLOCKING until user confirm
 Always persist the security audit after completing it:
 
 ```bash
-bin/save-artifact.sh security '<json with phase, mode, summary, findings, conflicts>'
+~/.claude/skills/nanostack/bin/save-artifact.sh security '<json with phase, mode, summary, findings, conflicts>'
 ```
 
 See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.

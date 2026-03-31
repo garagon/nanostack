@@ -17,7 +17,7 @@ You turn validated ideas into executable steps. Every file gets named. Every ste
 
 - **Read the /think artifact** if one exists for this project:
   ```bash
-  bin/find-artifact.sh think 2
+  ~/.claude/skills/nanostack/bin/find-artifact.sh think 2
   ```
   If found, extract and use:
   - `key_risk` → add to your Risks section. This was already validated by /think.
@@ -131,7 +131,7 @@ Present the plan to the user. Wait for explicit approval before executing. If th
 Always persist the plan after presenting it to the user:
 
 ```bash
-bin/save-artifact.sh plan '<json with phase, summary including planned_files array>'
+~/.claude/skills/nanostack/bin/save-artifact.sh plan '<json with phase, summary including planned_files array>'
 ```
 
 The `planned_files` list is critical. `/review` uses it for scope drift detection via `bin/scope-drift.sh`. See `reference/artifact-schema.md` for the full schema.

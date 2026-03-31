@@ -206,25 +206,25 @@ Every phase transition follows this protocol. The agent executes these steps at 
 
 ### Pre-phase (before starting a new phase)
 
-1. Check for existing session: `bin/session.sh resume`
-   - If resumable and user confirms, restore context via `bin/restore-context.sh`
-   - If no session exists, create one: `bin/session.sh init <type>`
-2. Validate upstream dependencies: `bin/validate-dependencies.sh <phase>`
+1. Check for existing session: `~/.claude/skills/nanostack/bin/session.sh resume`
+   - If resumable and user confirms, restore context via `~/.claude/skills/nanostack/bin/restore-context.sh`
+   - If no session exists, create one: `~/.claude/skills/nanostack/bin/session.sh init <type>`
+2. Validate upstream dependencies: `~/.claude/skills/nanostack/bin/validate-dependencies.sh <phase>`
    - If MISSING, stop and report which dependencies are not met
-3. Update session: `bin/session.sh phase-start <phase>`
+3. Update session: `~/.claude/skills/nanostack/bin/session.sh phase-start <phase>`
 
 ### Post-phase (after completing a phase)
 
-1. Save artifact with `context_checkpoint` via `bin/save-artifact.sh`
+1. Save artifact with `context_checkpoint` via `~/.claude/skills/nanostack/bin/save-artifact.sh`
    - The `context_checkpoint` must include: `summary`, `key_files`, `decisions_made`, `open_questions`
    - No artifact is saved without `context_checkpoint` populated
-2. Update session: `bin/session.sh phase-complete <phase>`
+2. Update session: `~/.claude/skills/nanostack/bin/session.sh phase-complete <phase>`
 3. If context is running low, the agent reads the checkpoint summary instead of replaying full conversation
 
 ### Session resume (on crash recovery)
 
-1. `bin/session.sh resume` detects the last session state
-2. `bin/restore-context.sh` reads all completed phase checkpoints
+1. `~/.claude/skills/nanostack/bin/session.sh resume` detects the last session state
+2. `~/.claude/skills/nanostack/bin/restore-context.sh` reads all completed phase checkpoints
 3. Skip completed phases, restart the in-progress phase from scratch
 
 ## Gotchas
