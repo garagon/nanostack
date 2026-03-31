@@ -82,6 +82,50 @@ if [ -n "$PROJECT_ROOT" ]; then
   esac
 fi
 
+# ─── Tier 2.5: Phase-aware concurrency enforcement ─────────
+# If a session is active and the current phase is read-only,
+# block write operations to prevent race conditions in parallel execution.
+GUARD_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+NANOSTACK_ROOT="$(cd "$GUARD_DIR/.." && pwd)"
+STORE_PATH_SH="$NANOSTACK_ROOT/bin/lib/store-path.sh"
+
+if [ -f "$STORE_PATH_SH" ]; then
+  source "$STORE_PATH_SH"
+  SESSION_CHECK="$NANOSTACK_STORE/session.json"
+
+  if [ -f "$SESSION_CHECK" ]; then
+    CURRENT_PHASE=$(jq -r '.current_phase // ""' "$SESSION_CHECK" 2>/dev/null)
+
+    if [ -n "$CURRENT_PHASE" ]; then
+      # Get concurrency from skill frontmatter
+      SKILL_CONC=""
+      case "$CURRENT_PHASE" in
+        plan) SKILL_MD="$NANOSTACK_ROOT/plan/SKILL.md" ;;
+        build) SKILL_MD="" ;;
+        *) SKILL_MD="$NANOSTACK_ROOT/$CURRENT_PHASE/SKILL.md" ;;
+      esac
+
+      if [ -n "${SKILL_MD:-}" ] && [ -f "$SKILL_MD" ]; then
+        SKILL_CONC=$(sed -n '/^---$/,/^---$/p' "$SKILL_MD" | grep '^concurrency:' | head -1 | sed 's/^concurrency: *//')
+      fi
+
+      # Block writes during read-only phases
+      if [ "$SKILL_CONC" = "read" ]; then
+        case "$CMD" in
+          *rm\ *|*mv\ *|*cp\ *|*mkdir\ *|*touch\ *|*chmod\ *|*git\ add*|*git\ commit*|*git\ push*|*git\ reset*)
+            echo "BLOCKED [PHASE] Write operation during read-only phase '$CURRENT_PHASE'"
+            echo "Category: concurrency-safety"
+            echo "Command: $CMD"
+            echo ""
+            echo "Phase '$CURRENT_PHASE' has concurrency=read. Write operations are blocked to prevent race conditions in parallel execution. Report as a finding instead of auto-fixing."
+            exit 1
+            ;;
+        esac
+      fi
+    fi
+  fi
+fi
+
 # ─── Tier 3: Pattern matching ───────────────────────────────
 
 # Check block rules first

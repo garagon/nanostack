@@ -21,11 +21,13 @@ NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 cmd_init() {
   local type="${1:-development}"
   local issue_url=""
+  local autopilot="false"
 
   shift || true
   while [ $# -gt 0 ]; do
     case "$1" in
       --issue) issue_url="$2"; shift 2 ;;
+      --autopilot) autopilot="true"; shift ;;
       *) shift ;;
     esac
   done
@@ -50,6 +52,7 @@ cmd_init() {
     --arg repo "$repo" \
     --arg workspace "$PROJECT" \
     --arg date "$NOW" \
+    --argjson autopilot "$autopilot" \
     '{
       session_id: $id,
       type: $type,
@@ -57,6 +60,9 @@ cmd_init() {
       repo: (if $repo != "" then $repo else null end),
       workspace: $workspace,
       current_phase: null,
+      next_phase: null,
+      autopilot: $autopilot,
+      stop_conditions_met: [],
       phase_log: [],
       budget: {
         max_usd: null,
@@ -110,12 +116,52 @@ cmd_phase_complete() {
     exit 1
   fi
 
+  # Calculate next phase from default sequence
+  local next=""
+  case "$phase" in
+    think) next="plan" ;;
+    plan)  next="build" ;;
+    build) next="review" ;;
+    review)
+      # Check if qa and security are done
+      local qa_done sec_done
+      qa_done=$(jq -r '[.phase_log[] | select(.phase == "qa" and .status == "completed")] | length' "$SESSION_FILE")
+      sec_done=$(jq -r '[.phase_log[] | select(.phase == "security" and .status == "completed")] | length' "$SESSION_FILE")
+      if [ "$qa_done" -gt 0 ] && [ "$sec_done" -gt 0 ]; then next="ship"
+      elif [ "$qa_done" -gt 0 ]; then next="security"
+      else next="qa"
+      fi
+      ;;
+    qa)
+      local rev_done sec_done
+      rev_done=$(jq -r '[.phase_log[] | select(.phase == "review" and .status == "completed")] | length' "$SESSION_FILE")
+      sec_done=$(jq -r '[.phase_log[] | select(.phase == "security" and .status == "completed")] | length' "$SESSION_FILE")
+      if [ "$rev_done" -gt 0 ] && [ "$sec_done" -gt 0 ]; then next="ship"
+      elif [ "$rev_done" -gt 0 ]; then next="security"
+      else next="review"
+      fi
+      ;;
+    security)
+      local rev_done qa_done
+      rev_done=$(jq -r '[.phase_log[] | select(.phase == "review" and .status == "completed")] | length' "$SESSION_FILE")
+      qa_done=$(jq -r '[.phase_log[] | select(.phase == "qa" and .status == "completed")] | length' "$SESSION_FILE")
+      if [ "$rev_done" -gt 0 ] && [ "$qa_done" -gt 0 ]; then next="ship"
+      elif [ "$rev_done" -gt 0 ]; then next="qa"
+      else next="review"
+      fi
+      ;;
+    ship) next="compound" ;;
+    compound) next="" ;;
+  esac
+
   jq \
     --arg phase "$phase" \
     --arg date "$NOW" \
     --arg artifact "$artifact" \
+    --arg next "$next" \
     '(.phase_log[] | select(.phase == $phase and .status == "in_progress")) |=
        (.status = "completed" | .completed_at = $date | .artifact = (if $artifact != "" then $artifact else null end)) |
+     .next_phase = (if $next != "" then $next else null end) |
      .last_updated = $date' "$SESSION_FILE" > "${SESSION_FILE}.tmp"
   mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
 
@@ -137,10 +183,12 @@ cmd_resume() {
     exit 0
   fi
 
-  local session_id current_phase type
+  local session_id current_phase type autopilot next_phase
   session_id=$(jq -r '.session_id' "$SESSION_FILE")
   current_phase=$(jq -r '.current_phase // "none"' "$SESSION_FILE")
   type=$(jq -r '.type' "$SESSION_FILE")
+  autopilot=$(jq -r '.autopilot // false' "$SESSION_FILE")
+  next_phase=$(jq -r '.next_phase // "none"' "$SESSION_FILE")
 
   local completed_phases
   completed_phases=$(jq -r '[.phase_log[] | select(.status == "completed") | .phase] | join(", ")' "$SESSION_FILE")
@@ -159,11 +207,15 @@ cmd_resume() {
     --arg last_phase "$last_phase" \
     --arg last_status "$last_status" \
     --arg completed "$completed_phases" \
+    --argjson autopilot "$autopilot" \
+    --arg next_phase "$next_phase" \
     '{
       resumable: true,
       session_id: $session_id,
       type: $type,
+      autopilot: $autopilot,
       current_phase: $current_phase,
+      next_phase: $next_phase,
       last_phase: $last_phase,
       last_status: $last_status,
       completed_phases: $completed,

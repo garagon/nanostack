@@ -130,6 +130,23 @@ while IFS= read -r filepath; do
       fi
     fi
 
+    # Staleness: penalize if referenced files no longer exist
+    if [ -n "$FM_FILES" ] && [ "$FM_FILES" != "[]" ]; then
+      STALE_FILES=0
+      TOTAL_FILES=0
+      for ref_file in $(echo "$FM_FILES" | tr -d '[]"' | tr ',' ' '); do
+        ref_file=$(echo "$ref_file" | tr -d ' ' | sed 's/:.*$//')  # strip line numbers
+        [ -z "$ref_file" ] && continue
+        TOTAL_FILES=$((TOTAL_FILES + 1))
+        [ ! -f "$ref_file" ] && STALE_FILES=$((STALE_FILES + 1))
+      done
+      if [ "$TOTAL_FILES" -gt 0 ] && [ "$STALE_FILES" -eq "$TOTAL_FILES" ]; then
+        SCORE=$((SCORE - 3))  # all files gone: heavy penalty
+      elif [ "$STALE_FILES" -gt 0 ]; then
+        SCORE=$((SCORE - 1))  # some files gone: light penalty
+      fi
+    fi
+
     RESULTS="${RESULTS}${SCORE}|${filepath}|${TITLE}|${SEVERITY}|${DATE}|${TAGS}|${FM_FILES}|${TYPE_DIR}
 "
   fi

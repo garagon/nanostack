@@ -12,6 +12,7 @@ PROJECT="$(pwd)"
 MAX_AGE=30
 PHASES="think plan review qa security ship"
 JSON_OUTPUT=false
+TOKEN_BUDGET=0  # 0 = no budget, load full artifacts
 
 # Parse arguments
 while [ $# -gt 0 ]; do
@@ -19,6 +20,7 @@ while [ $# -gt 0 ]; do
     --phases) PHASES="$2"; shift 2 ;;
     --max-age-days) MAX_AGE="$2"; shift 2 ;;
     --json) JSON_OUTPUT=true; shift ;;
+    --budget) TOKEN_BUDGET="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
@@ -28,6 +30,33 @@ CONFIG="$NANOSTACK_STORE/config.json"
 if [ -f "$CONFIG" ]; then
   CUSTOM=$(jq -r '.custom_phases // [] | join(" ")' "$CONFIG" 2>/dev/null || echo "")
   [ -n "$CUSTOM" ] && PHASES="$PHASES $CUSTOM"
+fi
+
+# If budget is set, estimate total upstream size and decide mode
+CHECKPOINT_ONLY=false
+if [ "$TOKEN_BUDGET" -gt 0 ]; then
+  TOTAL_ESTIMATED=0
+  for phase in $PHASES; do
+    ARTIFACT=$("$SCRIPT_DIR/find-artifact.sh" "$phase" "$MAX_AGE" 2>/dev/null) || continue
+    # Read estimated_tokens from the skill's SKILL.md, fall back to artifact size estimate
+    NANOSTACK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+    SKILL_MD=""
+    case "$phase" in
+      plan) SKILL_MD="$NANOSTACK_ROOT/plan/SKILL.md" ;;
+      build) ;;
+      *) SKILL_MD="$NANOSTACK_ROOT/$phase/SKILL.md" ;;
+    esac
+    EST=0
+    if [ -n "$SKILL_MD" ] && [ -f "$SKILL_MD" ]; then
+      EST=$(sed -n '/^---$/,/^---$/p' "$SKILL_MD" | grep '^estimated_tokens:' | head -1 | sed 's/^estimated_tokens: *//')
+    fi
+    [ -z "$EST" ] || [ "$EST" = "0" ] && EST=300
+    TOTAL_ESTIMATED=$((TOTAL_ESTIMATED + EST))
+  done
+
+  if [ "$TOTAL_ESTIMATED" -gt "$TOKEN_BUDGET" ]; then
+    CHECKPOINT_ONLY=true
+  fi
 fi
 
 FOUND=0
@@ -42,13 +71,19 @@ for phase in $PHASES; do
   STATUS=$(jq -r '.status // "completed"' "$ARTIFACT" 2>/dev/null)
   TIMESTAMP=$(jq -r '.timestamp // "unknown"' "$ARTIFACT" 2>/dev/null)
 
-  if [ "$HAS_CHECKPOINT" = "yes" ]; then
+  if [ "$CHECKPOINT_ONLY" = true ] && [ "$HAS_CHECKPOINT" = "yes" ]; then
+    # Budget exceeded: checkpoint only
+    SUMMARY=$(jq -r '.context_checkpoint.summary' "$ARTIFACT")
+    KEY_FILES=$(jq -r '.context_checkpoint.key_files // [] | join(", ")' "$ARTIFACT")
+    DECISIONS=$(jq -r '.context_checkpoint.decisions_made // [] | join("; ")' "$ARTIFACT")
+    OPEN_QS=$(jq -r '.context_checkpoint.open_questions // [] | join("; ")' "$ARTIFACT")
+  elif [ "$HAS_CHECKPOINT" = "yes" ] && [ "$CHECKPOINT_ONLY" != true ]; then
     SUMMARY=$(jq -r '.context_checkpoint.summary' "$ARTIFACT")
     KEY_FILES=$(jq -r '.context_checkpoint.key_files // [] | join(", ")' "$ARTIFACT")
     DECISIONS=$(jq -r '.context_checkpoint.decisions_made // [] | join("; ")' "$ARTIFACT")
     OPEN_QS=$(jq -r '.context_checkpoint.open_questions // [] | join("; ")' "$ARTIFACT")
   else
-    # Fall back to phase summary if no checkpoint
+    # No checkpoint: fall back to phase summary
     SUMMARY=$(jq -r '.summary | to_entries | map("\(.key): \(.value)") | join(", ")' "$ARTIFACT" 2>/dev/null || echo "No summary")
     KEY_FILES=""
     DECISIONS=""
