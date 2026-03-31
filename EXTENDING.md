@@ -83,7 +83,7 @@ Extract: PR number, branch, deploy URL (if available).
 
 ### 2. Health check
 
-Run basic verification:
+Run basic verification against the local or staging endpoint (never production unless explicitly configured):
 
 - Hit the main endpoint, confirm 200 status
 - Check response time is under 500ms
@@ -94,7 +94,7 @@ Run basic verification:
 Print a summary:
 
 Deployed: PR #123
-Endpoint: https://app.example.com
+Endpoint: http://localhost:3000
 Status: 200 OK (142ms)
 Errors: none detected
 
@@ -130,7 +130,7 @@ Agent:  PR #42 created. CI passed.
 
 You:    /deploy
 Agent:  Reading ship artifact... PR #42, branch feat/new-feature.
-        Checking https://app.example.com...
+        Checking http://localhost:3000...
         Status: 200 OK (142ms). No errors detected.
         Deploy healthy.
 ```
