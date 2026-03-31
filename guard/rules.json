@@ -232,6 +232,41 @@
           "category": "safety-bypass",
           "description": "Skipping safety checks",
           "alternative": "Fix the check failure instead of bypassing"
+        },
+        {
+          "id": "G-029",
+          "pattern": "export.*(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|API_KEY)\\s*=",
+          "category": "credential-injection",
+          "description": "Setting credentials in environment variables",
+          "alternative": "Use .env files (gitignored) instead of export in shell history"
+        },
+        {
+          "id": "G-030",
+          "pattern": "(cat|less|head|tail|vi|vim|nano|code)\\s+.*\\.(env|pem|key|credentials|keystore)",
+          "category": "secrets-access",
+          "description": "Reading or editing secrets files directly",
+          "alternative": "Use the project's secrets management or read specific non-secret fields with jq/grep"
+        },
+        {
+          "id": "G-031",
+          "pattern": "sudo\\s+(rm|chmod|chown|kill|systemctl|service|apt|yum)",
+          "category": "privilege-escalation",
+          "description": "Running destructive commands with elevated privileges",
+          "alternative": "Run without sudo inside the project directory"
+        },
+        {
+          "id": "G-032",
+          "pattern": "docker\\s+run.*(--privileged|-v\\s+/[^t])",
+          "category": "container-escape",
+          "description": "Docker with privileged mode or host root mount",
+          "alternative": "Use specific volume mounts and drop --privileged"
+        },
+        {
+          "id": "G-033",
+          "pattern": "(0\\.0\\.0\\.0|INADDR_ANY|--host\\s+0\\.0)",
+          "category": "network-exposure",
+          "description": "Binding to all interfaces exposes service to the network",
+          "alternative": "Bind to 127.0.0.1 for local development"
         }
       ]
     },

@@ -86,14 +86,19 @@ cmd_phase_start() {
     exit 1
   fi
 
+  local epoch
+  epoch=$(date +%s)
+
   jq \
     --arg phase "$phase" \
     --arg date "$NOW" \
+    --argjson epoch "$epoch" \
     '.current_phase = $phase |
      .phase_log += [{
        phase: $phase,
        status: "in_progress",
        started_at: $date,
+       started_epoch: $epoch,
        completed_at: null,
        artifact: null
      }] |
@@ -154,13 +159,25 @@ cmd_phase_complete() {
     compound) next="" ;;
   esac
 
+  # Calculate duration from stored epoch
+  local duration=0
+  local start_epoch
+  start_epoch=$(jq -r --arg phase "$phase" \
+    '.phase_log[] | select(.phase == $phase and .status == "in_progress") | .started_epoch // 0' "$SESSION_FILE" 2>/dev/null)
+  if [ "$start_epoch" -gt 0 ]; then
+    local end_epoch
+    end_epoch=$(date +%s)
+    duration=$((end_epoch - start_epoch))
+  fi
+
   jq \
     --arg phase "$phase" \
     --arg date "$NOW" \
     --arg artifact "$artifact" \
     --arg next "$next" \
+    --argjson duration "$duration" \
     '(.phase_log[] | select(.phase == $phase and .status == "in_progress")) |=
-       (.status = "completed" | .completed_at = $date | .artifact = (if $artifact != "" then $artifact else null end)) |
+       (.status = "completed" | .completed_at = $date | .duration_seconds = $duration | .artifact = (if $artifact != "" then $artifact else null end)) |
      .next_phase = (if $next != "" then $next else null end) |
      .last_updated = $date' "$SESSION_FILE" > "${SESSION_FILE}.tmp"
   mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
