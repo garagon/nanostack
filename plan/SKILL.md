@@ -17,7 +17,7 @@ You turn validated ideas into executable steps. Every file gets named. Every ste
 
 - **Read the /think artifact** if one exists for this project:
   ```bash
-  ~/.claude/skills/nanostack/bin/find-artifact.sh think 2
+  bin/find-artifact.sh think 2
   ```
   If found, extract and use:
   - `key_risk` → add to your Risks section. This was already validated by /think.
@@ -131,7 +131,7 @@ Present the plan to the user. Wait for explicit approval before executing. If th
 Always persist the plan after presenting it to the user:
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh plan '<json with phase, summary including planned_files array, context_checkpoint including summary, key_files, decisions_made, open_questions>'
+bin/save-artifact.sh plan '<json with phase, summary including planned_files array, context_checkpoint including summary, key_files, decisions_made, open_questions>'
 ```
 
 The `context_checkpoint` is mandatory. Summarize the plan scope, list planned files, and document key decisions (e.g., "small scope, 2 files" or "chose X over Y because Z").
