@@ -1,6 +1,10 @@
 ---
 name: ship
 description: Use when code is ready to ship — creates PRs, merges, deploys, and verifies. Handles the full PR-to-production pipeline. Triggers on /ship.
+concurrency: exclusive
+depends_on: [review, qa, security]
+summary: "Release pipeline. PR creation, CI monitoring, post-deploy verification, rollback plan."
+estimated_tokens: 350
 hooks:
   PreToolUse:
     - matcher: Bash

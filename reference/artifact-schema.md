@@ -18,6 +18,34 @@ All artifacts share this base structure:
 }
 ```
 
+## Context Checkpoint
+
+Every artifact can include a `context_checkpoint` — a self-contained summary that lets the agent reconstruct phase state without replaying the full conversation. This prevents context overflow on long workflows (8+ phases).
+
+```json
+{
+  "context_checkpoint": {
+    "summary": "One-paragraph summary of what this phase discovered or produced.",
+    "key_files": ["path/to/file.ts:142", "path/to/other.ts:87"],
+    "decisions_made": [
+      "Chose approach X over Y because Z"
+    ],
+    "open_questions": []
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `summary` | string | What this phase found or produced. Should be self-sufficient — readable without prior context. |
+| `key_files` | string[] | Files central to this phase's work, with line numbers where relevant. |
+| `decisions_made` | string[] | Choices made during this phase, with reasoning. Critical for downstream phases. |
+| `open_questions` | string[] | Unresolved items. Empty array if none. |
+
+**When to populate:** At the end of every phase, BEFORE starting the next. The agent writes the checkpoint as part of `save-artifact.sh` output.
+
+**When to read:** Use `bin/restore-context.sh` to read all completed checkpoints at once — produces a condensed summary under 500 tokens.
+
 ## Schema per phase
 
 ### /think

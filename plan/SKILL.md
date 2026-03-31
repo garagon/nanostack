@@ -1,6 +1,10 @@
 ---
 name: nano
 description: Use when starting non-trivial work (touching 3+ files, new features, refactors, bug investigations). Produces a scoped, actionable implementation plan before any code is written. Triggers on /nano.
+concurrency: read
+depends_on: [think]
+summary: "Implementation planning. Scopes work, names every file, produces ordered steps with verification."
+estimated_tokens: 400
 ---
 
 # /nano — Implementation Planning

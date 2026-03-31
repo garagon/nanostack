@@ -1,6 +1,10 @@
 ---
 name: qa
 description: Use to verify that code works correctly — browser-based testing with Playwright, native app testing with computer use, CLI testing, API testing, or root-cause debugging. Supports --quick, --standard, --thorough modes. Triggers on /qa.
+concurrency: read
+depends_on: [build]
+summary: "QA testing. Browser, native, API, CLI, or debug modes. Finds and fixes bugs with atomic commits."
+estimated_tokens: 450
 ---
 
 # /qa — Quality Assurance & Debugging

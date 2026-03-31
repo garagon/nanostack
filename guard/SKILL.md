@@ -1,6 +1,10 @@
 ---
 name: guard
 description: Use when working near production, sensitive systems, or destructive operations. Activates on-demand safety hooks that block dangerous commands. Supports modes — careful (warn), freeze (block writes outside scope), unfreeze (remove restrictions). Triggers on /guard, /careful, /freeze, /unfreeze.
+concurrency: exclusive
+depends_on: []
+summary: "Safety guardrails. Blocks dangerous commands near production or sensitive systems."
+estimated_tokens: 200
 hooks:
   PreToolUse:
     - matcher: Bash
