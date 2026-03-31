@@ -131,8 +131,10 @@ Present the plan to the user. Wait for explicit approval before executing. If th
 Always persist the plan after presenting it to the user:
 
 ```bash
-bin/save-artifact.sh plan '<json with phase, summary including planned_files array>'
+bin/save-artifact.sh plan '<json with phase, summary including planned_files array, context_checkpoint including summary, key_files, decisions_made, open_questions>'
 ```
+
+The `context_checkpoint` is mandatory. Summarize the plan scope, list planned files, and document key decisions (e.g., "small scope, 2 files" or "chose X over Y because Z").
 
 The `planned_files` list is critical. `/review` uses it for scope drift detection via `bin/scope-drift.sh`. See `reference/artifact-schema.md` for the full schema.
 

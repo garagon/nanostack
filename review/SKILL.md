@@ -133,8 +133,10 @@ When a conflict is detected, mark it inline:
 Always persist the review after completing it:
 
 ```bash
-bin/save-artifact.sh review '<json with phase, mode, summary, scope_drift, findings, conflicts>'
+bin/save-artifact.sh review '<json with phase, mode, summary, scope_drift, findings, conflicts, context_checkpoint including summary, key_files, decisions_made, open_questions>'
 ```
+
+The `context_checkpoint` is mandatory. Summarize findings count and severity, scope drift status, and any auto-fixes applied.
 
 See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.
 

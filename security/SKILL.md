@@ -224,8 +224,10 @@ In `--thorough` mode, document conflicts AND flag as BLOCKING until user confirm
 Always persist the security audit after completing it:
 
 ```bash
-bin/save-artifact.sh security '<json with phase, mode, summary, findings, conflicts>'
+bin/save-artifact.sh security '<json with phase, mode, summary, findings, conflicts, context_checkpoint including summary, key_files, decisions_made, open_questions>'
 ```
+
+The `context_checkpoint` is mandatory. Summarize the security grade, finding counts by severity, and any critical decisions.
 
 See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.
 

@@ -196,8 +196,10 @@ Report progress as you go. After each test group (happy path, error states, edge
 Always persist the QA results after completing the run:
 
 ```bash
-bin/save-artifact.sh qa '<json with phase, mode, summary including wtf_likelihood, findings>'
+bin/save-artifact.sh qa '<json with phase, mode, summary including wtf_likelihood, findings, context_checkpoint including summary, key_files, decisions_made, open_questions>'
 ```
+
+The `context_checkpoint` is mandatory. Summarize tests passed/failed, bugs found/fixed, and WTF likelihood.
 
 See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.
 
