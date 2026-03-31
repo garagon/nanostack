@@ -59,20 +59,16 @@ Skills auto-suggest a mode based on the diff, but the user always decides.
 
 ## Script Resolution
 
-All skills reference scripts as `bin/save-artifact.sh`, `bin/find-artifact.sh`, etc. These paths are **relative to the nanostack skill root**, not to the user's project directory.
+All skills reference scripts as `bin/save-artifact.sh`, `bin/find-artifact.sh`, etc. These paths are relative to the nanostack skill root, not to the user's project directory.
 
-Before running any `bin/` script, resolve the nanostack root:
+**When you need to run a bin/ script, prefix it with `~/.claude/skills/nanostack/`:**
 
 ```bash
-# Find nanostack installation directory
-NANOSTACK_ROOT="$(dirname "$(readlink -f "$(which claude 2>/dev/null)" 2>/dev/null)")/../../skills/nanostack" 2>/dev/null
-[ ! -d "$NANOSTACK_ROOT" ] && NANOSTACK_ROOT="$HOME/.claude/skills/nanostack"
-[ ! -d "$NANOSTACK_ROOT" ] && NANOSTACK_ROOT="$(find "$HOME/.claude" -name "nanostack" -type d -path "*/skills/*" 2>/dev/null | head -1)"
+~/.claude/skills/nanostack/bin/save-artifact.sh think '{"phase":"think",...}'
+~/.claude/skills/nanostack/bin/find-artifact.sh plan 2
 ```
 
-Then prefix all script calls: `"$NANOSTACK_ROOT/bin/save-artifact.sh"` instead of `bin/save-artifact.sh`.
-
-If the nanostack root cannot be found, skip the script call and proceed with the skill. Never fail a skill because a helper script is missing.
+This works for all standard installations (git clone and npx). Saving artifacts is not optional — every skill must save its artifact after completing.
 
 ## Artifact Persistence
 
