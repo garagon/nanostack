@@ -104,8 +104,8 @@ Each skill feeds into the next. `/nano` writes an artifact that `/review` reads 
 | Skill | What it does |
 |-------|-------------|
 | `/compound` | **Knowledge** | Documents solved problems after each sprint. Three types: bug (what broke + fix), pattern (reusable approach), decision (architecture choice). `/nano` and `/review` search past solutions automatically in future sprints. |
-| `/guard` | **Safety** | Three-tier safety: allowlist, in-project bypass, pattern matching with 28 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
-| `/conductor` | **Orchestrator** | Orchestrate parallel agent sessions through a sprint. Agents claim phases, resolve dependencies, hand off artifacts. No daemon, just atomic file ops. |
+| `/guard` | **Safety** | Four-tier safety: allowlist, in-project bypass, phase-aware concurrency enforcement (blocks writes during read-only phases), and pattern matching with 28 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
+| `/conductor` | **Orchestrator** | Parallel agent sessions with auto-batching. `sprint.sh batch` reads skill concurrency metadata and groups parallel-safe phases. Session resume on crash. Dependency validation before each phase. No daemon, just atomic file ops. |
 
 ### Intensity modes
 
@@ -216,17 +216,31 @@ Nanostack works well with one agent. It gets interesting with three running at o
 
 No daemon. No message queue. Just `mkdir` for atomic locking, JSON for state, symlinks for artifact handoff.
 
+`sprint.sh batch` reads each skill's `concurrency` metadata (read, write, exclusive) and outputs execution batches. Review, QA and security are all `read` and share the same dependency, so they batch together automatically.
+
+### Session resume
+
+If the agent crashes mid-sprint, `session.sh resume` detects the last session state and `restore-context.sh` reads all completed phase checkpoints. The agent skips completed phases and restarts from where it left off. Each checkpoint is a compact summary (~50 tokens) with the key findings, files and decisions from that phase.
+
+### Budget and circuit breaker
+
+`budget.sh set --max-usd 15 --model opus-4` sets a cost limit for the sprint. At each phase transition, `budget.sh check` calculates spent vs budget. Warns at 80%, stops at 95% with partial results preserved.
+
+`circuit.sh` tracks consecutive failures. After 3 failures on the same approach, the circuit opens and the agent must pivot or stop. Changing approach resets the counter.
+
 ## Guard
 
 AI agents make mistakes. They run `rm -rf` when they mean `rm -r`, force push to main when they mean to push to a branch, pipe untrusted URLs to shell. `/guard` catches these before they execute.
 
-### Three tiers
+### Four tiers
 
-Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude-code-auto-mode), guard evaluates every command through three tiers:
+Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude-code-auto-mode), guard evaluates every command through four tiers:
 
 **Tier 1: Allowlist.** Commands like `git status`, `ls`, `cat`, `jq` skip all checks. They can't cause damage.
 
 **Tier 2: In-project.** Operations that only touch files inside the current git repo pass through. If the agent writes a bad file, you revert it. Version control is the safety net.
+
+**Tier 2.5: Phase-aware concurrency.** During read-only phases (review, qa, security), write operations are blocked. This prevents race conditions when multiple agents run in parallel. The agent reports findings instead of auto-fixing.
 
 **Tier 3: Pattern matching.** Everything else is checked against block and warn rules. 28 block rules cover mass deletion, history destruction, database drops, production deploys, remote code execution, security degradation and safety bypasses. 9 warn rules cover operations that need attention but not blocking.
 
@@ -442,7 +456,7 @@ After shipping, run `/compound` to document what you learned:
            →  writes to .nanostack/know-how/solutions/decision/
 ```
 
-Next sprint, `/nano` automatically searches past solutions before planning. `/review` checks if current code follows documented resolutions. The knowledge compounds: every sprint makes the next one faster.
+Next sprint, `/nano` automatically searches past solutions before planning. `/review` checks if current code follows documented resolutions. Solutions that reference files no longer on disk are ranked lower automatically. The knowledge compounds: every sprint makes the next one faster.
 
 Search manually:
 
