@@ -238,10 +238,19 @@ These were discovered from shipping real PRs:
 
 ## Next Step
 
-After shipping, the sprint is complete. Tell the user:
+After shipping, close with two things: what was built and what could come next.
 
-> Sprint complete. PR created. Journal generated at .nanostack/know-how/journal/.
+**1. What was built.** Summarize what the user now has in plain language. Not phase names or artifact counts. What does the thing DO, where is it, and how to use it.
+
+**2. What could come next.** Suggest 2-3 concrete extensions based on what was built. These should be things the user can say right now to start a new sprint. Frame them as natural next steps, not feature requests.
+
+Example:
+
+> Sprint complete. You have a world clock widget showing Buenos Aires, New York and Tokyo with live updates. Open `index.html` in your browser to see it.
 >
-> Run `/compound` to document what you learned. Past solutions are found automatically by /nano and /review in future sprints.
+> Ideas for the next sprint:
+> - "Add a city picker so I can swap timezones"
+> - "Show the date and day of the week under each clock"
+> - "Add a dark/light mode toggle"
 >
-> Run `bin/analytics.sh` to see trends across sprints.
+> Just describe what you want and run `/think` to start a new sprint. Run `/compound` to save what you learned from this one.
