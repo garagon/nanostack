@@ -48,6 +48,7 @@ if [ -f "$SETTINGS" ]; then
       "Bash(sort:*)",
       "Bash(sed:*)",
       "Bash(awk:*)",
+      "Bash(~/.claude/skills/nanostack/bin/*:*)",
       "Read(*)",
       "Write(*)",
       "Edit(*)"
@@ -86,6 +87,7 @@ else
       "Bash(sort:*)",
       "Bash(sed:*)",
       "Bash(awk:*)",
+      "Bash(~/.claude/skills/nanostack/bin/*:*)",
       "Read(*)",
       "Write(*)",
       "Edit(*)"
