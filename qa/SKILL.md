@@ -218,9 +218,11 @@ See `reference/artifact-schema.md` for the full schema. The user can disable aut
 
 After QA is complete and the artifact is saved:
 
-**If AUTOPILOT is active and tests pass:** Proceed to `/ship`. Show: `Autopilot: qa passed (X tests, 0 failed). Running /ship...`
+**If AUTOPILOT is active and running as a parallel sub-agent:** Save the artifact and return your summary to the parent agent. Do not proceed to the next skill — the parent orchestrates the sequence.
 
-**If AUTOPILOT is active but tests fail:** Stop and ask the user. Show failures and wait.
+**If AUTOPILOT is active and running sequentially (no parallel):** Proceed to `/ship`. Show: `Autopilot: qa passed (X tests, 0 failed). Running /ship...`
+
+**If AUTOPILOT is active but tests fail:** Return the failures. The parent agent (or sequential flow) will stop and ask the user.
 
 **Otherwise:** Tell the user:
 > QA complete. Remaining steps:

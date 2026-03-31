@@ -146,16 +146,27 @@ After the user approves the plan and you finish building:
 
 **If AUTOPILOT is active:**
 
-Proceed directly to `/review`. After review completes, run `/security`. After security, run `/qa`. After all three pass, run `/ship`. Only stop if:
-- `/review` finds **blocking** issues that need user decision
-- `/security` finds **critical** vulnerabilities
-- A product question comes up that you can't answer from context
+After build completes, run `/review`, `/security` and `/qa` **in parallel** using three Agent tool calls in a single message. These three phases are all read-only (they analyze code but don't modify it) and have no dependencies on each other.
 
-Between each step, show a brief status:
-> Autopilot: build complete. Running /review...
-> Autopilot: review clean. Running /security...
-> Autopilot: security grade A. Running /qa...
-> Autopilot: qa passed. Running /ship...
+```
+Launch 3 agents in parallel (single message, 3 Agent tool calls):
+
+Agent 1: "Run /review on this project. Save the artifact when done. Return the summary."
+Agent 2: "Run /security on this project. Save the artifact when done. Return the summary."
+Agent 3: "Run /qa on this project. Save the artifact when done. Return the summary."
+```
+
+Show status as results come back:
+> Autopilot: running /review, /security and /qa in parallel...
+> Autopilot: review complete (X findings, 0 blocking).
+> Autopilot: security grade A (0 critical, 0 high).
+> Autopilot: qa passed (X tests, 0 failed).
+
+After all three complete, check results:
+- If any has **blocking issues**, **critical vulnerabilities**, or **test failures**: stop and ask the user
+- If all three pass: proceed to `/ship`
+
+If parallel execution is not available (single-threaded agent, no Agent tool), fall back to running them sequentially: `/review` → `/security` → `/qa`.
 
 **Otherwise (default):**
 
