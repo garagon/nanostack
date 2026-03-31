@@ -144,6 +144,13 @@ while [ "$i" -lt "$BLOCK_COUNT" ]; do
     echo "Command: $CMD"
     echo ""
     echo "Safer alternative: $ALT"
+    # Audit blocked command
+    if [ -n "${NANOSTACK_STORE:-}" ] || [ -f "${STORE_PATH_SH:-}" ]; then
+      [ -z "${NANOSTACK_STORE:-}" ] && source "$STORE_PATH_SH" 2>/dev/null || true
+      AUDIT_LOG="${NANOSTACK_STORE:-}/audit.log"
+      [ -n "$AUDIT_LOG" ] && [ -d "$(dirname "$AUDIT_LOG")" ] && \
+        echo "{\"at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"cmd\":$(echo "$CMD" | jq -Rs .),\"result\":\"blocked\",\"rule\":\"$ID\"}" >> "$AUDIT_LOG" 2>/dev/null || true
+    fi
     exit 1
   fi
   i=$((i + 1))
@@ -168,6 +175,16 @@ while [ "$i" -lt "$WARN_COUNT" ]; do
   fi
   i=$((i + 1))
 done
+
+# ─── Audit trail ────────────────────────────────────────────
+# Append every evaluated command to .nanostack/audit.log (non-blocking)
+if [ -n "${NANOSTACK_STORE:-}" ] || [ -f "$STORE_PATH_SH" ]; then
+  [ -z "${NANOSTACK_STORE:-}" ] && source "$STORE_PATH_SH" 2>/dev/null || true
+  AUDIT_LOG="${NANOSTACK_STORE:-}/audit.log"
+  if [ -n "$AUDIT_LOG" ] && [ -d "$(dirname "$AUDIT_LOG")" ]; then
+    echo "{\"at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"cmd\":$(echo "$CMD" | jq -Rs .),\"result\":\"allowed\"}" >> "$AUDIT_LOG" 2>/dev/null || true
+  fi
+fi
 
 # No rules matched. Allow.
 exit 0
