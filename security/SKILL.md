@@ -224,8 +224,10 @@ In `--thorough` mode, document conflicts AND flag as BLOCKING until user confirm
 Always persist the security audit after completing it:
 
 ```bash
-bin/save-artifact.sh security '<json with phase, mode, summary, findings, conflicts>'
+bin/save-artifact.sh security '<json with phase, mode, summary, findings, conflicts, context_checkpoint including summary, key_files, decisions_made, open_questions>'
 ```
+
+The `context_checkpoint` is mandatory. Summarize the security grade, finding counts by severity, and any critical decisions.
 
 See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.
 
@@ -244,9 +246,11 @@ See `reference/artifact-schema.md` for the full schema. The user can disable aut
 
 After the security audit is complete and the artifact is saved:
 
-**If AUTOPILOT is active and no critical/high findings:** Proceed to next pending skill (`/qa` or `/ship`). Show: `Autopilot: security grade X (0 critical, 0 high). Running /qa...`
+**If AUTOPILOT is active and running as a parallel sub-agent:** Save the artifact and return your summary to the parent agent. Do not proceed to the next skill — the parent orchestrates the sequence.
 
-**If AUTOPILOT is active but critical or high findings found:** Stop and ask the user to review. Show the findings and wait. After resolution, continue autopilot.
+**If AUTOPILOT is active and running sequentially (no parallel):** Proceed to next pending skill (`/qa` or `/ship`). Show: `Autopilot: security grade X (0 critical, 0 high). Running /qa...`
+
+**If AUTOPILOT is active but critical or high findings found:** Return the findings. The parent agent (or sequential flow) will stop and ask the user.
 
 **Otherwise:** Tell the user:
 > Security audit complete. Remaining steps:

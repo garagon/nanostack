@@ -127,8 +127,10 @@ Total solutions in project: 12
 ## Save Artifact
 
 ```bash
-bin/save-artifact.sh compound '<json with phase, summary including solutions_created, solutions_updated, total_solutions>'
+bin/save-artifact.sh compound '<json with phase, summary including solutions_created, solutions_updated, total_solutions, context_checkpoint including summary, key_files, decisions_made, open_questions>'
 ```
+
+The `context_checkpoint` is mandatory. Summarize how many solutions were created/updated and their types.
 
 ## Next Step
 
