@@ -1,6 +1,10 @@
 ---
 name: review
 description: Use after writing code to get a thorough code review. Runs two passes — structural correctness then adversarial edge-case hunting. Scales depth by diff size. Supports --quick, --standard, --thorough modes. Triggers on /review.
+concurrency: read
+depends_on: [build]
+summary: "Two-pass code review. Structural correctness then adversarial edge-case hunting. Scope drift detection."
+estimated_tokens: 400
 hooks:
   PostToolUse:
     - matcher: Bash

@@ -1,6 +1,10 @@
 ---
 name: conductor
 description: Orchestrate parallel agent sessions through a sprint. Coordinates task claiming, dependency resolution, and artifact handoff between independent agents. Triggers on /conductor, /sprint, /parallel.
+concurrency: exclusive
+depends_on: []
+summary: "Multi-agent sprint orchestrator. Atomic file ops for phase claiming and dependency resolution."
+estimated_tokens: 500
 ---
 
 # /conductor — Multi-Agent Sprint Orchestrator
@@ -94,6 +98,34 @@ conductor/bin/sprint.sh abort [phase]
 
 Release a claim without completing. Use when an agent encounters a blocker.
 
+### Batch (auto-parallelize)
+
+```bash
+conductor/bin/sprint.sh batch
+```
+
+Reads `concurrency` metadata from each skill's SKILL.md frontmatter and outputs execution batches. Consecutive `read` phases with met dependencies are grouped into parallel batches. `write` phases run one at a time. `exclusive` phases run alone.
+
+**Concurrency classification:**
+
+| Value | Meaning | Example |
+|-------|---------|---------|
+| `read` | Read-only, safe to parallelize | review, qa, security |
+| `write` | Mutates files, run serial | compound |
+| `exclusive` | Needs exclusive access (git ops) | ship, guard |
+
+**Example output:**
+
+```json
+{"batch":1,"type":"read","phases":["think"]}
+{"batch":2,"type":"read","phases":["plan"]}
+{"batch":3,"type":"write","phases":["build"]}
+{"batch":4,"type":"read","phases":["review","qa","security"]}
+{"batch":5,"type":"exclusive","phases":["ship"]}
+```
+
+Batch 4 shows review, qa, and security running in parallel — they share `concurrency: read` and all depend only on `build`.
+
 ## Filesystem Protocol
 
 ```
@@ -167,6 +199,33 @@ Dev A (claude):   /review (claims after build.done)
 Dev C (opencode):     /security (claims after build.done, parallel with review)
 Dev A (claude):   /ship (claims after review.done + security.done)
 ```
+
+## Phase Protocol
+
+Every phase transition follows this protocol. The agent executes these steps at every boundary — they are mandatory, not optional.
+
+### Pre-phase (before starting a new phase)
+
+1. Check for existing session: `bin/session.sh resume`
+   - If resumable and user confirms, restore context via `bin/restore-context.sh`
+   - If no session exists, create one: `bin/session.sh init <type>`
+2. Validate upstream dependencies: `bin/validate-dependencies.sh <phase>`
+   - If MISSING, stop and report which dependencies are not met
+3. Update session: `bin/session.sh phase-start <phase>`
+
+### Post-phase (after completing a phase)
+
+1. Save artifact with `context_checkpoint` via `bin/save-artifact.sh`
+   - The `context_checkpoint` must include: `summary`, `key_files`, `decisions_made`, `open_questions`
+   - No artifact is saved without `context_checkpoint` populated
+2. Update session: `bin/session.sh phase-complete <phase>`
+3. If context is running low, the agent reads the checkpoint summary instead of replaying full conversation
+
+### Session resume (on crash recovery)
+
+1. `bin/session.sh resume` detects the last session state
+2. `bin/restore-context.sh` reads all completed phase checkpoints
+3. Skip completed phases, restart the in-progress phase from scratch
 
 ## Gotchas
 

@@ -265,6 +265,97 @@ cmd_clean() {
   echo "OK: cleaned archived sprints older than 7 days"
 }
 
+# ─── batch ──────────────────────────────────────────────────
+# Read concurrency metadata from SKILL.md files and output execution batches.
+# Phases with concurrency=read and all deps met run in parallel.
+# Phases with concurrency=write run serial, one at a time.
+# Phases with concurrency=exclusive run serial, no other phases.
+cmd_batch() {
+  local sprint_dir
+  sprint_dir=$(find_sprint) || { echo "ERROR: no active sprint" >&2; exit 1; }
+
+  local nanostack_root
+  nanostack_root="$(cd "$(dirname "$0")/../.." && pwd)"
+
+  # Get concurrency for a phase from its SKILL.md frontmatter
+  get_concurrency() {
+    local phase="$1"
+    local skill_md=""
+    case "$phase" in
+      plan) skill_md="$nanostack_root/plan/SKILL.md" ;;
+      build) echo "write"; return ;;
+      *) skill_md="$nanostack_root/$phase/SKILL.md" ;;
+    esac
+    if [ -n "$skill_md" ] && [ -f "$skill_md" ]; then
+      local conc
+      conc=$(sed -n '/^---$/,/^---$/p' "$skill_md" | grep '^concurrency:' | head -1 | sed 's/^concurrency: *//')
+      echo "${conc:-write}"
+    else
+      echo "write"
+    fi
+  }
+
+  local phases
+  phases=$(jq -r '.phases[].name' "$sprint_dir/sprint.json")
+
+  # Partition into execution batches
+  # Track all phases scheduled in prior batches (considered "will be done")
+  local batch_num=0
+  local current_batch=""
+  local current_type=""
+  local scheduled=""
+
+  for phase in $phases; do
+    # Skip completed phases (but track them as available)
+    if [ -f "$sprint_dir/$phase/done" ]; then
+      scheduled="$scheduled $phase"
+      continue
+    fi
+
+    # Check if deps are met (done on disk OR scheduled in a prior batch)
+    local deps_met=true
+    local deps
+    deps=$(jq -r --arg p "$phase" '.phases[] | select(.name == $p) | .depends_on[]' "$sprint_dir/sprint.json" 2>/dev/null)
+    for dep in $deps; do
+      if [ ! -f "$sprint_dir/$dep/done" ]; then
+        # Check if dep is scheduled in a prior batch (not current — current runs in parallel)
+        if ! echo "$scheduled" | grep -qw "$dep" 2>/dev/null; then
+          deps_met=false
+          break
+        fi
+      fi
+    done
+
+    local conc
+    conc=$(get_concurrency "$phase")
+
+    if [ "$conc" = "read" ] && [ "$current_type" = "read" ] && [ "$deps_met" = true ]; then
+      # Extend current read batch
+      current_batch="$current_batch $phase"
+    else
+      # Flush previous batch
+      if [ -n "$current_batch" ]; then
+        batch_num=$((batch_num + 1))
+        local phase_json
+        phase_json=$(echo "$current_batch" | tr ' ' '\n' | grep -v '^$' | jq -R . | paste -sd, -)
+        echo "{\"batch\":$batch_num,\"type\":\"$current_type\",\"phases\":[$phase_json]}"
+        # Mark flushed phases as scheduled
+        scheduled="$scheduled $current_batch"
+      fi
+      current_batch="$phase"
+      current_type="$conc"
+    fi
+  done
+
+  # Flush last batch
+  if [ -n "$current_batch" ]; then
+    batch_num=$((batch_num + 1))
+    local phase_json
+    phase_json=$(echo "$current_batch" | tr ' ' '\n' | grep -v '^$' | jq -R . | paste -sd, -)
+    echo "{\"batch\":$batch_num,\"type\":\"$current_type\",\"phases\":[$phase_json]}"
+  fi
+}
+
 # ─── dispatch ────────────────────────────────────────────────
 CMD="${1:-status}"
 shift || true
@@ -275,9 +366,10 @@ case "$CMD" in
   complete) cmd_complete "$@" ;;
   abort)    cmd_abort "$@" ;;
   status)   cmd_status "$@" ;;
+  batch)    cmd_batch "$@" ;;
   clean)    cmd_clean "$@" ;;
   *)
-    echo "Usage: sprint.sh <start|claim|complete|abort|status|clean>" >&2
+    echo "Usage: sprint.sh <start|claim|complete|abort|status|batch|clean>" >&2
     exit 1
     ;;
 esac

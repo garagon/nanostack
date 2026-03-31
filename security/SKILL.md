@@ -1,6 +1,10 @@
 ---
 name: security
 description: Use before shipping to production. Performs OWASP Top 10 audit and STRIDE threat modeling against the codebase. Supports --quick, --standard, --thorough modes. Also use when the user asks to check security, audit code, or review for vulnerabilities. Triggers on /security.
+concurrency: read
+depends_on: [build]
+summary: "Security audit. OWASP A01-A10, STRIDE threat modeling, secrets scan, dependency audit."
+estimated_tokens: 450
 ---
 
 # /security — Security Audit

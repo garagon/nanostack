@@ -1,6 +1,10 @@
 ---
 name: think
 description: Use before planning when you need strategic clarity — product discovery, scope decisions, premise validation. Applies YC-grade product thinking to challenge assumptions and find the narrowest valuable wedge. Supports --autopilot to run the full sprint automatically after approval. Triggers on /think, /office-hours, /ceo-review.
+concurrency: read
+depends_on: []
+summary: "Strategic product thinking. Challenges assumptions, finds narrowest valuable wedge, validates premise before planning."
+estimated_tokens: 450
 ---
 
 # /think — Strategic Product Thinking

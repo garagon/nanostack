@@ -1,6 +1,10 @@
 ---
 name: compound
 description: Document what you learned during this sprint. Reads artifacts, writes structured solutions to know-how/solutions/. Run after /ship or after fixing a significant bug. Triggers on /compound.
+concurrency: write
+depends_on: [ship]
+summary: "Knowledge capture. Documents bugs, patterns, decisions from sprint artifacts."
+estimated_tokens: 250
 ---
 
 # /compound - Knowledge Compounding
