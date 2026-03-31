@@ -57,20 +57,9 @@ Skills `/review`, `/security`, and `/qa` support intensity modes:
 
 Skills auto-suggest a mode based on the diff, but the user always decides.
 
-## Script Resolution
-
-All skills reference scripts as `bin/save-artifact.sh`, `bin/find-artifact.sh`, etc. These paths are relative to the nanostack skill root, not to the user's project directory.
-
-**When you need to run a bin/ script, prefix it with `~/.claude/skills/nanostack/`:**
-
-```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh think '{"phase":"think",...}'
-~/.claude/skills/nanostack/bin/find-artifact.sh plan 2
-```
-
-This works for all standard installations (git clone and npx). Saving artifacts is not optional — every skill must save its artifact after completing.
-
 ## Artifact Persistence
+
+**Saving artifacts is not optional.** Every skill must save its artifact after completing.
 
 Skills automatically save their output to `.nanostack/` after every run:
 
