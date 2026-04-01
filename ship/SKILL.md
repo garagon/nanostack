@@ -31,7 +31,7 @@ If either reports errors, fix them before proceeding. Warnings are informational
 **Verify review findings were resolved:**
 
 ```bash
-bin/find-artifact.sh review 2
+~/.claude/skills/nanostack/bin/find-artifact.sh review 2
 ```
 
 If a review artifact exists, check that all **blocking** findings have been addressed. For each blocking finding, verify the code at the reported file and line no longer has the issue. If a blocking finding is still present, do NOT proceed. Flag it.
@@ -186,8 +186,8 @@ Before creating the PR, verify these standards. The public repo is the face of t
 After shipping, persist the result and generate the sprint journal:
 
 ```bash
-bin/save-artifact.sh ship '<json with phase, summary including pr_number, pr_url, title, status, ci_passed, context_checkpoint including summary, key_files, decisions_made, open_questions>'
-bin/sprint-journal.sh
+~/.claude/skills/nanostack/bin/save-artifact.sh ship '<json with phase, summary including pr_number, pr_url, title, status, ci_passed, context_checkpoint including summary, key_files, decisions_made, open_questions>'
+~/.claude/skills/nanostack/bin/sprint-journal.sh
 ```
 
 The `context_checkpoint` is mandatory. Summarize what was shipped, PR number, and CI status.

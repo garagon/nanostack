@@ -39,14 +39,14 @@ Calibrate depth by diff size: **Small** (< 100 lines, quick pass) / **Medium** (
 Find the plan artifact and extract context for the review:
 
 ```bash
-bin/find-artifact.sh plan 2
+~/.claude/skills/nanostack/bin/find-artifact.sh plan 2
 ```
 
 Search for past solutions related to the files being changed:
 
 ```bash
-bin/find-solution.sh --file <changed-file-path>
-bin/find-solution.sh "<relevant-keywords>"
+~/.claude/skills/nanostack/bin/find-solution.sh --file <changed-file-path>
+~/.claude/skills/nanostack/bin/find-solution.sh "<relevant-keywords>"
 ```
 
 The output shows ranked summaries. Read the summaries first, then load only the solutions relevant to the current review. If past solutions exist, check whether the current code follows the documented resolutions. If it contradicts a past solution, flag it.
@@ -63,7 +63,7 @@ Always run if a recent plan artifact exists. In `--quick` mode, drift is informa
 Run the scope drift script:
 
 ```bash
-bin/scope-drift.sh
+~/.claude/skills/nanostack/bin/scope-drift.sh
 ```
 
 The script returns JSON with `status` (clean / drift_detected / requirements_missing), `out_of_scope_files`, and `missing_files`. Config/lock files are automatically exempt.
@@ -113,7 +113,7 @@ Then group by severity: **Blocking** (must fix), **Should Fix** (tech debt, conf
 After completing both passes, check for conflicts with prior `/security` findings:
 
 ```bash
-bin/find-artifact.sh security 30
+~/.claude/skills/nanostack/bin/find-artifact.sh security 30
 ```
 
 If an artifact is found, cross-reference your findings against it. Read `reference/conflict-precedents.md` for known conflict patterns and resolutions.
@@ -133,7 +133,7 @@ When a conflict is detected, mark it inline:
 Always persist the review after completing it:
 
 ```bash
-bin/save-artifact.sh review '<json with phase, mode, summary, scope_drift, findings, conflicts, context_checkpoint including summary, key_files, decisions_made, open_questions>'
+~/.claude/skills/nanostack/bin/save-artifact.sh review '<json with phase, mode, summary, scope_drift, findings, conflicts, context_checkpoint including summary, key_files, decisions_made, open_questions>'
 ```
 
 The `context_checkpoint` is mandatory. Summarize findings count and severity, scope drift status, and any auto-fixes applied.
