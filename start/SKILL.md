@@ -76,6 +76,8 @@ If they chose "step by step":
 > 5. We ship it (/ship)
 >
 > You control the pace. Tell me when you're ready.
+>
+> Tip: for adding features to an existing project, try `/feature` — it skips the scope discussion and goes straight to planning.
 
 When they describe something, invoke: use Skill tool: skill="think"
 
