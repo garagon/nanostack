@@ -128,17 +128,11 @@ When a conflict is detected, mark it inline:
 **In `--standard` mode:** Document conflicts inline in output.
 **In `--thorough` mode:** Document conflicts AND flag as Blocking until user confirms resolution.
 
-## Save Artifact
-
-Always persist the review after completing it:
+After completing both passes and conflict detection, save the artifact. Run this command now — do not skip it:
 
 ```bash
 ~/.claude/skills/nanostack/bin/save-artifact.sh review '<json with phase, mode, summary, scope_drift, findings, conflicts, context_checkpoint including summary, key_files, decisions_made, open_questions>'
 ```
-
-The `context_checkpoint` is mandatory. Summarize findings count and severity, scope drift status, and any auto-fixes applied.
-
-See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.
 
 ## Mode Summary
 
@@ -152,7 +146,7 @@ See `reference/artifact-schema.md` for the full schema. The user can disable aut
 
 ## Next Step
 
-After the review is complete and the artifact is saved:
+After the review is complete and the artifact is saved, proceed:
 
 **If AUTOPILOT is active and no blocking issues found:** Proceed directly to the next pending skill (`/security` or `/qa`). Show: `Autopilot: review complete (X findings, 0 blocking). Running /security...`
 

@@ -126,19 +126,17 @@ If the plan is a pure library with no user-facing output, skip this section.
 
 Present the plan to the user. Wait for explicit approval before executing. If the user modifies the plan, update it before proceeding.
 
-### 8. Save Artifact
+After the user approves, do these two steps in order:
 
-Always persist the plan after presenting it to the user:
+**Step 1: Save the artifact.** Run this command now — do not skip it:
 
 ```bash
 ~/.claude/skills/nanostack/bin/save-artifact.sh plan '<json with phase, summary including planned_files array, context_checkpoint including summary, key_files, decisions_made, open_questions>'
 ```
 
-The `context_checkpoint` is mandatory. Summarize the plan scope, list planned files, and document key decisions (e.g., "small scope, 2 files" or "chose X over Y because Z").
+The `planned_files` list is critical — `/review` uses it for scope drift detection.
 
-The `planned_files` list is critical. `/review` uses it for scope drift detection via `~/.claude/skills/nanostack/bin/scope-drift.sh`. See `reference/artifact-schema.md` for the full schema.
-
-The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.
+**Step 2: Build and proceed.**
 
 ## Next Step
 

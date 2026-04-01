@@ -219,17 +219,11 @@ In `--quick` mode, apply default precedence (security > review) without document
 In `--standard` mode, document conflicts inline.
 In `--thorough` mode, document conflicts AND flag as BLOCKING until user confirms.
 
-## Save Artifact
-
-Always persist the security audit after completing it:
+After completing the audit and conflict detection, save the artifact. Run this command now — do not skip it:
 
 ```bash
 ~/.claude/skills/nanostack/bin/save-artifact.sh security '<json with phase, mode, summary, findings, conflicts, context_checkpoint including summary, key_files, decisions_made, open_questions>'
 ```
-
-The `context_checkpoint` is mandatory. Summarize the security grade, finding counts by severity, and any critical decisions.
-
-See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.
 
 ## Mode Summary
 

@@ -181,20 +181,16 @@ Before creating the PR, verify these standards. The public repo is the face of t
 
 `ship/bin/quality-check.sh` automates the checks it can. Use your judgment for the rest.
 
-## Save Artifact and Generate Sprint Journal
+After shipping, do these steps in order:
 
-After shipping, persist the result and generate the sprint journal:
+**Step 1: Save the artifact.** Run this command now — do not skip it:
 
 ```bash
 ~/.claude/skills/nanostack/bin/save-artifact.sh ship '<json with phase, summary including pr_number, pr_url, title, status, ci_passed, context_checkpoint including summary, key_files, decisions_made, open_questions>'
 ~/.claude/skills/nanostack/bin/sprint-journal.sh
 ```
 
-The `context_checkpoint` is mandatory. Summarize what was shipped, PR number, and CI status.
-
-### Show the result
-
-After shipping, if the project produces a viewable output (HTML file, web app, CLI tool), tell the user how to see it:
+**Step 2: Show the result.** If the project produces a viewable output, tell the user how to see it:
 
 - HTML files: "Open `index.html` in your browser to see the result"
 - Web apps: "Run `npm start` and open http://localhost:3000"

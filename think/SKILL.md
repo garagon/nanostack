@@ -150,37 +150,25 @@ Produce a clear brief for the next phase:
 **Narrowest wedge:** {{the smallest thing that delivers value}}
 **Key risk:** {{the one thing most likely to make this fail}}
 **Premise validated:** {{yes/no — and why}}
-
-Ready for: /nano
 ```
 
-## Save Artifact
+After producing the Think Summary, do these two steps in order:
 
-Always persist the think output after the handoff brief:
+**Step 1: Save the artifact.** Run this command now — do not skip it:
 
 ```bash
 ~/.claude/skills/nanostack/bin/save-artifact.sh think '<json with phase, summary including value_proposition, scope_mode, target_user, narrowest_wedge, key_risk, premise_validated, context_checkpoint including summary, key_files, decisions_made, open_questions>'
 ```
 
-The `context_checkpoint` is mandatory. It captures the essence of this phase so downstream phases can restore context without replaying the full conversation. Write a 1-2 sentence summary, list key files, and document decisions made.
+**Step 2: Next phase.**
 
-See `reference/artifact-schema.md` for the full schema. The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.
-
-## Next Step
-
-After the Think Summary and artifact are saved:
-
-**If `--autopilot` was used (or the user said "autopilot", "run everything", "ship it end to end"):**
-
-Tell the user:
+If `--autopilot` was used (or the user said "autopilot", "run everything", "ship it end to end"):
 
 > Autopilot active. Proceeding with the full sprint: /nano, build, /review, /qa, /security, /ship. I'll only stop for blocking issues or product questions I can't answer.
 
 Then proceed directly to `/nano` without waiting. Set `AUTOPILOT=true` in your context and carry it through every subsequent skill.
 
-**Otherwise (default):**
-
-Tell the user:
+Otherwise:
 
 > Ready for `/nano`. Say `/nano` to create the implementation plan, or adjust the brief first.
 

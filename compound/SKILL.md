@@ -124,15 +124,13 @@ Compound: 3 solutions captured
 Total solutions in project: 12
 ```
 
-## Save Artifact
+After reporting, save the artifact. Run this command now — do not skip it:
 
 ```bash
 ~/.claude/skills/nanostack/bin/save-artifact.sh compound '<json with phase, summary including solutions_created, solutions_updated, total_solutions, context_checkpoint including summary, key_files, decisions_made, open_questions>'
 ```
 
-The `context_checkpoint` is mandatory. Summarize how many solutions were created/updated and their types.
-
-## Next Step
+Then tell the user:
 
 > Knowledge captured. These solutions will be found automatically by /nano during planning and /review during code review.
 
