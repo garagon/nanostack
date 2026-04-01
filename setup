@@ -18,7 +18,7 @@ set -e
 NANOSTACK_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 SKILLS_DIR="$(dirname "$NANOSTACK_DIR")"
-SKILLS=(think nano review qa security ship guard conductor compound)
+SKILLS=(think nano review qa security ship guard conductor compound feature)
 
 # Map skill name to directory (when they differ)
 skill_dir() {
