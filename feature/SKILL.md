@@ -9,25 +9,19 @@ estimated_tokens: 200
 
 # /feature — Add a Feature
 
-Fast path for adding a feature to an existing project. Skips the /think diagnostic (the user already knows what they want) and goes straight to planning with full project context.
-
-## How it works
+Fast path for adding a feature to an existing project. Skips the /think diagnostic and runs the full sprint via skill invocations.
 
 ```
-/feature Add JSON and CSV export for habit data backup
+/feature Add import from JSON/CSV to restore backups
 ```
-
-The agent:
-1. Reads existing artifacts to understand the project
-2. Plans the change (/nano)
-3. Builds it
-4. Reviews, audits, tests, ships (autopilot)
 
 ## Process
 
-### 1. Load project context
+You are an orchestrator. You invoke each skill in sequence using the Skill tool. Do NOT implement the skill logic yourself — invoke the skill and let it run.
 
-Read the most recent artifacts to understand what exists:
+### Step 1: Context
+
+Read existing artifacts to understand the project:
 
 ```bash
 ~/.claude/skills/nanostack/bin/find-artifact.sh think 30
@@ -35,38 +29,60 @@ Read the most recent artifacts to understand what exists:
 ~/.claude/skills/nanostack/bin/find-artifact.sh ship 30
 ```
 
-Read the checkpoint summaries from each. If no artifacts exist, read the codebase directly.
+Read the checkpoint summaries. If no artifacts exist, read the codebase directly.
 
-### 2. Plan the feature
+### Step 2: Plan
 
-Follow the full `/nano` process: evaluate scope, generate specs if needed, list planned files, identify risks. Read `plan/SKILL.md` for the detailed protocol.
+Invoke the nano skill using the Skill tool. Pass the feature description as context:
 
-After the plan is ready, save the artifact — do not skip it:
-
-```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh plan '<json with phase, summary including planned_files array, context_checkpoint including summary, key_files, decisions_made, open_questions>'
+```
+Use Skill tool: skill="nano"
 ```
 
-Present the plan to the user. Wait for approval.
+Wait for /nano to complete. It will save its own artifact.
 
-### 3. Build, review, audit, test, ship
+### Step 3: Build
 
-After the user approves, set `AUTOPILOT=true` and run the full sprint:
+After /nano completes and the user approves the plan, build the feature.
 
-`build` → `/review` → `/security` → `/qa` → `/ship`
+### Step 4: Review
 
-Each phase saves its artifact. Between steps show status:
+After build completes, invoke the review skill:
 
-> Feature: build complete. Running /review...
-> Feature: review clean. Running /security...
-> Feature: security grade A. Running /qa...
-> Feature: qa passed. Running /ship...
+```
+Use Skill tool: skill="review"
+```
 
-Only stop if:
-- `/review` finds blocking issues
-- `/security` finds critical vulnerabilities
-- `/qa` tests fail
+Wait for /review to complete. It saves its own artifact. If blocking issues found, fix them before continuing.
 
-### 4. Close
+### Step 5: Security
 
-Follow the /ship closing protocol: what was built, how to see it, and 2-3 ideas for next features using `/feature`.
+```
+Use Skill tool: skill="security"
+```
+
+Wait for /security to complete. If critical findings, fix before continuing.
+
+### Step 6: QA
+
+```
+Use Skill tool: skill="qa"
+```
+
+Wait for /qa to complete. If tests fail, fix before continuing.
+
+### Step 7: Ship
+
+```
+Use Skill tool: skill="ship"
+```
+
+/ship commits, creates PR if remote exists, generates sprint journal, and shows the result with next feature suggestions.
+
+## Rules
+
+- Each skill is invoked via the Skill tool, not implemented inline.
+- Each skill saves its own artifact. You do not save artifacts — the skills do.
+- Between steps, show brief status: `Feature: review complete. Running /security...`
+- Stop the sequence if any skill finds blocking issues or critical vulnerabilities.
+- If the feature already exists in the codebase, tell the user and suggest alternatives.

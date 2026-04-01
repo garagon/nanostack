@@ -144,18 +144,20 @@ After the user approves the plan and you finish building:
 
 **If AUTOPILOT is active:**
 
-Proceed directly to `/review`. After review completes, run `/security`. After security, run `/qa`. After all three pass, run `/ship`. Only stop if:
-- `/review` finds **blocking** issues that need user decision
-- `/security` finds **critical** vulnerabilities
-- A product question comes up that you can't answer from context
+After build completes, invoke each skill in sequence using the Skill tool. Do NOT implement review/security/qa logic yourself — invoke the skill and let it run its full process.
 
-Between each step, show a brief status:
-> Autopilot: build complete. Running /review...
-> Autopilot: review clean. Running /security...
-> Autopilot: security grade A. Running /qa...
-> Autopilot: qa passed. Running /ship...
+1. Invoke review: `Use Skill tool: skill="review"`
+   Wait for completion. Show: `Autopilot: review complete. Running /security...`
 
-For parallel execution across multiple terminals, use `/conductor` instead of autopilot.
+2. Invoke security: `Use Skill tool: skill="security"`
+   Wait for completion. Show: `Autopilot: security complete. Running /qa...`
+
+3. Invoke qa: `Use Skill tool: skill="qa"`
+   Wait for completion. Show: `Autopilot: qa complete. Running /ship...`
+
+4. Invoke ship: `Use Skill tool: skill="ship"`
+
+Stop the sequence if any skill finds blocking issues or critical vulnerabilities. For parallel execution across multiple terminals, use `/conductor`.
 
 **Otherwise (default):**
 
