@@ -154,11 +154,9 @@ See `reference/artifact-schema.md` for the full schema. The user can disable aut
 
 After the review is complete and the artifact is saved:
 
-**If AUTOPILOT is active and running as a parallel sub-agent:** Save the artifact and return your summary to the parent agent. Do not proceed to the next skill — the parent orchestrates the sequence.
+**If AUTOPILOT is active and no blocking issues found:** Proceed directly to the next pending skill (`/security` or `/qa`). Show: `Autopilot: review complete (X findings, 0 blocking). Running /security...`
 
-**If AUTOPILOT is active and running sequentially (no parallel):** Proceed to the next pending skill (`/security` or `/qa`). Show: `Autopilot: review complete (X findings, 0 blocking). Running /security...`
-
-**If AUTOPILOT is active but blocking issues found:** Return the blocking issues. The parent agent (or sequential flow) will stop and ask the user.
+**If AUTOPILOT is active but blocking issues found:** Stop and ask the user to resolve. Show the blocking issues and wait. After resolution, continue autopilot.
 
 **Otherwise:** Tell the user:
 > Review complete. Remaining steps:
