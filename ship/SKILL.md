@@ -242,11 +242,11 @@ After shipping, close with two things: what was built and what could come next.
 
 Example:
 
-> Sprint complete. You have a world clock widget showing Buenos Aires, New York and Tokyo with live updates. Open `index.html` in your browser to see it.
+> Sprint complete. You have a habit tracker with a GitHub-style contribution graph. Run `npm start` and open http://localhost:3000 to see it.
 >
-> Ideas for the next sprint:
-> - "Add a city picker so I can swap timezones"
-> - "Show the date and day of the week under each clock"
-> - "Add a dark/light mode toggle"
+> Ideas for the next feature:
+> - `/feature Add JSON and CSV export for habit data backup`
+> - `/feature Add weekly and monthly streak counters`
+> - `/feature Add categories to organize habits by area`
 >
-> Just describe what you want and run `/think` to start a new sprint. Run `/compound` to save what you learned from this one.
+> Run `/compound` to save what you learned from this sprint.
