@@ -16,5 +16,8 @@ research.ideas.md
 research.log
 research.checkpoint.json
 
+# Tests (local only)
+tests/
+
 # Nanostack artifacts (project-local)
 .nanostack/
