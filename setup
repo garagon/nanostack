@@ -18,12 +18,14 @@ set -e
 NANOSTACK_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 SKILLS_DIR="$(dirname "$NANOSTACK_DIR")"
-SKILLS=(think nano review qa security ship guard conductor compound feature)
+SKILLS=(think nano review qa security ship guard conductor compound feature nano-run nano-help)
 
 # Map skill name to directory (when they differ)
 skill_dir() {
   case "$1" in
     nano) echo "plan" ;;
+    nano-run) echo "start" ;;
+    nano-help) echo "help" ;;
     *) echo "$1" ;;
   esac
 }
@@ -469,6 +471,7 @@ w_ship=$(skill_public_name "ship")
 w_guard=$(skill_public_name "guard")
 echo "Workflow: /$w_think → /$w_nano → build → /$w_review → /$w_qa → /$w_security → /$w_ship"
 echo "Safety:   /$w_guard (activate on-demand)"
+echo "Start:    /nano-run (first-time setup)"
 echo ""
 echo "Per-project setup (run once in each project):"
 echo "  ~/.claude/skills/nanostack/bin/init-project.sh"
