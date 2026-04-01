@@ -5,6 +5,10 @@ concurrency: read
 depends_on: []
 summary: "Fast sprint for incremental features. Reads existing artifacts, plans, builds, reviews, audits, ships."
 estimated_tokens: 200
+hooks:
+  PreToolUse:
+    - matcher: Bash
+      command: "./feature/bin/enforce-sprint.sh"
 ---
 
 # /feature — Add a Feature
