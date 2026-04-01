@@ -21,6 +21,7 @@ You have access to a set of composable engineering workflow skills. Each skill i
 | `/feature` | Add a feature to an existing project. Skips /think, goes straight to plan → build → review → security → qa → ship. | — | `feature/SKILL.md` |
 | `/conductor` | Orchestrate parallel agent sessions through a sprint. Coordinate task claiming and artifact handoff. | `start` `claim` `complete` `status` | `conductor/bin/sprint.sh` |
 | `/nano-run` | First-time setup. Configures stack, permissions, and preferences conversationally. Guides first sprint. | — | `start/SKILL.md` |
+| `/nano-help` | Quick reference for all nanostack commands and how to use them. | — | `help/SKILL.md` |
 
 ## Workflow Order
 
