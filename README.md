@@ -35,7 +35,9 @@ git clone https://github.com/garagon/nanostack.git ~/.claude/skills/nanostack
 cd ~/.claude/skills/nanostack && ./setup
 ```
 
-That's it. Now try this:
+Open Claude Code in your project and run `/nano-run`. It configures your stack, permissions, and preferences through a conversation and guides your first sprint.
+
+Or jump straight in:
 
 ```
 You:    I need to add notifications to my app. Users keep missing
@@ -106,6 +108,7 @@ Each skill feeds into the next. `/nano` writes an artifact that `/review` reads 
 | `/compound` | **Knowledge** | Documents solved problems after each sprint. Three types: bug (what broke + fix), pattern (reusable approach), decision (architecture choice). `/nano` and `/review` search past solutions automatically in future sprints. |
 | `/guard` | **Safety** | Four-tier safety: allowlist, in-project bypass, phase-aware concurrency enforcement (blocks writes during read-only phases), and pattern matching with 28 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
 | `/conductor` | **Orchestrator** | Parallel agent sessions with auto-batching. `sprint.sh batch` reads skill concurrency metadata and groups parallel-safe phases. Session resume on crash. Dependency validation before each phase. No daemon, just atomic file ops. |
+| `/nano-run` | **Onboarding** | First-time setup. Configures stack, permissions, and work preferences through a conversation. Auto-detects your project and guides your first sprint. |
 
 ### Intensity modes
 
