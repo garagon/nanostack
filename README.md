@@ -31,11 +31,12 @@ Works with Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity,
 ## Quick start
 
 ```bash
-git clone https://github.com/garagon/nanostack.git ~/.claude/skills/nanostack
-cd ~/.claude/skills/nanostack && ./setup
+npx create-nanostack
 ```
 
-Open Claude Code in your project and run `/nano-run`. It configures your stack, permissions, and preferences through a conversation and guides your first sprint.
+One command. Detects your agents, installs everything, runs setup. Works with Claude Code, Cursor, Codex, Gemini CLI, Amp, Cline, OpenCode, and Antigravity.
+
+Then run `/nano-run` in your agent to configure your project through a conversation.
 
 Or jump straight in:
 
@@ -99,16 +100,18 @@ Each skill feeds into the next. `/nano` writes an artifact that `/review` reads 
 | `/review` | **Staff Engineer** | Two-pass code review: structural then adversarial. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan. Cross-references `/security` with 10 conflict precedents. |
 | `/qa` | **QA Lead** | Functional testing + Visual QA. Takes screenshots and analyzes UI against product standards. Browser, API, CLI and debug modes. WTF heuristic stops before fixes cause regressions. |
 | `/security` | **Security Engineer** | Auto-detects your stack, scans secrets, injection, auth, CI/CD, AI/LLM vulnerabilities. Graded report (A-F). Cross-references `/review` for conflict detection. Every finding includes the fix. |
-| `/ship` | **Release Engineer** | Pre-flight + repo quality checks (broken links, stale refs, writing quality). PR creation, CI monitoring, post-deploy verification. Auto-generates sprint journal. Rollback plan included. |
+| `/ship` | **Release Engineer** | Pre-flight + repo quality checks. PR creation, CI monitoring, sprint journal. After commit, asks: run locally, deploy to production, or done. Production path guides through hosting, domain, monitoring, costs. |
 
 ### Power tools
 
 | Skill | What it does |
 |-------|-------------|
 | `/compound` | **Knowledge** | Documents solved problems after each sprint. Three types: bug (what broke + fix), pattern (reusable approach), decision (architecture choice). `/nano` and `/review` search past solutions automatically in future sprints. |
-| `/guard` | **Safety** | Four-tier safety: allowlist, in-project bypass, phase-aware concurrency enforcement (blocks writes during read-only phases), and pattern matching with 28 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
+| `/guard` | **Safety** | Four-tier safety: allowlist, in-project bypass, phase-aware concurrency enforcement (blocks writes during read-only phases), and pattern matching with 33 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
 | `/conductor` | **Orchestrator** | Parallel agent sessions with auto-batching. `sprint.sh batch` reads skill concurrency metadata and groups parallel-safe phases. Session resume on crash. Dependency validation before each phase. No daemon, just atomic file ops. |
+| `/feature` | **Builder** | Add functionality to an existing project. Skips /think, goes straight to plan, build, review, audit, test, ship. |
 | `/nano-run` | **Onboarding** | First-time setup. Configures stack, permissions, and work preferences through a conversation. Auto-detects your project and guides your first sprint. |
+| `/nano-help` | **Reference** | Quick reference for all nanostack commands and how to use them. |
 
 ### Intensity modes
 
@@ -245,7 +248,7 @@ Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude
 
 **Tier 2.5: Phase-aware concurrency.** During read-only phases (review, qa, security), write operations are blocked. This prevents race conditions when multiple agents run in parallel. The agent reports findings instead of auto-fixing.
 
-**Tier 3: Pattern matching.** Everything else is checked against block and warn rules. 28 block rules cover mass deletion, history destruction, database drops, production deploys, remote code execution, security degradation and safety bypasses. 9 warn rules cover operations that need attention but not blocking.
+**Tier 3: Pattern matching.** Everything else is checked against block and warn rules. 33 block rules cover mass deletion, history destruction, database drops, production deploys, remote code execution, security degradation and safety bypasses. 9 warn rules cover operations that need attention but not blocking.
 
 ### Deny-and-continue
 
@@ -277,52 +280,32 @@ All rules live in [`guard/rules.json`](guard/rules.json). Each rule has an ID, r
 
 ## Install
 
-### Recommended: git clone
-
-Full features including skill rename, analytics, sprint journal and project setup.
+### Recommended
 
 ```bash
-git clone https://github.com/garagon/nanostack.git ~/.claude/skills/nanostack
-cd ~/.claude/skills/nanostack && ./setup
+npx create-nanostack
 ```
 
-Supports Claude Code (default), Codex (`--host codex`), Cursor (`--host cursor`), OpenCode (`--host opencode`), Gemini CLI (`--host gemini`), or all at once (`--host auto`).
+Detects your agents, installs all skills, runs setup. Works with Claude Code, Cursor, Codex, Gemini CLI, Amp, Cline, OpenCode, and Antigravity.
 
-Update from Claude Code:
+Update from your agent:
 
 ```
 /nano-update
 ```
 
-Or from the terminal:
+### Alternative: git clone (advanced)
+
+Full control including skill rename, analytics, sprint journal and project setup.
 
 ```bash
-~/.claude/skills/nanostack/bin/upgrade.sh
+git clone https://github.com/garagon/nanostack.git <path>
+cd <path> && ./setup --host auto
 ```
 
-Pulls latest, shows what changed, re-runs setup if needed. Works with both git clone and npx installations.
+Targets: `claude`, `codex`, `cursor`, `opencode`, `gemini`, `auto`.
 
-### Alternative: npx skills
-
-One command, auto-detects installed agents.
-
-```bash
-npx skills add garagon/nanostack -g --full-depth
-```
-
-`-g` installs globally (available in every project, not just the current directory). `--full-depth` installs all 8 skills. Without it, only the root overview skill gets installed.
-
-Natively supports Claude Code, OpenClaw, Antigravity, Cursor, Gemini CLI, Amp, Cline and others.
-
-Update:
-
-```bash
-npx skills update
-```
-
-Note: this method copies skill files instead of linking to the git repo. Advanced features like `--rename`, `bin/analytics.sh`, sprint journal and `bin/init-project.sh` are not available through this method. For the full workflow use git clone.
-
-### Alternative: Gemini CLI extension
+### Alternative: Gemini CLI
 
 ```bash
 gemini extensions install https://github.com/garagon/nanostack --consent
