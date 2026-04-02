@@ -190,13 +190,47 @@ After shipping, do these steps in order:
 ~/.claude/skills/nanostack/bin/sprint-journal.sh
 ```
 
-**Step 2: Show the result.** If the project produces a viewable output, tell the user how to see it:
+**Step 2: Ask how the user wants to see the result.**
 
-- HTML files: "Open `index.html` in your browser to see the result"
-- Web apps: "Run `npm start` and open http://localhost:3000"
-- CLI tools: "Run `node bin/cli.js --help` to try it"
+Ask:
+> How do you want to see it?
+> 1. Local — I'll start the server and show you how to open it
+> 2. Production — I'll guide you through deploying to the internet
+> 3. I'm done — just the commit
 
-Never auto-open URLs or execute `open` commands. Show the path or command and let the user decide.
+**If Local (option 1):**
+- HTML files: "Open `index.html` in your browser"
+- Web apps: start the server (`npm start`, `node src/server.js`, etc.) and tell the user the URL
+- CLI tools: show the command to run it
+- Never auto-open URLs or execute `open` commands. Show the path and let the user decide.
+
+**If Production (option 2):**
+Guide the user through deploying. One step at a time:
+
+1. **Detect project type** and recommend ONE hosting provider:
+   - Next.js → Vercel (free tier, zero config)
+   - Node.js + Express → Railway ($5/mo, deploys on git push)
+   - Static HTML → Cloudflare Pages (free, CDN)
+   - Python → Railway (Docker support)
+   - Go → Fly.io (containers, free allowance)
+
+2. **Walk through deploy:**
+   - Create account on the provider
+   - Connect the GitHub repo
+   - Set environment variables (list them from the project)
+   - Push to main — deploys automatically
+
+3. **Domain** (optional): free subdomain from provider or custom ~$10/year from Cloudflare/Namecheap
+
+4. **SSL**: automatic on all modern providers. User does nothing.
+
+5. **Monitoring** (optional): Sentry for errors (free tier), UptimeRobot for uptime (free)
+
+6. **Cost summary**: show monthly cost clearly
+
+One question at a time. Plain language. "Server" means "a computer that runs your app 24/7". "Deploy" means "put your code on the internet".
+
+**If Done (option 3):** Skip to next features.
 
 The sprint journal reads all phase artifacts (think, plan, review, qa, security, ship) and writes a single entry to `.nanostack/know-how/journal/`. This happens automatically on every successful ship.
 
@@ -242,9 +276,12 @@ After shipping, close with two things: what was built and what could come next.
 
 Example:
 
-> Sprint complete. You have a habit tracker with a GitHub-style contribution graph. Run `npm start` and open http://localhost:3000 to see it.
+> Sprint complete. You have a habit tracker with a GitHub-style contribution graph.
 >
-> Ready to go live? Run `/launch` to deploy to production.
+> How do you want to see it?
+> 1. Local — I'll start the server and show you how to open it
+> 2. Production — I'll guide you through deploying to the internet
+> 3. I'm done — just the commit
 >
 > Ideas for the next feature:
 > - `/feature Add JSON and CSV export for habit data backup`

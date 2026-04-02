@@ -17,7 +17,6 @@ You have access to a set of composable engineering workflow skills. Each skill i
 | `/qa` | To verify code works. Browser-based testing with Playwright, plus root-cause debugging. | `--quick` `--standard` `--thorough` | `qa/bin/screenshot.sh` |
 | `/security` | Before shipping. OWASP Top 10 + STRIDE + variant analysis + conflict detection. | `--quick` `--standard` `--thorough` | `security/references/owasp-checklist.md`, `security/templates/security-report.md` |
 | `/ship` | To create PRs, merge, deploy, and verify. Generates sprint journal on success. | — | `ship/templates/pr-template.md` |
-| `/launch` | Deploy to production. Guides through hosting, domain, SSL, monitoring, and costs. | — | `launch/SKILL.md` |
 | `/guard` | When working near production, destructive operations, or sensitive systems. | — | `guard/bin/check-dangerous.sh` |
 | `/feature` | Add a feature to an existing project. Skips /think, goes straight to plan → build → review → security → qa → ship. | — | `feature/SKILL.md` |
 | `/conductor` | Orchestrate parallel agent sessions through a sprint. Coordinate task claiming and artifact handoff. | `start` `claim` `complete` `status` | `conductor/bin/sprint.sh` |

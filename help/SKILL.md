@@ -37,7 +37,6 @@ Shortcuts:
   /feature <description> Add a feature to an existing project with full sprint.
 
 After shipping:
-  /launch                Deploy to production. Hosting, domain, SSL, monitoring.
   /compound              Save what you learned. Future sprints find it automatically.
 
 Safety:
