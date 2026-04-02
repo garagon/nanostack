@@ -11,7 +11,7 @@ source "$SCRIPT_DIR/lib/store-path.sh"
 PHASE="${1:?Usage: save-artifact.sh <phase> <json>}"
 JSON="${2:?Missing JSON argument}"
 STORE="$NANOSTACK_STORE/$PHASE"
-CORE_PHASES="think plan review qa security ship"
+CORE_PHASES="think plan review qa security ship launch"
 
 # Load custom phases from config if exists
 CUSTOM_PHASES=""
