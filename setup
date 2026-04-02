@@ -315,9 +315,11 @@ install_codex() {
 
   local linked=()
   for skill in "${SKILLS[@]}"; do
+    local dir
+    dir=$(skill_dir "$skill")
     local target="$codex_skills/nanostack-${skill}"
     if [ -L "$target" ] || [ ! -e "$target" ]; then
-      ln -snf "$SOURCE_DIR/$skill" "$target"
+      ln -snf "$SOURCE_DIR/$dir" "$target"
       linked+=("nanostack-${skill}")
     fi
   done
@@ -342,8 +344,10 @@ alwaysApply: true
 
 You have access to nanostack skills. Read SKILL.md files in ~/.claude/skills/nanostack/ for instructions.
 
-Available: /think, /nano, /review, /qa, /security, /ship, /guard, /conductor
+Available: /think, /nano, /review, /qa, /security, /ship, /guard, /conductor, /compound, /feature, /nano-run, /nano-help
 Workflow: /think → /nano → build → /review → /qa → /security → /ship
+Shortcuts: /think --autopilot (full sprint), /feature <description> (add to existing project)
+Start: /nano-run (first-time setup)
 CURSORRULE
 
   echo "  Created $cursor_rules/nanostack.md"
@@ -365,8 +369,14 @@ install_opencode() {
 # ─── Gemini CLI ───────────────────────────────────────────────
 # Installs as Gemini extension
 install_gemini() {
-  echo "  Gemini CLI: run 'gemini extensions install $SOURCE_DIR' to install"
-  echo "  Or for development: 'gemini extensions link $SOURCE_DIR'"
+  # Try to install the extension automatically
+  if gemini extensions install "https://github.com/garagon/nanostack.git" --consent 2>/dev/null; then
+    echo "  Gemini extension installed."
+  elif gemini extensions link "$SOURCE_DIR" 2>/dev/null; then
+    echo "  Gemini extension linked (development mode)."
+  else
+    echo "  Gemini CLI: run 'gemini extensions install https://github.com/garagon/nanostack --consent'"
+  fi
 }
 
 # ─── Config ──────────────────────────────────────────────────
