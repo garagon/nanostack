@@ -244,6 +244,8 @@ Example:
 
 > Sprint complete. You have a habit tracker with a GitHub-style contribution graph. Run `npm start` and open http://localhost:3000 to see it.
 >
+> Ready to go live? Run `/launch` to deploy to production.
+>
 > Ideas for the next feature:
 > - `/feature Add JSON and CSV export for habit data backup`
 > - `/feature Add weekly and monthly streak counters`
