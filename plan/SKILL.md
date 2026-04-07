@@ -42,6 +42,12 @@ Then run `session.sh phase-start plan`.
   - `scope_mode` → if /think said "reduce," plan the smallest version. If "expand," plan bigger.
   - `premise_validated` → if false, flag it. Don't plan for an unvalidated premise.
 
+  **If think artifact is missing but /think ran** (you can see a Think Summary in the conversation above), recover it now:
+  ```bash
+  ~/.claude/skills/nanostack/bin/save-artifact.sh --from-session think 'Value prop: <from summary>. Scope: <from summary>. Wedge: <from summary>. Risk: <from summary>. Premise: <from summary>.'
+  ```
+  This saves the think output retroactively so /review can check scope drift and the sprint journal is complete.
+
 - Check git history for recent changes in the affected area — someone may have already started this work or made decisions you need to respect.
 - Search past solutions: run `~/.claude/skills/nanostack/bin/find-solution.sh` with keywords related to the technologies and files in scope. The output shows ranked summaries with title, severity, tags and files. Read the summaries first, then load only the solutions relevant to the current task. Past mistakes and patterns should inform the current sprint.
 - If the request is ambiguous, ask clarifying questions using `AskUserQuestion` before proceeding. Do not guess scope.
