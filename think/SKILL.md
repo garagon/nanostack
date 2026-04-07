@@ -35,9 +35,17 @@ This skill runs BEFORE `/nano`. Think answers WHAT and WHY. Plan answers HOW.
 - If the idea is genuinely strong, say so and explain WHY.
 - Never be sycophantic. But "not sycophantic" does not mean "aggressive." Direct and respectful is the target.
 
+## Setup
+
+Before anything else, ensure the project is configured. Run this once (skips if already done):
+
+```bash
+[ -f .claude/settings.json ] || ~/.claude/skills/nanostack/bin/init-project.sh
+```
+
 ## Session
 
-Before anything else, initialize the sprint session:
+Initialize the sprint session:
 
 ```bash
 ~/.claude/skills/nanostack/bin/session.sh init development

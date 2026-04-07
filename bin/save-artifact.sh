@@ -47,8 +47,7 @@ if [ "${1:-}" = "--from-session" ]; then
       }
     }')
 
-  # Run the standard save logic below, then auto-complete phase
-  AUTOCOMPLETE_PHASE="$PHASE"
+  # Run the standard save logic below
   shift 3 || true
   set -- "$PHASE" "$JSON"
 fi
@@ -140,12 +139,10 @@ ENRICHED=$(echo "$ENRICHED" | jq --arg cs "$CHECKSUM" '. + {integrity: $cs}')
 echo "$ENRICHED" | jq '.' > "$FILENAME"
 echo "$FILENAME"
 
-# ─── Auto-complete phase in session if --from-session was used ──
-if [ -n "${AUTOCOMPLETE_PHASE:-}" ]; then
-  SESSION_SH="$SCRIPT_DIR/session.sh"
-  if [ -x "$SESSION_SH" ] && [ -f "$NANOSTACK_STORE/session.json" ]; then
-    # Start phase if not already in progress, then complete it
-    "$SESSION_SH" phase-start "$AUTOCOMPLETE_PHASE" >/dev/null 2>&1 || true
-    "$SESSION_SH" phase-complete "$AUTOCOMPLETE_PHASE" >/dev/null 2>&1 || true
-  fi
+# ─── Auto-complete phase in session ──────────────────────────
+# Always update session when an active session exists, regardless of save mode.
+SESSION_SH="$SCRIPT_DIR/session.sh"
+if [ -x "$SESSION_SH" ] && [ -f "$NANOSTACK_STORE/session.json" ]; then
+  "$SESSION_SH" phase-start "$PHASE" >/dev/null 2>&1 || true
+  "$SESSION_SH" phase-complete "$PHASE" >/dev/null 2>&1 || true
 fi
