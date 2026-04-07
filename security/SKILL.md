@@ -143,7 +143,7 @@ If results: secrets may be in history even if currently gitignored. **CRITICAL**
 
 ### 3. False Positive/Negative Awareness
 
-**False positives (skip):** `.env.example`, `sk_test_` keys, UUIDs, React default output, `eval()` in build configs, `0.0.0.0` in Docker, SQL in migrations.
+**False positives (skip):** `.env.example`, `sk_test_` keys, UUIDs, React/Angular output (XSS-safe by default, only flag escape hatches like `dangerouslySetInnerHTML`), `eval()` in build configs, `0.0.0.0` in Docker, SQL in migrations.
 
 **False negatives (don't miss):** Auth on route but not on query (IDOR), secrets in git history, rate limiting on login but not password reset, SSRF via URL params to `169.254.169.254`, `dangerouslySetInnerHTML` without DOMPurify.
 

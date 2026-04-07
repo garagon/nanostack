@@ -217,6 +217,16 @@ Detect project type, recommend ONE provider (Next.js→Vercel, Node→Railway, S
 
 **If Done (option 3):** Skip to next features.
 
+## Output Format
+
+Close with a summary:
+```
+Ship: PR #N created. CI passed.
+Tests: X → Y (+N new). No regressions.
+```
+
+Include before/after test counts when tests were added. Quantify the improvement.
+
 ## Gotchas
 
 - **Run tests before creating PR.** CI is slower than catching it locally.
