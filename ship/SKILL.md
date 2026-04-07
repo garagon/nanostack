@@ -196,9 +196,11 @@ Or pass full JSON for richer detail:
 ~/.claude/skills/nanostack/bin/sprint-journal.sh
 ```
 
-**Step 2: Ask how the user wants to see the result.**
+**Step 2: How to see the result.**
 
-Ask:
+**If AUTOPILOT is active:** Skip this question. Go directly to Next Step (compound + sprint summary). The user will decide how to run it after the sprint closes.
+
+**Otherwise**, ask:
 > How do you want to see it?
 > 1. Local — I'll start the server and show you how to open it
 > 2. Production — I'll guide you through deploying to the internet

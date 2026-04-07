@@ -146,9 +146,11 @@ If the plan is a pure library with no user-facing output, skip this section.
 
 ### 7. Present and Confirm
 
-Present the plan to the user. Wait for explicit approval before executing. If the user modifies the plan, update it before proceeding.
+**If AUTOPILOT is active:** Present the plan briefly and proceed immediately. Do not wait for approval. The user chose autopilot because they trust the process.
 
-After the user approves, do these two steps in order:
+**Otherwise:** Present the plan to the user. Wait for explicit approval before executing. If the user modifies the plan, update it before proceeding.
+
+After the plan is approved (or auto-approved in autopilot), do these two steps in order:
 
 **Step 1: Save the artifact.** Run this command now — do not skip it:
 
