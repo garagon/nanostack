@@ -39,7 +39,7 @@ Then run `session.sh phase-start plan`. This activates the phase gate — `git c
 
 ## Process
 
-You are an orchestrator. You invoke each skill in sequence using the Skill tool. Do NOT implement the skill logic yourself — invoke the skill and let it run.
+You are an autonomous orchestrator. You run the entire sprint without stopping between phases. Do NOT wait for user input between steps. Do NOT ask "should I continue?" or "ready for review?". Invoke each skill, wait for it to complete, then immediately invoke the next one. The only reasons to stop are blocking issues or critical vulnerabilities.
 
 ### Step 1: Context
 
@@ -55,43 +55,37 @@ Read the checkpoint summaries. If no artifacts exist, read the codebase directly
 
 ### Step 2: Plan
 
-Invoke the nano skill using the Skill tool. Pass the feature description as context:
-
 ```
 Use Skill tool: skill="nano"
 ```
 
-Wait for /nano to complete. It will save its own artifact.
+Wait for /nano to complete. It saves its own artifact. Then immediately build.
 
 ### Step 3: Build
 
-After /nano completes and the user approves the plan, build the feature.
+Build the feature. Do not ask for approval. The plan was the contract.
 
-### Step 4: Review
+### Step 4: Review → Step 5: Security → Step 6: QA
 
-After build completes, invoke the review skill:
+Run all three in sequence without stopping:
 
 ```
 Use Skill tool: skill="review"
 ```
-
-Wait for /review to complete. It saves its own artifact. If blocking issues found, fix them before continuing.
-
-### Step 5: Security
+If blocking issues: fix them, then continue. Between steps show one line:
+`Feature: review complete. Running /security...`
 
 ```
 Use Skill tool: skill="security"
 ```
-
-Wait for /security to complete. If critical findings, fix before continuing.
-
-### Step 6: QA
+If critical findings: fix them, then continue.
+`Feature: security complete. Running /qa...`
 
 ```
 Use Skill tool: skill="qa"
 ```
-
-Wait for /qa to complete. If tests fail, fix before continuing.
+If tests fail: fix them, then continue.
+`Feature: qa complete. Running /ship...`
 
 ### Step 7: Ship
 
@@ -99,12 +93,13 @@ Wait for /qa to complete. If tests fail, fix before continuing.
 Use Skill tool: skill="ship"
 ```
 
-/ship commits, creates PR if remote exists, generates sprint journal, and shows the result with next feature suggestions.
+/ship commits, creates PR if remote exists, generates sprint journal, runs /compound, and shows the result with next feature suggestions.
 
 ## Rules
 
+- **Do not stop between phases.** This is the most important rule. Plan → build → review → security → qa → ship runs as one continuous flow. No pauses, no questions, no confirmations.
 - Each skill is invoked via the Skill tool, not implemented inline.
 - Each skill saves its own artifact. You do not save artifacts — the skills do.
-- Between steps, show brief status: `Feature: review complete. Running /security...`
-- Stop the sequence if any skill finds blocking issues or critical vulnerabilities.
+- Between steps, show one line of status: `Feature: review complete. Running /security...`
+- Stop ONLY if a skill finds a blocking issue or critical vulnerability you cannot fix.
 - If the feature already exists in the codebase, tell the user and suggest alternatives.

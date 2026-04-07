@@ -86,6 +86,16 @@ cmd_phase_start() {
     exit 1
   fi
 
+  # Idempotent: skip if phase already completed or in progress
+  local existing
+  existing=$(jq -r --arg p "$phase" \
+    '[.phase_log[] | select(.phase == $p and (.status == "completed" or .status == "in_progress"))] | length' \
+    "$SESSION_FILE" 2>/dev/null || echo "0")
+  if [ "$existing" -gt 0 ]; then
+    echo "OK: $phase already in log"
+    return 0
+  fi
+
   local epoch
   epoch=$(date +%s)
 
