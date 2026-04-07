@@ -91,7 +91,7 @@ Nanostack is a process, not a collection of tools. The skills run in the order a
 /think → /nano → build → /review → /qa → /security → /ship
 ```
 
-Each skill feeds into the next. `/nano` writes an artifact that `/review` reads for scope drift detection. `/review` catches conflicts with `/security` findings. `/ship` verifies everything is clean before creating the PR. Nothing falls through the cracks because every step knows what came before it.
+Each skill feeds into the next. `/nano` writes an artifact that `/review` reads for scope drift detection. `/review` catches conflicts with `/security` findings. `/ship` verifies everything is clean before creating the PR. The phase gate enforces the pipeline: `git commit` is blocked until review, security and qa are done. Nothing falls through the cracks because every step knows what came before it, and skipping steps is not an option.
 
 | Skill | Your specialist | What they do |
 |-------|----------------|--------------|
@@ -107,7 +107,7 @@ Each skill feeds into the next. `/nano` writes an artifact that `/review` reads 
 | Skill | What it does |
 |-------|-------------|
 | `/compound` | **Knowledge** | Documents solved problems after each sprint. Three types: bug (what broke + fix), pattern (reusable approach), decision (architecture choice). `/nano` and `/review` search past solutions automatically in future sprints. |
-| `/guard` | **Safety** | Four-tier safety: allowlist, in-project bypass, phase-aware concurrency enforcement (blocks writes during read-only phases), and pattern matching with 33 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
+| `/guard` | **Safety** | Five-tier safety: allowlist, in-project bypass, phase-aware concurrency (blocks writes during read-only phases), phase gate (blocks commit/push until review+security+qa pass), and pattern matching with 33 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
 | `/conductor` | **Orchestrator** | Parallel agent sessions with auto-batching. `sprint.sh batch` reads skill concurrency metadata and groups parallel-safe phases. Session resume on crash. Dependency validation before each phase. No daemon, just atomic file ops. |
 | `/feature` | **Builder** | Add functionality to an existing project. Skips /think, goes straight to plan, build, review, audit, test, ship. |
 | `/nano-run` | **Onboarding** | First-time setup. Configures stack, permissions, and work preferences through a conversation. Auto-detects your project and guides your first sprint. |
@@ -194,6 +194,8 @@ Discuss the idea, approve the brief, walk away. The agent runs the full sprint:
 /nano → build → /review → /security → /qa → /ship
 ```
 
+The phase gate enforces the pipeline. Even if the agent judges a task as "simple" and tries to skip review or security, `git commit` is blocked until all phases have fresh artifacts. No instructions to follow — the hook stops the commit.
+
 Autopilot only stops if:
 - `/review` finds blocking issues that need your decision
 - `/security` finds critical or high vulnerabilities
@@ -238,15 +240,17 @@ If the agent crashes mid-sprint, `session.sh resume` detects the last session st
 
 AI agents make mistakes. They run `rm -rf` when they mean `rm -r`, force push to main when they mean to push to a branch, pipe untrusted URLs to shell. `/guard` catches these before they execute.
 
-### Four tiers
+### Five tiers
 
-Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude-code-auto-mode), guard evaluates every command through four tiers:
+Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude-code-auto-mode), guard evaluates every command through five tiers:
 
 **Tier 1: Allowlist.** Commands like `git status`, `ls`, `cat`, `jq` skip all checks. They can't cause damage.
 
 **Tier 2: In-project.** Operations that only touch files inside the current git repo pass through. If the agent writes a bad file, you revert it. Version control is the safety net.
 
 **Tier 2.5: Phase-aware concurrency.** During read-only phases (review, qa, security), write operations are blocked. This prevents race conditions when multiple agents run in parallel. The agent reports findings instead of auto-fixing.
+
+**Tier 2.75: Phase gate.** When a sprint is active, `git commit` and `git push` are blocked until review, security and qa artifacts exist and are fresher than the latest code change. This is the enforcement that prevents the agent from skipping pipeline phases on simple tasks. Bypass with `NANOSTACK_SKIP_GATE=1` for non-sprint commits.
 
 **Tier 3: Pattern matching.** Everything else is checked against block and warn rules. 33 block rules cover mass deletion, history destruction, database drops, production deploys, remote code execution, security degradation and safety bypasses. 9 warn rules cover operations that need attention but not blocking.
 
