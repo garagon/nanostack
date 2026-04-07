@@ -176,20 +176,15 @@ Produce a clear brief for the next phase:
 **Premise validated:** {{yes/no — and why}}
 ```
 
-After producing the Think Summary, do these two steps in order:
-
-**Step 1: Save the artifact.** Run this command now — do not skip it:
+Immediately after writing the Think Summary — before anything else, before presenting next steps — save the artifact:
 
 ```bash
 ~/.claude/skills/nanostack/bin/save-artifact.sh --from-session think 'Value prop: X. Scope: Y. Wedge: Z. Risk: W. Premise: validated/not.'
 ```
 
-Or pass full JSON for richer detail:
-```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh think '<json with phase, summary including value_proposition, scope_mode, target_user, narrowest_wedge, key_risk, premise_validated, context_checkpoint>'
-```
+This is the first thing you do after the summary. Not optional. Not "Step 2". The summary and the save are one action.
 
-**Step 2: Next phase.**
+**Next phase.**
 
 If `--autopilot` was used (or the user said "autopilot", "run everything", "ship it end to end"):
 

@@ -294,4 +294,10 @@ Example:
 > - `/feature Add weekly and monthly streak counters`
 > - `/feature Add categories to organize habits by area`
 >
-> Run `/compound` to save what you learned from this sprint.
+After presenting the summary and next steps, automatically run compound to capture learnings:
+
+```
+Use Skill tool: skill="compound"
+```
+
+Do not ask. Do not skip. Compound reads the sprint artifacts and saves solutions for future sprints.
