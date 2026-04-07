@@ -67,7 +67,7 @@ if [ -n "$PROJECT_ROOT" ]; then
         esac
         # If it looks like a path and exists or starts with project root
         if [ -e "$token" ] || [[ "$token" == /* ]]; then
-          REAL_PATH=$(cd "$(dirname "$token" 2>/dev/null)" 2>/dev/null && pwd)/$(basename "$token") 2>/dev/null || REAL_PATH="$token"
+          REAL_PATH=$(realpath "$token" 2>/dev/null) || REAL_PATH="$token"
           case "$REAL_PATH" in
             "$PROJECT_ROOT"*) ;; # in project
             *) ALL_IN_PROJECT=false ;;
