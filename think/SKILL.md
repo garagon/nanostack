@@ -86,20 +86,9 @@ Read `think/references/search-before-building.md` and follow the instructions be
 
 #### Startup Mode — Six Forcing Questions
 
-These are drawn from YC's product thinking framework. Cover all six — adapt the order to the conversation flow. If the user already addressed some, acknowledge and move on.
+Read `think/references/forcing-questions.md` and cover all six: Demand Reality, Status Quo, Desperate Specificity, Narrowest Wedge, Observation & Surprise, Future-Fit. Adapt order to conversation flow.
 
-Read `think/references/forcing-questions.md` for the detailed question framework.
-
-| # | Question | What it reveals |
-|---|----------|----------------|
-| 1 | **Demand Reality** | Is there real demand, or is this a solution looking for a problem? |
-| 2 | **Status Quo** | What are people doing today without this? If nothing, demand may not exist. |
-| 3 | **Desperate Specificity** | Who needs this SO badly they'd use a broken v1? If nobody, scope is too broad. |
-| 4 | **Narrowest Wedge** | What's the absolute minimum that delivers value? Smaller than you think. |
-| 5 | **Observation & Surprise** | What have you observed that others haven't? This is your unfair insight. |
-| 6 | **Future-Fit** | Will this matter in 3 years, or is it a fad? Build for the future, not the present. |
-
-After the diagnostic, synthesize: What is the **one sentence** value proposition that survives all six questions?
+Synthesize: What is the **one sentence** value proposition that survives all six questions?
 
 #### Builder Mode — Engineering Forcing Questions
 
@@ -116,25 +105,7 @@ For internal tools, infra, and developer experience:
 
 ### Phase 3: Ambition Check
 
-After the diagnostic, challenge the ambition level. The user is working with an AI agent that can build a full web app, API, database, and deploy pipeline in one session. If they're asking for a bash script when they could have a product, say so.
-
-Ask yourself: is the user thinking small because of habit, or because small is genuinely right here?
-
-**Signs the ambition is too low:**
-- "Just a script" or "just a CLI" when the problem needs a UI people will actually open
-- Building for themselves what would take 10 minutes more to build for anyone
-- Solving with a text file what a database solves better
-- Avoiding a web app because "it's too complex" when the agent builds it in the same time as a script
-
-**Signs the ambition is right:**
-- Small scope because the problem is actually small
-- CLI because the user IS a developer and the terminal IS the interface
-- Script because it composes with existing tools better than a standalone app
-- Local-first because the data is sensitive and doesn't need a server
-
-If the ambition is too low, reframe upward. "You asked for a savings tracker script. But you have an AI agent that can build you a personal finance app with a dashboard, charts, and CSV import in one session. The script version you'll abandon in a week. The app version you'll actually use."
-
-If the ambition is right, say so and move on. Not everything needs to be a web app.
+Challenge: is the user thinking small because of habit, or because small is genuinely right? An AI agent builds a web app as fast as a bash script. If "just a CLI" when a real product would serve better, reframe upward. If CLI is genuinely right (developer audience, composes with existing tools, local-first), say so and move on.
 
 ### Phase 4: Premise Challenge
 
@@ -142,15 +113,9 @@ Challenge the fundamental premise:
 
 > "The thing we haven't questioned is whether {{the core assumption}} is actually true."
 
-Apply these CEO cognitive patterns (read `think/references/cognitive-patterns.md` for the full set):
+Apply CEO cognitive patterns from `think/references/cognitive-patterns.md` (Inversion, Customer Obsession, 10x vs 10%, Narrowest Wedge).
 
-- **Inversion** (Munger): What would guarantee failure? Avoid that.
-- **Customer obsession** (Bezos): Work backward from what the user needs, not forward from what you can build.
-- **Disagree and commit** (Bezos): It's OK to proceed with something you disagree with IF the decision is reversible.
-- **10x vs 10%** (Grove): Is this a 10x improvement or a 10% improvement? 10% improvements don't change behavior.
-- **Narrowest wedge** (Graham): Do things that don't scale first. Serve one user perfectly before serving a million poorly.
-
-After applying the patterns, **argue the opposite**. Construct the strongest possible case that this idea should NOT be built, or that the opposite direction is better. Present it with the same conviction you used to build the case in favor. This forces real evaluation instead of confirmation bias. If the opposite argument is stronger, say so. If the original holds, it's now battle-tested.
+Then **argue the opposite**: construct the strongest case this should NOT be built. If the opposite argument is stronger, say so. If the original holds, it's battle-tested.
 
 ### Phase 5: Scope Mode Selection
 
@@ -202,19 +167,8 @@ Wait for the user to invoke `/nano`.
 
 ## Gotchas
 
-- **Don't skip the diagnostic to "save time."** The diagnostic IS the time savings — it prevents building the wrong thing.
-- **Don't confuse conviction with evidence.** The user being excited about an idea is not validation. Who else is excited? Who would pay?
-- **Don't expand scope when reducing is the right call.** More features ≠ better product. The best v1s do one thing exceptionally well.
-- **"Search Before Building" is now a step, not a suggestion.** Phase 1.5 runs before the diagnostic. If you skipped it, go back.
-- **"Processize before you productize."** If the user can't describe how they'd deliver the value by hand (no code), they don't understand the problem well enough to automate it. The manual process comes first.
-- **Don't let this become a planning session.** /think produces a brief, not a plan. If you're writing implementation steps, you've gone too far. Hand off to /nano.
-- **Don't let the user think small by habit.** An AI agent builds a web app as fast as a bash script. If the user defaults to "just a CLI" when a real product would serve them better, say so. The narrowest wedge should be narrow in scope, not narrow in ambition.
-
-## Anti-patterns (from real usage)
-
-These were discovered from running /think on real projects:
-
-- **Same intensity for everyone.** The first version challenged a user's personal pain point ("are your bookmarks even worth saving?"). Calibrate by mode. Founder mode pushes hard. Startup/Builder mode respects stated pain.
-- **Skipping Search Before Building.** A user wanted to build a feature that 3 other people had already submitted PRs for in the target repo. 30 seconds of search would have saved hours.
-- **Asking with AskUserQuestion when the user gave no context.** The modal prompt confused users. Just ask in plain text.
-- **Running the diagnostic on a problem that doesn't need a diagnostic.** "Fix this bug" doesn't need six forcing questions. Detect when the user already knows what they want and skip to the brief.
+- **Don't skip the diagnostic.** It prevents building the wrong thing.
+- **Search Before Building is mandatory.** Phase 1.5 runs before the diagnostic.
+- **/think produces a brief, not a plan.** If you're writing implementation steps, hand off to /nano.
+- **Calibrate intensity by mode.** Founder pushes hard. Builder respects stated pain.
+- **"Fix this bug" doesn't need six forcing questions.** Skip to the brief when the user already knows what they want.

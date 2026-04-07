@@ -141,36 +141,15 @@ If results: secrets may be in history even if currently gitignored. **CRITICAL**
 | Missing rate limiting | AI endpoints without rate limiter — attacker runs up your bill |
 | Unsanitized LLM output | LLM response rendered as HTML without escaping |
 
-### 3. False Positive/Negative Traps
+### 3. False Positive/Negative Awareness
 
-**Skip these (false positives):**
-- `.env.example` / `.env.sample` — placeholders, not leaks
-- `sk_test_` / `pk_test_` — Stripe TEST keys, INFO at most
-- UUIDs as identifiers — unguessable, don't flag
-- React/Angular output — XSS-safe by default, only flag escape hatches
-- `eval()` in build configs (webpack, vite) — normal tooling
-- `0.0.0.0` binding inside Docker — expected container behavior
-- SQL in migration files — expected patterns
+**False positives (skip):** `.env.example`, `sk_test_` keys, UUIDs, React default output, `eval()` in build configs, `0.0.0.0` in Docker, SQL in migrations.
 
-**Don't miss these (false negatives):**
-- Auth on route but not on data query — IDOR through direct DB access
-- Secrets removed from code but still in `git log`
-- Rate limiting on login but not on password reset
-- SSRF via URL params hitting cloud metadata (`169.254.169.254`)
-- `dangerouslySetInnerHTML` without DOMPurify sanitization
+**False negatives (don't miss):** Auth on route but not on query (IDOR), secrets in git history, rate limiting on login but not password reset, SSRF via URL params to `169.254.169.254`, `dangerouslySetInnerHTML` without DOMPurify.
 
-### 3. STRIDE Threat Model
+### 4. STRIDE per component
 
-For each component in the system, evaluate:
-
-| Threat | Question |
-|--------|----------|
-| **S**poofing | Can an attacker impersonate a user or service? |
-| **T**ampering | Can data be modified in transit or at rest without detection? |
-| **R**epudiation | Can actions be performed without an audit trail? |
-| **I**nformation Disclosure | Can sensitive data leak through errors, logs, or side channels? |
-| **D**enial of Service | Can the system be overwhelmed or made unavailable? |
-| **E**levation of Privilege | Can a user gain permissions they shouldn't have? |
+Spoofing (impersonation?), Tampering (data integrity?), Repudiation (audit trail?), Info Disclosure (leaks?), DoS (overwhelm?), Elevation (privilege escalation?).
 
 ### 4. Produce Report
 
@@ -194,12 +173,7 @@ Always close with **What's solid**: 2-3 specific things the codebase does well o
 
 ## Severity Classification
 
-| Severity | Criteria | Examples |
-|----------|----------|---------|
-| **Critical** | Exploitable remotely, no authentication required, leads to full compromise | RCE, SQL injection with admin access, hardcoded admin credentials |
-| **High** | Exploitable with some conditions, significant impact | Stored XSS, IDOR exposing sensitive data, privilege escalation |
-| **Medium** | Requires specific conditions or has limited impact | CSRF, information disclosure via error messages, missing rate limiting |
-| **Low** | Informational or requires unlikely conditions | Missing security headers, verbose error messages, outdated non-vulnerable dependency |
+Severity: Critical (RCE, unauth admin, hardcoded creds), High (stored XSS, IDOR, privilege escalation), Medium (CSRF, info disclosure, missing rate limit), Low (headers, verbose errors, outdated non-vulnerable deps).
 
 ## Conflict Detection
 
@@ -266,13 +240,11 @@ Re-running the full OWASP scan after fixing a missing Content-Type header wastes
 
 ## Gotchas
 
-- **If you find zero vulnerabilities, say so.** A clean audit is a valid result. Don't manufacture findings to justify the scan.
-- **Don't inflate severity.** Missing security headers on an internal tool is Low, not Medium. Calibrate to actual exploitability.
-- **Don't report theoretical vulnerabilities without evidence.** "This could be vulnerable to XSS" is not a finding. Show the input path, the sink, and the missing sanitization.
-- **Don't skip dependency scanning.** Run `npm audit`, `pip audit`, `go vuln check`, or equivalent. Known CVEs in dependencies are the lowest-hanging fruit.
-- **Don't ignore configuration.** `.env.example`, `docker-compose.yml`, CI/CD configs, and cloud IAM policies are part of the attack surface.
-- **Don't confuse defense-in-depth with redundancy.** Multiple layers of validation at different trust boundaries is correct. Validating the same thing three times in the same function is not.
-- **Authentication ≠ Authorization.** Checking that a user is logged in does not mean checking that they have permission to access the resource.
-- **Secrets in git history are still exposed.** Even if a secret was removed in a later commit, it exists in the history. Check with `git log -p --all -S 'password\|secret\|key\|token'`.
-- **Variant analysis is not optional in `--thorough`.** One confirmed finding means the pattern may exist elsewhere. Search for it.
+- **Zero findings is valid.** Don't manufacture findings.
+- **Don't inflate severity.** Calibrate to actual exploitability.
+- **Show evidence.** Input path, sink, missing sanitization. Not "could be vulnerable."
+- **Run dependency scanning.** `npm audit`, `pip audit`, `go vuln check`.
+- **Auth ≠ authz.** Logged in ≠ has permission.
+- **Check git history for secrets.** `git log -p --all -S 'password\|secret\|key\|token'`
+- **Variant analysis in `--thorough`.** One finding = search for the pattern elsewhere.
 

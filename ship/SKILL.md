@@ -213,66 +213,16 @@ Or pass full JSON for richer detail:
 - Never auto-open URLs or execute `open` commands. Show the path and let the user decide.
 
 **If Production (option 2):**
-Guide the user through deploying. One step at a time:
-
-1. **Detect project type** and recommend ONE hosting provider:
-   - Next.js → Vercel (free tier, zero config)
-   - Node.js + Express → Railway ($5/mo, deploys on git push)
-   - Static HTML → Cloudflare Pages (free, CDN)
-   - Python → Railway (Docker support)
-   - Go → Fly.io (containers, free allowance)
-
-2. **Walk through deploy:**
-   - Create account on the provider
-   - Connect the GitHub repo
-   - Set environment variables (list them from the project)
-   - Push to main — deploys automatically
-
-3. **Domain** (optional): free subdomain from provider or custom ~$10/year from Cloudflare/Namecheap
-
-4. **SSL**: automatic on all modern providers. User does nothing.
-
-5. **Monitoring** (optional): Sentry for errors (free tier), UptimeRobot for uptime (free)
-
-6. **Cost summary**: show monthly cost clearly
-
-One question at a time. Plain language. "Server" means "a computer that runs your app 24/7". "Deploy" means "put your code on the internet".
+Detect project type, recommend ONE provider (Next.js→Vercel, Node→Railway, Static→Cloudflare Pages, Python→Railway, Go→Fly.io). Walk through: account, connect repo, env vars, push. Mention domain (~$10/yr), SSL (automatic), monitoring (Sentry free + UptimeRobot free). Show monthly cost.
 
 **If Done (option 3):** Skip to next features.
 
-The sprint journal reads all phase artifacts (think, plan, review, qa, security, ship) and writes a single entry to `.nanostack/know-how/journal/`. This happens automatically on every successful ship.
-
-The user can disable auto-saving by setting `auto_save: false` in `.nanostack/config.json`.
-
-## Output
-
-After shipping, close with a summary:
-```
-Ship: PR #42 created. CI passed. Deployed. Smoke test clean.
-Tests: 42 → 51 (+9 new). No regressions.
-Journal: .nanostack/know-how/journal/2026-03-25-myproject.md
-```
-
-Include before/after test counts when tests were added during the sprint. Quantify the improvement.
-
 ## Gotchas
 
-- **Don't create a PR without running tests locally.** CI catching your bugs is slower than you catching them.
-- **Don't force-push to a branch with open review comments.** It destroys the review context. Push new commits instead.
-- **Don't merge your own PR without review** unless it's a trivial fix (typo, config) and the team norm allows it.
-- **Don't deploy on Friday afternoons.** Unless you want to debug on Saturday morning. If the user insists, note the risk.
-- **One PR = one concern.** If your PR does two unrelated things, split it. The review will be faster and the rollback will be cleaner.
-- **Draft PRs are useful.** If the code isn't ready for review but you want CI to run, create a draft: `gh pr create --draft`
-
-## Anti-patterns (from real usage)
-
-These were discovered from shipping real PRs:
-
-- **Creating PRs without checking existing work.** Submitted a PR to FastAPI without realizing 8 other PRs existed for the same issue, including one the maintainer preferred. Always search first.
-- **Skipping PR Preview.** A PR went out with "Fixes #4060" as the only body text. The project required What/Why/Before-After/Tests/AI disclosure. PR Preview catches this.
-- **Pushing directly to main.** Every change should go through a PR regardless of size. Clean history, reviewable changes.
-- **Not reading CONTRIBUTING.md.** Every project has different rules. Some require video evidence, some require specific naming conventions, some have line limits. Read the rules before writing the PR.
-- **CI checks that only maintainers resolve.** Label checks, CLA checks, approval gates. These will fail on your PR and there's nothing you can do. Know which checks you own and which you don't.
+- **Run tests before creating PR.** CI is slower than catching it locally.
+- **One PR = one concern.** Split unrelated changes.
+- **Check existing PRs before creating yours.** Search first.
+- **Read CONTRIBUTING.md.** Every project has different rules.
 
 ## Next Step
 
