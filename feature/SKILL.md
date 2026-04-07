@@ -19,9 +19,17 @@ Fast path for adding a feature to an existing project. Skips the /think diagnost
 /feature Add import from JSON/CSV to restore backups
 ```
 
+## Setup
+
+Before anything else, ensure the project is configured. Run this once (skips if already done):
+
+```bash
+[ -f .claude/settings.json ] || ~/.claude/skills/nanostack/bin/init-project.sh
+```
+
 ## Session
 
-Before anything else, initialize the sprint session:
+Initialize the sprint session:
 
 ```bash
 ~/.claude/skills/nanostack/bin/session.sh init feature

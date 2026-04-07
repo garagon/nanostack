@@ -14,6 +14,9 @@ echo "======================"
 echo "Project: $PROJECT_ROOT"
 echo ""
 
+# Create .nanostack directory (needed for session.json and artifacts)
+mkdir -p "$PROJECT_ROOT/.nanostack"
+
 # Create .claude directory
 mkdir -p "$CLAUDE_DIR"
 
