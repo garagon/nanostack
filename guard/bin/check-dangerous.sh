@@ -26,24 +26,25 @@ fi
 # Extract first token of the command (the binary/builtin)
 CMD_BASE=$(echo "$CMD" | awk '{print $1}' | sed 's|.*/||')
 
-# Check if the command starts with an allowlisted command
-ALLOWED=$(jq -r '.tiers.allowlist.commands[]' "$RULES_FILE" 2>/dev/null)
-# Read allowlist into array
-while IFS= read -r allowed; do
-  [ -z "$allowed" ] && continue
-  allowed_base=$(echo "$allowed" | awk '{print $1}' | sed 's|.*/||')
-  if [ "$CMD_BASE" = "$allowed_base" ]; then
-    # Multi-word entry: command must start with the full allowlist string
-    if [ "$allowed_base" != "$allowed" ]; then
-      if echo "$CMD" | grep -qF "$allowed" 2>/dev/null; then
-        exit 0
-      fi
-    else
-      # Single-word entry (e.g. "ls", "cat", "jq"): base match is enough
-      exit 0
-    fi
+# Single jq call: check if command matches any allowlist entry
+# Returns "pass" if allowed, empty if not
+TIER1=$(jq -r --arg cmd "$CMD" --arg base "$CMD_BASE" '
+  .tiers.allowlist.commands[] |
+  split(" ")[0] | gsub(".*/"; "") |
+  select(. == $base)' "$RULES_FILE" 2>/dev/null | head -1)
+
+if [ -n "$TIER1" ]; then
+  # Base matches. For multi-word entries, verify full match
+  MULTI=$(jq -r --arg base "$CMD_BASE" '
+    .tiers.allowlist.commands[] |
+    select((split(" ")[0] | gsub(".*/"; "")) == $base and (split(" ") | length) > 1)' "$RULES_FILE" 2>/dev/null | head -1)
+  if [ -z "$MULTI" ]; then
+    # Single-word entry: base match is enough
+    exit 0
+  elif echo "$CMD" | grep -qF "$MULTI" 2>/dev/null; then
+    exit 0
   fi
-done <<< "$ALLOWED"
+fi
 
 # ─── Tier 2: In-project operations ──────────────────────────
 # If the command only touches files inside the current git repo,
@@ -139,54 +140,69 @@ if [ -x "$PHASE_GATE" ]; then
 fi
 
 # ─── Tier 3: Pattern matching ───────────────────────────────
+# 1 jq call extracts all patterns. 1 combined grep for fast pre-check.
+# Only loop individual patterns if the pre-check hits.
 
-# Check block rules first
-BLOCK_COUNT=$(jq '.tiers.block.rules | length' "$RULES_FILE")
-i=0
-while [ "$i" -lt "$BLOCK_COUNT" ]; do
-  PATTERN=$(jq -r ".tiers.block.rules[$i].pattern" "$RULES_FILE")
-  if echo "$CMD" | grep -qiE -- "$PATTERN"; then
-    ID=$(jq -r ".tiers.block.rules[$i].id" "$RULES_FILE")
-    DESC=$(jq -r ".tiers.block.rules[$i].description" "$RULES_FILE")
-    CATEGORY=$(jq -r ".tiers.block.rules[$i].category" "$RULES_FILE")
-    ALT=$(jq -r ".tiers.block.rules[$i].alternative" "$RULES_FILE")
+# Extract all block patterns (1 jq call)
+BLOCK_PATTERNS=$(jq -r '.tiers.block.rules[] | .pattern' "$RULES_FILE" 2>/dev/null)
 
-    echo "BLOCKED [$ID] $DESC"
-    echo "Category: $CATEGORY"
-    echo "Command: $CMD"
-    echo ""
-    echo "Safer alternative: $ALT"
-    # Audit blocked command
-    if [ -n "${NANOSTACK_STORE:-}" ] || [ -f "${STORE_PATH_SH:-}" ]; then
-      [ -z "${NANOSTACK_STORE:-}" ] && source "$STORE_PATH_SH" 2>/dev/null || true
-      AUDIT_LOG="${NANOSTACK_STORE:-}/audit.log"
-      [ -n "$AUDIT_LOG" ] && [ -d "$(dirname "$AUDIT_LOG")" ] && \
-        echo "{\"at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"cmd\":$(echo "$CMD" | jq -Rs .),\"result\":\"blocked\",\"rule\":\"$ID\"}" >> "$AUDIT_LOG" 2>/dev/null || true
+# Fast pre-check: combine all patterns with | for a single grep
+BLOCK_COMBINED=$(echo "$BLOCK_PATTERNS" | paste -sd'|' -)
+if [ -n "$BLOCK_COMBINED" ] && echo "$CMD" | grep -qiE -- "$BLOCK_COMBINED" 2>/dev/null; then
+  # Something matched — find which rule
+  BLOCK_IDX=0
+  while IFS= read -r PATTERN; do
+    [ -z "$PATTERN" ] && continue
+    if echo "$CMD" | grep -qiE -- "$PATTERN" 2>/dev/null; then
+      RULE=$(jq -c ".tiers.block.rules[$BLOCK_IDX]" "$RULES_FILE")
+      ID=$(echo "$RULE" | jq -r '.id')
+      DESC=$(echo "$RULE" | jq -r '.description')
+      CATEGORY=$(echo "$RULE" | jq -r '.category')
+      ALT=$(echo "$RULE" | jq -r '.alternative')
+
+      echo "BLOCKED [$ID] $DESC"
+      echo "Category: $CATEGORY"
+      echo "Command: $CMD"
+      echo ""
+      echo "Safer alternative: $ALT"
+      # Audit blocked command
+      if [ -n "${NANOSTACK_STORE:-}" ] || [ -f "${STORE_PATH_SH:-}" ]; then
+        [ -z "${NANOSTACK_STORE:-}" ] && source "$STORE_PATH_SH" 2>/dev/null || true
+        AUDIT_LOG="${NANOSTACK_STORE:-}/audit.log"
+        [ -n "$AUDIT_LOG" ] && [ -d "$(dirname "$AUDIT_LOG")" ] && \
+          echo "{\"at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"cmd\":$(echo "$CMD" | jq -Rs .),\"result\":\"blocked\",\"rule\":\"$ID\"}" >> "$AUDIT_LOG" 2>/dev/null || true
+      fi
+      exit 1
     fi
-    exit 1
-  fi
-  i=$((i + 1))
-done
+    BLOCK_IDX=$((BLOCK_IDX + 1))
+  done <<< "$BLOCK_PATTERNS"
+fi
 
-# Check warn rules
-WARN_COUNT=$(jq '.tiers.warn.rules | length' "$RULES_FILE")
-i=0
-while [ "$i" -lt "$WARN_COUNT" ]; do
-  PATTERN=$(jq -r ".tiers.warn.rules[$i].pattern" "$RULES_FILE")
-  if echo "$CMD" | grep -qiE -- "$PATTERN"; then
-    ID=$(jq -r ".tiers.warn.rules[$i].id" "$RULES_FILE")
-    DESC=$(jq -r ".tiers.warn.rules[$i].description" "$RULES_FILE")
-    CATEGORY=$(jq -r ".tiers.warn.rules[$i].category" "$RULES_FILE")
+# Extract all warn patterns (1 jq call)
+WARN_PATTERNS=$(jq -r '.tiers.warn.rules[] | .pattern' "$RULES_FILE" 2>/dev/null)
 
-    echo "WARNING [$ID] $DESC"
-    echo "Category: $CATEGORY"
-    echo "Command: $CMD"
-    echo ""
-    echo "Proceeding. Consider the impact."
-    exit 0
-  fi
-  i=$((i + 1))
-done
+# Fast pre-check for warn rules
+WARN_COMBINED=$(echo "$WARN_PATTERNS" | paste -sd'|' -)
+if [ -n "$WARN_COMBINED" ] && echo "$CMD" | grep -qiE -- "$WARN_COMBINED" 2>/dev/null; then
+  WARN_IDX=0
+  while IFS= read -r PATTERN; do
+    [ -z "$PATTERN" ] && continue
+    if echo "$CMD" | grep -qiE -- "$PATTERN" 2>/dev/null; then
+      RULE=$(jq -c ".tiers.warn.rules[$WARN_IDX]" "$RULES_FILE")
+      ID=$(echo "$RULE" | jq -r '.id')
+      DESC=$(echo "$RULE" | jq -r '.description')
+      CATEGORY=$(echo "$RULE" | jq -r '.category')
+
+      echo "WARNING [$ID] $DESC"
+      echo "Category: $CATEGORY"
+      echo "Command: $CMD"
+      echo ""
+      echo "Proceeding. Consider the impact."
+      exit 0
+    fi
+    WARN_IDX=$((WARN_IDX + 1))
+  done <<< "$WARN_PATTERNS"
+fi
 
 # ─── Audit trail ────────────────────────────────────────────
 # Append every evaluated command to .nanostack/audit.log (non-blocking)

@@ -65,27 +65,26 @@ Wait for /nano to complete. It saves its own artifact. Then immediately build.
 
 Build the feature. Do not ask for approval. The plan was the contract.
 
-### Step 4: Review → Step 5: Security → Step 6: QA
+### Step 4: Review + Security + QA (parallel)
 
-Run all three in sequence without stopping:
+These three phases are independent. They all read the build output but don't depend on each other. Launch all three using the Agent tool in a single message with three parallel tool calls:
 
+```
+Agent: subagent_type="general-purpose", prompt="Run /review on this project. Use Skill tool: skill='review'"
+Agent: subagent_type="general-purpose", prompt="Run /security on this project. Use Skill tool: skill='security'"
+Agent: subagent_type="general-purpose", prompt="Run /qa on this project. Use Skill tool: skill='qa'"
+```
+
+If parallel agents are not available, fall back to sequential:
 ```
 Use Skill tool: skill="review"
-```
-If blocking issues: fix them, then continue. Between steps show one line:
-`Feature: review complete. Running /security...`
-
-```
 Use Skill tool: skill="security"
-```
-If critical findings: fix them, then continue.
-`Feature: security complete. Running /qa...`
-
-```
 Use Skill tool: skill="qa"
 ```
-If tests fail: fix them, then continue.
-`Feature: qa complete. Running /ship...`
+
+If any phase finds blocking issues or critical vulnerabilities: fix them, then re-run that phase only.
+
+`Feature: review + security + qa complete. Running /ship...`
 
 ### Step 7: Ship
 
