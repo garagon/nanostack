@@ -144,6 +144,8 @@ echo "$FILENAME"
 if [ -n "${AUTOCOMPLETE_PHASE:-}" ]; then
   SESSION_SH="$SCRIPT_DIR/session.sh"
   if [ -x "$SESSION_SH" ] && [ -f "$NANOSTACK_STORE/session.json" ]; then
-    "$SESSION_SH" phase-complete "$AUTOCOMPLETE_PHASE" 2>/dev/null || true
+    # Start phase if not already in progress, then complete it
+    "$SESSION_SH" phase-start "$AUTOCOMPLETE_PHASE" >/dev/null 2>&1 || true
+    "$SESSION_SH" phase-complete "$AUTOCOMPLETE_PHASE" >/dev/null 2>&1 || true
   fi
 fi
