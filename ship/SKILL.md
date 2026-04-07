@@ -186,7 +186,13 @@ After shipping, do these steps in order:
 **Step 1: Save the artifact.** Run this command now — do not skip it:
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh ship '<json with phase, summary including pr_number, pr_url, title, status, ci_passed, context_checkpoint including summary, key_files, decisions_made, open_questions>'
+~/.claude/skills/nanostack/bin/save-artifact.sh --from-session ship 'PR #N: title. Status: merged/open. CI: passed/failed.'
+~/.claude/skills/nanostack/bin/sprint-journal.sh
+```
+
+Or pass full JSON for richer detail:
+```bash
+~/.claude/skills/nanostack/bin/save-artifact.sh ship '<json with phase, summary including pr_number, pr_url, title, status, ci_passed, context_checkpoint>'
 ~/.claude/skills/nanostack/bin/sprint-journal.sh
 ```
 

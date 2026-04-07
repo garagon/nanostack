@@ -194,7 +194,12 @@ Report progress as you go. After each test group (happy path, error states, edge
 After completing all tests, save the artifact. Run this command now — do not skip it:
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh qa '<json with phase, mode, summary including wtf_likelihood, findings, context_checkpoint including summary, key_files, decisions_made, open_questions>'
+~/.claude/skills/nanostack/bin/save-artifact.sh --from-session qa 'N tests passed, M failed. WTF likelihood: low/medium/high.'
+```
+
+Or pass full JSON for richer detail:
+```bash
+~/.claude/skills/nanostack/bin/save-artifact.sh qa '<json with phase, mode, summary including wtf_likelihood, findings, context_checkpoint>'
 ```
 
 ## Mode Summary

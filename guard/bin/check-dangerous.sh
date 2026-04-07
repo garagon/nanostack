@@ -126,6 +126,18 @@ if [ -f "$STORE_PATH_SH" ]; then
   fi
 fi
 
+# ─── Tier 2.75: Sprint phase gate ──────────────────────────
+# If a sprint is active, block git commit/push until review, security, qa are done.
+PHASE_GATE="$(dirname "$0")/phase-gate.sh"
+if [ -x "$PHASE_GATE" ]; then
+  GATE_OUTPUT=$("$PHASE_GATE" "$CMD" 2>&1) || {
+    echo "$GATE_OUTPUT"
+    exit 1
+  }
+  # Print warnings (exit 0 with output = advisory)
+  [ -n "$GATE_OUTPUT" ] && echo "$GATE_OUTPUT"
+fi
+
 # ─── Tier 3: Pattern matching ───────────────────────────────
 
 # Check block rules first

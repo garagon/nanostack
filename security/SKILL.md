@@ -222,7 +222,12 @@ In `--thorough` mode, document conflicts AND flag as BLOCKING until user confirm
 After completing the audit and conflict detection, save the artifact. Run this command now — do not skip it:
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh security '<json with phase, mode, summary, findings, conflicts, context_checkpoint including summary, key_files, decisions_made, open_questions>'
+~/.claude/skills/nanostack/bin/save-artifact.sh --from-session security 'N findings (X critical). OWASP: covered A01-A10. Conflicts: none/N.'
+```
+
+Or pass full JSON for richer detail:
+```bash
+~/.claude/skills/nanostack/bin/save-artifact.sh security '<json with phase, mode, summary, findings, conflicts, context_checkpoint>'
 ```
 
 ## Mode Summary

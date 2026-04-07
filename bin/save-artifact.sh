@@ -1,12 +1,57 @@
 #!/usr/bin/env bash
 # save-artifact.sh — Save a skill artifact to .nanostack/<phase>/
-# Usage: save-artifact.sh <phase> <json-string>
-# Example: save-artifact.sh review '{"phase":"review","summary":{"blocking":0}}'
+# Usage:
+#   save-artifact.sh <phase> <json-string>              (full mode)
+#   save-artifact.sh --from-session <phase> <summary>   (simplified mode)
+#
+# Full mode: pass complete JSON with phase, summary, context_checkpoint.
+# Session mode: reads phase from session, builds JSON from git state + summary string.
+#   Auto-calls session.sh phase-complete after saving.
+#
 # Validates JSON has required fields before saving. Fails on invalid input.
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
+
+# ─── Session mode: build JSON from git state + summary ──────
+if [ "${1:-}" = "--from-session" ]; then
+  PHASE="${2:?Usage: save-artifact.sh --from-session <phase> <summary>}"
+  SUMMARY_TEXT="${3:?Missing summary argument}"
+
+  PROJECT="$(pwd)"
+  BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+
+  # Build context checkpoint from git state
+  CHANGED_FILES=$(git diff --name-only HEAD 2>/dev/null | head -20 | jq -R . | jq -s . 2>/dev/null || echo "[]")
+  STAGED_FILES=$(git diff --cached --name-only 2>/dev/null | head -20 | jq -R . | jq -s . 2>/dev/null || echo "[]")
+  RECENT_COMMITS=$(git log --oneline -5 2>/dev/null | jq -R . | jq -s . 2>/dev/null || echo "[]")
+
+  JSON=$(jq -n \
+    --arg phase "$PHASE" \
+    --arg summary "$SUMMARY_TEXT" \
+    --arg project "$PROJECT" \
+    --arg branch "$BRANCH" \
+    --argjson changed "$CHANGED_FILES" \
+    --argjson staged "$STAGED_FILES" \
+    --argjson commits "$RECENT_COMMITS" \
+    '{
+      phase: $phase,
+      summary: $summary,
+      context_checkpoint: {
+        summary: $summary,
+        key_files: ($changed + $staged | unique),
+        recent_commits: $commits,
+        decisions_made: [],
+        open_questions: []
+      }
+    }')
+
+  # Run the standard save logic below, then auto-complete phase
+  AUTOCOMPLETE_PHASE="$PHASE"
+  shift 3 || true
+  set -- "$PHASE" "$JSON"
+fi
 
 PHASE="${1:?Usage: save-artifact.sh <phase> <json>}"
 JSON="${2:?Missing JSON argument}"
@@ -94,3 +139,11 @@ ENRICHED=$(echo "$ENRICHED" | jq --arg cs "$CHECKSUM" '. + {integrity: $cs}')
 
 echo "$ENRICHED" | jq '.' > "$FILENAME"
 echo "$FILENAME"
+
+# ─── Auto-complete phase in session if --from-session was used ──
+if [ -n "${AUTOCOMPLETE_PHASE:-}" ]; then
+  SESSION_SH="$SCRIPT_DIR/session.sh"
+  if [ -x "$SESSION_SH" ] && [ -f "$NANOSTACK_STORE/session.json" ]; then
+    "$SESSION_SH" phase-complete "$AUTOCOMPLETE_PHASE" 2>/dev/null || true
+  fi
+fi

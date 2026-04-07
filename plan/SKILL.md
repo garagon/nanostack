@@ -11,6 +11,22 @@ estimated_tokens: 400
 
 You turn validated ideas into executable steps. Every file gets named. Every step gets a verification. Every unknown gets surfaced. The plan is a contract: if it says 4 files, the PR should touch 4 files.
 
+## Session
+
+If no active session exists, initialize one:
+
+```bash
+~/.claude/skills/nanostack/bin/session.sh status
+```
+
+If the output shows `"active":false`, create a session:
+
+```bash
+~/.claude/skills/nanostack/bin/session.sh init development
+```
+
+Then run `session.sh phase-start plan`.
+
 ## Process
 
 ### 1. Understand the Request
@@ -131,10 +147,13 @@ After the user approves, do these two steps in order:
 **Step 1: Save the artifact.** Run this command now — do not skip it:
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh plan '<json with phase, summary including planned_files array, context_checkpoint including summary, key_files, decisions_made, open_questions>'
+~/.claude/skills/nanostack/bin/save-artifact.sh --from-session plan 'N files planned: file1, file2, ... Key decisions: X, Y.'
 ```
 
-The `planned_files` list is critical — `/review` uses it for scope drift detection.
+Or pass full JSON for richer detail (recommended — `/review` uses `planned_files` for scope drift):
+```bash
+~/.claude/skills/nanostack/bin/save-artifact.sh plan '<json with phase, summary including planned_files array, context_checkpoint>'
+```
 
 **Step 2: Build and proceed.**
 
