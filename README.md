@@ -347,9 +347,11 @@ Requires [Git for Windows](https://git-scm.com/downloads/win) which includes Git
 
 ### Requirements
 
-- macOS, Linux or Windows (Git Bash or WSL)
+Nanostack runs on git. Artifacts are stored relative to the git root. The phase gate uses git history to verify sprint compliance. Scope drift compares planned files against `git diff`. Guard uses the repo boundary for in-project safety. Every project that uses nanostack must be a git repository.
+
+- [Git](https://git-scm.com/)
 - [jq](https://jqlang.github.io/jq/) for artifact processing (`brew install jq`, `apt install jq`, or `choco install jq`)
-- Git
+- macOS, Linux or Windows (Git Bash or WSL)
 - One of: Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp, Cline
 
 ## The Zen of Nanostack
