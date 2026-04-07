@@ -67,6 +67,8 @@ Understand the landscape, then determine the mode.
 
 **If the user didn't provide an idea or problem** (e.g. they just said `/think` or `/think --autopilot` with no context), simply ask in your response: "What do you want to build?" Do NOT use `AskUserQuestion` for this. Just ask in plain text and wait for their reply.
 
+**If AUTOPILOT is active:** Do NOT ask clarifying questions. Work with the information provided. Default to Builder mode. If the description is clear enough to plan, skip the diagnostic questions and go straight to Phase 5 (scope recommendation) with a brief that covers value prop, scope, wedge and risk. The user chose autopilot because they want speed, not a conversation.
+
 Determine the mode from the user's description:
 
 - **Founder mode**: Experienced entrepreneur stress-testing an idea. Wants to be challenged hard. Applies full YC diagnostic with maximum pushback. Use when the user explicitly asks for a tough review or says something like "tear this apart."
