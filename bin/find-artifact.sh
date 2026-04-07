@@ -29,6 +29,28 @@ done | sort -r | head -1)
 
 [ -n "$RESULT" ] || exit 1
 
+# ─── Session sync: register phase if session is active ──────
+# When a downstream skill reads an artifact, ensure the producing
+# phase is registered in the session. Covers cases where the model
+# saved the artifact but didn't call session.sh directly.
+# NOTE: Only calls phase-start, NOT phase-complete (which would
+# recurse back to find-artifact.sh and hang). The phase stays
+# "in_progress" until save-artifact.sh completes it.
+SESSION_FILE="$NANOSTACK_STORE/session.json"
+if [ -f "$SESSION_FILE" ]; then
+  # Check if phase already in session (avoid unnecessary jq calls)
+  PHASE_EXISTS=$(jq -r --arg p "$PHASE" \
+    '[.phase_log[] | select(.phase == $p)] | length' \
+    "$SESSION_FILE" 2>/dev/null)
+  PHASE_EXISTS="${PHASE_EXISTS:-0}"
+  if [ "$PHASE_EXISTS" -eq 0 ]; then
+    SESSION_SH="$SCRIPT_DIR/session.sh"
+    if [ -x "$SESSION_SH" ]; then
+      "$SESSION_SH" phase-start "$PHASE" >/dev/null 2>&1 || true
+    fi
+  fi
+fi
+
 # Verify artifact integrity if requested
 if [ "$VERIFY" = true ]; then
   STORED_HASH=$(jq -r '.integrity // ""' "$RESULT" 2>/dev/null)

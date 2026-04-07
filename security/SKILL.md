@@ -255,6 +255,15 @@ After the security audit is complete and the artifact is saved:
 > - `/qa` to test that everything works (if not done yet)
 > - `/ship` to create the PR (after review, security and qa pass)
 
+## After Fixes
+
+When the model or user fixes security findings, do NOT re-run the full audit. Instead:
+
+- **CRITICAL/HIGH fixes:** Re-audit only the affected files and the specific vulnerability class. Verify the fix resolves the finding. Save a new artifact.
+- **MEDIUM/LOW fixes:** Verify the specific fix by reading the changed code. No re-audit needed. Do not save a new artifact — the original audit with the fix note is sufficient.
+
+Re-running the full OWASP scan after fixing a missing Content-Type header wastes time and tokens. Target the verification.
+
 ## Gotchas
 
 - **If you find zero vulnerabilities, say so.** A clean audit is a valid result. Don't manufacture findings to justify the scan.
