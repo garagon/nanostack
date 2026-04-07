@@ -131,7 +131,12 @@ When a conflict is detected, mark it inline:
 After completing both passes and conflict detection, save the artifact. Run this command now — do not skip it:
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh review '<json with phase, mode, summary, scope_drift, findings, conflicts, context_checkpoint including summary, key_files, decisions_made, open_questions>'
+~/.claude/skills/nanostack/bin/save-artifact.sh --from-session review 'N findings (X blocking). Scope drift: none/detected. Conflicts: none/N.'
+```
+
+Or pass full JSON for richer detail:
+```bash
+~/.claude/skills/nanostack/bin/save-artifact.sh review '<json with phase, mode, summary, scope_drift, findings, conflicts, context_checkpoint>'
 ```
 
 ## Mode Summary

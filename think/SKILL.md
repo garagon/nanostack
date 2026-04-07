@@ -35,6 +35,22 @@ This skill runs BEFORE `/nano`. Think answers WHAT and WHY. Plan answers HOW.
 - If the idea is genuinely strong, say so and explain WHY.
 - Never be sycophantic. But "not sycophantic" does not mean "aggressive." Direct and respectful is the target.
 
+## Session
+
+Before anything else, initialize the sprint session:
+
+```bash
+~/.claude/skills/nanostack/bin/session.sh init development
+```
+
+If the user said `--autopilot`, `autopilot`, `run everything`, or `ship it end to end`:
+
+```bash
+~/.claude/skills/nanostack/bin/session.sh init development --autopilot
+```
+
+Then run `session.sh phase-start think`.
+
 ## Process
 
 ### Phase 1: Context Gathering
@@ -157,7 +173,12 @@ After producing the Think Summary, do these two steps in order:
 **Step 1: Save the artifact.** Run this command now — do not skip it:
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh think '<json with phase, summary including value_proposition, scope_mode, target_user, narrowest_wedge, key_risk, premise_validated, context_checkpoint including summary, key_files, decisions_made, open_questions>'
+~/.claude/skills/nanostack/bin/save-artifact.sh --from-session think 'Value prop: X. Scope: Y. Wedge: Z. Risk: W. Premise: validated/not.'
+```
+
+Or pass full JSON for richer detail:
+```bash
+~/.claude/skills/nanostack/bin/save-artifact.sh think '<json with phase, summary including value_proposition, scope_mode, target_user, narrowest_wedge, key_risk, premise_validated, context_checkpoint>'
 ```
 
 **Step 2: Next phase.**

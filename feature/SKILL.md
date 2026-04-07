@@ -19,6 +19,16 @@ Fast path for adding a feature to an existing project. Skips the /think diagnost
 /feature Add import from JSON/CSV to restore backups
 ```
 
+## Session
+
+Before anything else, initialize the sprint session:
+
+```bash
+~/.claude/skills/nanostack/bin/session.sh init feature
+```
+
+Then run `session.sh phase-start plan`. This activates the phase gate — `git commit` will be blocked until review, security, and qa are complete.
+
 ## Process
 
 You are an orchestrator. You invoke each skill in sequence using the Skill tool. Do NOT implement the skill logic yourself — invoke the skill and let it run.
