@@ -89,7 +89,7 @@ if [ -d "$STORE/security" ]; then
   fi
 fi
 
-# Fetch token data if requested
+# Fetch token data if requested (Claude Code only — skips silently on other agents)
 TOKEN_JSON=""
 if $TOKENS_OUTPUT; then
   TOKEN_REPORT="$SCRIPT_DIR/token-report.sh"
@@ -97,6 +97,10 @@ if $TOKENS_OUTPUT; then
     # Filter to current month
     MONTH_START="${MONTH}-01"
     TOKEN_JSON=$("$TOKEN_REPORT" --json --since "$MONTH_START" 2>/dev/null) || TOKEN_JSON=""
+    # Skip if analyzer returned a skip status (non-Claude-Code agent)
+    if echo "$TOKEN_JSON" | jq -e '.status == "skipped"' >/dev/null 2>&1; then
+      TOKEN_JSON=""
+    fi
   fi
 fi
 

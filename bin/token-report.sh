@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # token-report.sh — Token usage report from Claude Code session logs
+# Requires Claude Code. Skips gracefully on other agents (Cursor, OpenCode, Codex).
 # Usage:
 #   token-report.sh                     Summary for current project
 #   token-report.sh --all               All projects
@@ -16,6 +17,12 @@ ANALYZER="$SCRIPT_DIR/token-analyzer.py"
 
 if [ ! -f "$ANALYZER" ]; then
   echo "error: token-analyzer.py not found at $ANALYZER" >&2
+  exit 1
+fi
+
+# Requires python3
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "error: python3 required for token analysis" >&2
   exit 1
 fi
 

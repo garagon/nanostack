@@ -493,6 +493,15 @@ def main():
 
     cutoff = parse_cutoff(args.since)
 
+    # Check if Claude Code session logs exist
+    if not PROJECTS_DIR.is_dir():
+        msg = "Claude Code session logs not found. This feature requires Claude Code (reads ~/.claude/projects/)."
+        if args.json or args.check:
+            print(json.dumps({"status": "skipped", "sessions_scanned": 0, "alerts": [], "message": msg}))
+        else:
+            print(msg)
+        return
+
     if args.all:
         projects = scan_all_projects(cutoff)
         all_sessions = []
