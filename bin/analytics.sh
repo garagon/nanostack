@@ -9,13 +9,26 @@ source "$SCRIPT_DIR/lib/store-path.sh"
 
 STORE="$NANOSTACK_STORE"
 KNOW_HOW="$NANOSTACK_STORE/know-how"
-MONTH="${2:-$(date +"%Y-%m")}"
+MONTH="$(date +"%Y-%m")"
 JSON_OUTPUT=false
 OBSIDIAN_OUTPUT=false
-[ "$1" = "--json" ] && JSON_OUTPUT=true
-[ "$2" = "--json" ] && JSON_OUTPUT=true
-[ "$1" = "--obsidian" ] && OBSIDIAN_OUTPUT=true
-[ "$2" = "--obsidian" ] && OBSIDIAN_OUTPUT=true
+TOKENS_OUTPUT=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --json) JSON_OUTPUT=true ;;
+    --obsidian) OBSIDIAN_OUTPUT=true ;;
+    --tokens) TOKENS_OUTPUT=true ;;
+    --month) ;; # handled below
+    *)
+      # Check if previous arg was --month
+      if [ "${prev_arg:-}" = "--month" ]; then
+        MONTH="$arg"
+      fi
+      ;;
+  esac
+  prev_arg="$arg"
+done
 
 if [ ! -d "$STORE" ]; then
   echo "No nanostack data found. Artifacts auto-save after each skill run."
@@ -76,8 +89,19 @@ if [ -d "$STORE/security" ]; then
   fi
 fi
 
+# Fetch token data if requested
+TOKEN_JSON=""
+if $TOKENS_OUTPUT; then
+  TOKEN_REPORT="$SCRIPT_DIR/token-report.sh"
+  if [ -x "$TOKEN_REPORT" ]; then
+    # Filter to current month
+    MONTH_START="${MONTH}-01"
+    TOKEN_JSON=$("$TOKEN_REPORT" --json --since "$MONTH_START" 2>/dev/null) || TOKEN_JSON=""
+  fi
+fi
+
 if $JSON_OUTPUT; then
-  jq -n \
+  BASE_JSON=$(jq -n \
     --arg month "$MONTH" \
     --argjson think "$THINK" \
     --argjson plan "$PLAN" \
@@ -95,7 +119,30 @@ if $JSON_OUTPUT; then
       sprints: { think: $think, plan: $plan, review: $review, qa: $qa, security: $security, ship: $ship, total: $total },
       modes: { quick: $quick, standard: $standard, thorough: $thorough },
       last_security_findings: $last_security
-    }'
+    }')
+
+  if [ -n "$TOKEN_JSON" ] && $TOKENS_OUTPUT; then
+    # Merge token data into output
+    TOKENS_BLOCK=$(echo "$TOKEN_JSON" | jq '{
+      total: .tokens.total,
+      input: .tokens.input,
+      cache_creation: .tokens.cache_creation,
+      cache_read: .tokens.cache_read,
+      output: .tokens.output,
+      cost_usd: .cost_usd,
+      cache_efficiency_pct: .cache_efficiency_pct,
+      subagent_pct: .subagent_pct,
+      avg_per_session: .avg_per_session
+    }' 2>/dev/null) || TOKENS_BLOCK=""
+
+    if [ -n "$TOKENS_BLOCK" ]; then
+      echo "$BASE_JSON" | jq --argjson tokens "$TOKENS_BLOCK" '. + {tokens: $tokens}'
+    else
+      echo "$BASE_JSON"
+    fi
+  else
+    echo "$BASE_JSON"
+  fi
   exit 0
 fi
 
@@ -121,6 +168,26 @@ echo "  thorough    $THOROUGH"
 if [ -n "$LAST_SECURITY" ] && [ "$LAST_SECURITY" != "n/a" ]; then
   echo ""
   echo "  Last security audit: $LAST_SECURITY findings"
+fi
+
+# Token usage section
+if $TOKENS_OUTPUT && [ -n "$TOKEN_JSON" ]; then
+  TOK_TOTAL=$(echo "$TOKEN_JSON" | jq -r '.tokens.total // 0')
+  TOK_COST=$(echo "$TOKEN_JSON" | jq -r '.cost_usd // 0')
+  TOK_CACHE=$(echo "$TOKEN_JSON" | jq -r '.cache_efficiency_pct // 0')
+  TOK_SUB=$(echo "$TOKEN_JSON" | jq -r '.subagent_pct // 0')
+  TOK_AVG=$(echo "$TOKEN_JSON" | jq -r '.avg_per_session // 0')
+  TOK_SESSIONS=$(echo "$TOKEN_JSON" | jq -r '.sessions // 0')
+
+  echo ""
+  echo "  Token usage ($MONTH)"
+  echo "  ─────────────────────"
+  printf "  total tokens  %'d\n" "$TOK_TOTAL"
+  echo "  est. cost     \$$TOK_COST"
+  echo "  cache eff.    ${TOK_CACHE}%"
+  echo "  subagent %    ${TOK_SUB}%"
+  printf "  avg/session   %'d\n" "$TOK_AVG"
+  echo "  sessions      $TOK_SESSIONS"
 fi
 
 echo ""
@@ -165,6 +232,24 @@ if $OBSIDIAN_OUTPUT; then
       echo "## Security"
       echo ""
       echo "Last audit: **$LAST_SECURITY findings**"
+      echo ""
+    fi
+    if $TOKENS_OUTPUT && [ -n "$TOKEN_JSON" ]; then
+      TOK_TOTAL=$(echo "$TOKEN_JSON" | jq -r '.tokens.total // 0')
+      TOK_COST=$(echo "$TOKEN_JSON" | jq -r '.cost_usd // 0')
+      TOK_CACHE=$(echo "$TOKEN_JSON" | jq -r '.cache_efficiency_pct // 0')
+      TOK_SUB=$(echo "$TOKEN_JSON" | jq -r '.subagent_pct // 0')
+      TOK_SESSIONS=$(echo "$TOKEN_JSON" | jq -r '.sessions // 0')
+
+      echo "## Token Usage ($MONTH)"
+      echo ""
+      echo "| Metric | Value |"
+      echo "|--------|-------|"
+      printf "| Total tokens | %'d |\n" "$TOK_TOTAL"
+      echo "| Est. cost | \$$TOK_COST |"
+      echo "| Cache efficiency | ${TOK_CACHE}% |"
+      echo "| Subagent % | ${TOK_SUB}% |"
+      echo "| Sessions | $TOK_SESSIONS |"
       echo ""
     fi
     echo "## Recent Journals"
