@@ -22,14 +22,14 @@ Run `source bin/lib/git-context.sh && detect_git_mode`.
 **If `local` (no git repo):** Skip the entire PR/CI/deploy flow below. Instead:
 1. Run `ship/bin/quality-check.sh` (already works without git).
 2. Verify files from the plan exist and are non-empty.
-3. Detect project type and show how to use the result:
-   - HTML → "Abrí index.html en tu navegador (doble click en el archivo)"
+3. Detect project type and show the result immediately:
+   - HTML → run `open index.html` (or the main HTML file) so the user sees it instantly. Then say "Se abrió en tu navegador."
    - Python → "Corré: python3 main.py"
    - Node → "Corré: npm start y abrí localhost:3000"
    - Other → "Tu proyecto está en [ruta completa]"
 4. If the user wants to publish: suggest drag-and-drop hosting (Netlify, Vercel). Walk through it step by step.
 5. Save artifact and run compound as normal.
-Never mention PR, CI, branch, merge, deploy, or rollback. Output: "Listo. Para verlo: [comando]."
+Never mention PR, CI, branch, merge, deploy, rollback, or slash commands. Output: "Listo. Para verlo: [comando]."
 
 **If `local-git` (git, no remote):** Run pre-ship check and quality check. Skip PR/CI/deploy. Suggest `git tag` for versioning. Output: "Listo. Commit: [hash]."
 

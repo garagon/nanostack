@@ -39,7 +39,8 @@ Calibrate depth by diff size: **Small** (< 100 lines, quick pass) / **Medium** (
 Run `source bin/lib/git-context.sh && detect_git_mode`. If `local` (no git):
 - **File source:** use `context_checkpoint.key_files` from the plan artifact instead of git diff. If no plan artifact, list files in the project directory.
 - **Skip:** scope drift check (no diff to compare), PR preview.
-- **Language:** replace "diff", "branch", "PR" with plain terms. "Revisé N archivos. Encontré X cosas:" instead of "Diff: N files, X findings." Explain each finding in plain language — what's wrong, why it matters, and whether you can fix it.
+- **Language:** replace all jargon with plain terms. "Revisé N archivos. Encontré X cosas:" instead of "Diff: N files, X findings." Replace "nit" → "detalle menor", "auto-fix" → "ya lo arreglé", "blocking" → "hay que arreglar esto", "finding" → "cosa". Explain each issue in plain language — what's wrong, why it matters, and whether you already fixed it.
+- **Next steps:** do NOT list slash commands. Instead: "¿Querés que revise la seguridad antes de darlo por terminado?"
 - **Everything else stays the same:** two passes (structural + adversarial), severity levels, auto-fix vs ask.
 
 ## Step 0: Read Plan Context and Past Solutions
