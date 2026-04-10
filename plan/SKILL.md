@@ -27,6 +27,8 @@ If the output shows `"active":false`, create a session:
 
 Then run `session.sh phase-start plan`.
 
+**Local mode:** Run `source bin/lib/git-context.sh && detect_git_mode`. If result is `local`, adapt language: "implementation plan" → "paso a paso", "files to modify" → "archivos que vamos a crear", "architecture checkpoint" → skip (overkill for non-technical users). Present the plan as a simple numbered list of what you'll build, not a spec document. Same rigor, accessible words.
+
 ## Process
 
 ### 1. Understand the Request
