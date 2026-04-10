@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 # pre-ship-check.sh — PreToolUse hook for /ship
 # Before creating a PR, verify basic hygiene
+# In local mode (no git), skips git checks gracefully
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/../../bin/lib/git-context.sh" 2>/dev/null || true
+GIT_MODE=$(detect_git_mode 2>/dev/null || echo "local")
+
+if [ "$GIT_MODE" = "local" ]; then
+  echo "LOCAL_MODE"
+  exit 0
+fi
 
 WARNINGS=""
 
