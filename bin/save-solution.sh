@@ -56,6 +56,9 @@ project: $PROJECT
 files: []
 tags: $TAGS_YAML
 severity: medium
+validated: false
+last_validated: null
+applied_count: 0
 ---
 
 FRONTMATTER
@@ -81,6 +84,9 @@ case "$TYPE" in
 
 ## Prevention
 
+
+## History
+
 TEMPLATE
     ;;
   pattern)
@@ -99,6 +105,9 @@ TEMPLATE
 
 ## When NOT to apply
 
+
+## History
+
 TEMPLATE
     ;;
   decision)
@@ -116,6 +125,9 @@ TEMPLATE
 
 
 ## Consequences
+
+
+## History
 
 TEMPLATE
     ;;

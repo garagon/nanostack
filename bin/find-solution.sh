@@ -130,6 +130,30 @@ while IFS= read -r filepath; do
       fi
     fi
 
+    # Validation bonus: +2 if validated, +1 per applied_count (cap 5)
+    VALIDATED=$(get_field "$filepath" "validated")
+    APPLIED_COUNT=$(get_field "$filepath" "applied_count")
+    LAST_VALIDATED=$(get_field "$filepath" "last_validated")
+
+    if [ "$VALIDATED" = "true" ]; then
+      SCORE=$((SCORE + 2))
+    fi
+
+    if [ -n "$APPLIED_COUNT" ] && [ "$APPLIED_COUNT" != "0" ]; then
+      BONUS=$APPLIED_COUNT
+      [ "$BONUS" -gt 5 ] && BONUS=5
+      SCORE=$((SCORE + BONUS))
+    fi
+
+    # Unvalidated penalty: -1 if >60 days old and never validated
+    if [ "$VALIDATED" != "true" ] && [ -n "$DATE" ]; then
+      DOC_EPOCH_V=$($DATE_CMD -d "$DATE" +%s 2>/dev/null || echo 0)
+      NOW_EPOCH_V=$($DATE_CMD +%s 2>/dev/null || echo 0)
+      if [ "$DOC_EPOCH_V" -gt 0 ] && [ $((NOW_EPOCH_V - DOC_EPOCH_V)) -gt 5184000 ]; then
+        SCORE=$((SCORE - 1))
+      fi
+    fi
+
     # Staleness: penalize if referenced files no longer exist
     if [ -n "$FM_FILES" ] && [ "$FM_FILES" != "[]" ]; then
       STALE_FILES=0

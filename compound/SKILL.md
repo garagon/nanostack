@@ -67,6 +67,14 @@ If a closely related solution exists:
 
 Do not create duplicates. One good document beats two partial ones.
 
+**When updating an existing solution, evolve it:**
+1. Update the rewritable sections (Problem, Solution, Prevention, etc.) if the new information improves them
+2. Increment `applied_count` in the frontmatter
+3. Set `validated: true` and `last_validated` to today's date
+4. Append a `### YYYY-MM-DD — Context` entry to the `## History` section at the bottom, documenting what happened in this sprint and what changed
+
+The History section is append-only. The sections above it are rewritable. This way solutions get better with each sprint while preserving the evidence trail of how the understanding evolved.
+
 ### 4. Write solution documents
 
 For each significant learning, create a document:
