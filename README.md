@@ -24,7 +24,7 @@
 
 ---
 
-Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). 9 skills. Zero dependencies. Zero build step.
+Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). 13 skills. Zero dependencies. Zero build step.
 
 Works with Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp and Cline.
 
@@ -95,7 +95,7 @@ Each skill feeds into the next. `/nano` writes an artifact that `/review` reads 
 
 | Skill | Your specialist | What they do |
 |-------|----------------|--------------|
-| `/think` | **CEO / Founder** | Three intensity modes: Founder (full pushback), Startup (challenges scope, respects pain) and Builder (minimal pushback). Six forcing questions including manual delivery test and community validation. `--autopilot` runs the full sprint after approval. |
+| `/think` | **CEO / Founder** | Three intensity modes: Founder (full pushback), Startup (challenges scope, respects pain) and Builder (minimal pushback). Six forcing questions including manual delivery test. Auto-detects non-technical users and adapts language. `--autopilot` runs the full sprint after approval. |
 | `/nano` | **Eng Manager** | Auto-generates product specs (Medium scope) or product + technical specs (Large scope) before implementation steps. Product standards for web (shadcn/ui), CLI/TUI (Bubble Tea, Rich, Ink, Ratatui). Stack defaults with CLI preference for beginners. |
 | `/review` | **Staff Engineer** | Two-pass code review: structural then adversarial. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan. Cross-references `/security` with 10 conflict precedents. |
 | `/qa` | **QA Lead** | Functional testing + Visual QA. Takes screenshots and analyzes UI against product standards. Browser, API, CLI and debug modes. WTF heuristic stops before fixes cause regressions. |
@@ -106,7 +106,7 @@ Each skill feeds into the next. `/nano` writes an artifact that `/review` reads 
 
 | Skill | What it does |
 |-------|-------------|
-| `/compound` | **Knowledge** | Documents solved problems after each sprint. Three types: bug (what broke + fix), pattern (reusable approach), decision (architecture choice). `/nano` and `/review` search past solutions automatically in future sprints. |
+| `/compound` | **Knowledge** | Documents solved problems after each sprint. Three types: bug, pattern, decision. Solutions evolve across sprints: validated and applied_count track which solutions actually work. `/nano` and `/review` search past solutions automatically, ranked by proven value. |
 | `/guard` | **Safety** | Five-tier safety: allowlist, in-project bypass, phase-aware concurrency (blocks writes during read-only phases), phase gate (blocks commit/push until review+security+qa pass), and pattern matching with 33 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
 | `/conductor` | **Orchestrator** | Parallel agent sessions with auto-batching. `sprint.sh batch` reads skill concurrency metadata and groups parallel-safe phases. Session resume on crash. Dependency validation before each phase. No daemon, just atomic file ops. |
 | `/feature` | **Builder** | Add functionality to an existing project. Skips /think, goes straight to plan, build, review, audit, test, ship. |
@@ -347,7 +347,7 @@ Requires [Git for Windows](https://git-scm.com/downloads/win) which includes Git
 
 ### Requirements
 
-Nanostack runs on git. Artifacts are stored relative to the git root. The phase gate uses git history to verify sprint compliance. Scope drift compares planned files against `git diff`. Guard uses the repo boundary for in-project safety. Every project that uses nanostack must be a git repository.
+Nanostack works best with git but adapts automatically when there's no repo. With git, artifacts are stored relative to the git root, the phase gate verifies sprint compliance, scope drift compares planned files against `git diff`, and guard uses the repo boundary for in-project safety. Without git, nanostack detects local mode and adapts the sprint: review checks files from the plan instead of a diff, ship opens the result instead of creating a PR, and all skills use plain language without git terminology.
 
 - [Git](https://git-scm.com/)
 - [jq](https://jqlang.github.io/jq/) for artifact processing (`brew install jq`, `apt install jq`, or `choco install jq`)
@@ -448,7 +448,9 @@ After shipping, run `/compound` to document what you learned:
            →  writes to .nanostack/know-how/solutions/decision/
 ```
 
-Next sprint, `/nano` automatically searches past solutions before planning. `/review` checks if current code follows documented resolutions. Solutions that reference files no longer on disk are ranked lower automatically. The knowledge compounds: every sprint makes the next one faster.
+Next sprint, `/nano` automatically searches past solutions before planning. `/review` checks if current code follows documented resolutions. Solutions that reference files no longer on disk are ranked lower automatically.
+
+Solutions evolve over time. Each time `/compound` confirms a solution was applied, it increments `applied_count`, marks it `validated`, and appends a History entry. The rewritable sections (Problem, Solution, Prevention) get updated with new information. The History section is append-only evidence of how the understanding evolved. Validated solutions rank higher in search than untested ones.
 
 Search manually:
 
@@ -459,14 +461,19 @@ bin/find-solution.sh --tag security          # by tag
 bin/find-solution.sh --file src/api/webhooks # by file
 ```
 
-### Analytics and learnings
-
-Two optional scripts for when you want to see patterns across sprints:
+### Analytics, token usage and patterns
 
 ```bash
-bin/analytics.sh --obsidian    # dashboard with phase counts and security trends
+bin/analytics.sh --tokens      # phase counts, security trends, token usage
+bin/token-report.sh            # token consumption per session and subagent
+bin/token-report.sh --all      # all projects with cost breakdown
+bin/pattern-report.sh          # recurring issues, risk accuracy, phase bottlenecks
 bin/capture-learning.sh "..."  # append a learning to the knowledge base
 ```
+
+`token-report.sh` reads Claude Code's session logs and breaks down where tokens go. Cache-aware pricing (reads at 10%, creation at 125%). Flags runaway sessions and heavy subagents. Requires Claude Code; skips silently on other agents.
+
+`pattern-report.sh` detects patterns across sprints: which findings keep recurring, whether predicted risks materialized, which phases take the longest, and how often solutions get reused.
 
 ### Discard a bad session
 
