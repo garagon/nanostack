@@ -24,6 +24,7 @@ All solutions share these fields:
 | files | No | string[] | File paths involved |
 | tags | No | string[] | Keywords for search |
 | severity | No | `critical`, `high`, `medium`, `low` | Impact level |
+| confidence | No | integer (1-10) | How reliable this solution is. Default 5. Adjusted by /compound: +2 on perfect application, -2 on failure. Affects search ranking. |
 | validated | No | boolean | Whether the solution has been confirmed to work |
 | last_validated | No | YYYY-MM-DD | Last date the solution was applied and confirmed |
 | applied_count | No | integer | Number of sprints that applied this solution |

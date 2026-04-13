@@ -209,6 +209,8 @@ Validated — scanner finds problems after they exist, gate prevents them.
 
 The brief answers: what are we building, for whom, why this scope, and what could go wrong. Share it before writing code.
 
+On your second sprint onward, `/think` reads your last 3 briefs and the latest retro. Instead of starting from zero, it opens with context: "Last sprints: webhook signature gate, IAM role checks. The retro recommended rate limiting. What are we working on next?"
+
 ## Retro
 
 After a sprint, use `/think --retro` to reflect on what shipped:
@@ -522,7 +524,7 @@ After shipping, run `/compound` to document what you learned:
 
 Next sprint, `/nano` automatically searches past solutions before planning. `/review` checks if current code follows documented resolutions. Solutions that reference files no longer on disk are ranked lower automatically.
 
-Solutions evolve over time. Each time `/compound` confirms a solution was applied, it increments `applied_count`, marks it `validated`, and rewrites the compiled truth (Problem, Solution, Prevention) to reflect the current best understanding. The History section is append-only evidence of how that understanding evolved. Validated solutions rank higher in search than untested ones.
+Solutions evolve over time. Each time `/compound` confirms a solution was applied, it increments `applied_count`, marks it `validated`, adjusts `confidence` (1-10 scale: +2 if it worked perfectly, -2 if it failed), and rewrites the compiled truth (Problem, Solution, Prevention) to reflect the current best understanding. The History section is append-only evidence of how that understanding evolved. Solutions are ranked by confidence, validation status, severity, and recency — high-confidence proven solutions surface first.
 
 Search manually:
 
@@ -532,6 +534,16 @@ bin/find-solution.sh --type bug              # by type
 bin/find-solution.sh --tag security          # by tag
 bin/find-solution.sh --file src/api/webhooks # by file
 ```
+
+### Failure capture
+
+`/compound` captures what worked. Failures get captured too — automatically, without waiting for a successful ship.
+
+```bash
+bin/capture-failure.sh review "scope-drift.sh failed" "manual file comparison" "save plan artifact first"
+```
+
+Appends to `.nanostack/know-how/learnings/failures.jsonl`. Every skill can call this when something goes wrong: CLI errors, wrong approaches, project quirks. Next sprint, the same mistake is avoided. No `/compound` needed, no success needed — just log and move on.
 
 ### Skill graduation
 

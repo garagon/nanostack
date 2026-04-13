@@ -57,6 +57,7 @@ project: $PROJECT
 files: []
 tags: $TAGS_YAML
 severity: medium
+confidence: 5
 validated: false
 last_validated: null
 applied_count: 0

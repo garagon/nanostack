@@ -103,6 +103,28 @@ Write to `.nanostack/know-how/briefs/YYYY-MM-DD-retro.md` with the retro output 
 
 ---
 
+## Journey Context
+
+Before starting the diagnostic, check if the user has prior sprint history in this project:
+
+```bash
+ls -t .nanostack/know-how/briefs/*.md 2>/dev/null | head -3
+```
+
+If briefs exist, read the last 3 (most recent first). Also check for a retro brief:
+
+```bash
+ls -t .nanostack/know-how/briefs/*retro*.md 2>/dev/null | head -1
+```
+
+If prior briefs exist, open with context before asking the user what they want to build:
+
+> Last sprints: <title from brief 1> (<date>), <title from brief 2> (<date>). <If retro exists: The retro recommended: <recommendation from retro brief>.> What are we working on next?
+
+If no briefs exist, skip this step — the user is new to the project.
+
+This turns /think from a stateless tool into a partner that remembers. The user doesn't have to re-explain context from prior sprints.
+
 ## Session
 
 Initialize the sprint session:

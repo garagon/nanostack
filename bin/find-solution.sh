@@ -145,6 +145,14 @@ while IFS= read -r filepath; do
       SCORE=$((SCORE + BONUS))
     fi
 
+    # Confidence bonus: scale by confidence (1-10, default 5)
+    CONFIDENCE=$(get_field "$filepath" "confidence")
+    if [ -n "$CONFIDENCE" ] && [ "$CONFIDENCE" != "0" ]; then
+      # Confidence 5 = neutral (+0), 8 = +3, 10 = +5, 2 = -3
+      CONF_BONUS=$((CONFIDENCE - 5))
+      SCORE=$((SCORE + CONF_BONUS))
+    fi
+
     # Unvalidated penalty: -1 if >60 days old and never validated
     if [ "$VALIDATED" != "true" ] && [ -n "$DATE" ]; then
       DOC_EPOCH_V=$($DATE_CMD -d "$DATE" +%s 2>/dev/null || echo 0)

@@ -116,6 +116,11 @@ Per-skill configs (`security/config.json`, `guard/config.json`) store skill-spec
 
 - **Read before acting.** Every skill must read the relevant code/diff/config before producing output. Never analyze blind.
 - **Boil the lake, not the ocean.** When completeness costs minutes more than shortcuts, do the complete thing. When it costs days, don't.
+- **Log failures, not just successes.** When something goes wrong during a skill (script error, wrong approach, unexpected project behavior), capture it:
+  ```bash
+  ~/.claude/skills/nanostack/bin/capture-failure.sh <skill> "<what went wrong>" "<what was tried>" "<what fixed it>"
+  ```
+  Failures compound into knowledge. Next sprint, the same mistake is avoided. This does not require /compound or a successful ship — just log and move on.
 
 ## Proactive Triggers
 
