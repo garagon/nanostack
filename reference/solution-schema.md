@@ -24,6 +24,19 @@ All solutions share these fields:
 | files | No | string[] | File paths involved |
 | tags | No | string[] | Keywords for search |
 | severity | No | `critical`, `high`, `medium`, `low` | Impact level |
+| validated | No | boolean | Whether the solution has been confirmed to work |
+| last_validated | No | YYYY-MM-DD | Last date the solution was applied and confirmed |
+| applied_count | No | integer | Number of sprints that applied this solution |
+| graduated | No | boolean | Whether the solution has been promoted into a SKILL.md file |
+| graduated_to | No | string | Target skill file (e.g., `review/SKILL.md`) if graduated |
+
+### Graduation
+
+Solutions with `applied_count >= 3`, `validated: true`, `last_validated` within 60 days, and existing referenced files are eligible for graduation. `bin/graduate.sh` scans solutions and proposes insertions into SKILL.md files' `## Graduated Rules` sections.
+
+Once graduated, a solution is marked `graduated: true` and `graduated_to: <skill>/SKILL.md`. The solution is NOT deleted — it retains the full history. The graduated rule is a compressed version baked into the skill for zero-lookup access.
+
+Caps: review (10 rules), plan (8 rules), security (8 rules).
 
 ## Body sections by type
 

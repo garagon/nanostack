@@ -43,27 +43,32 @@ Run `source bin/lib/git-context.sh && detect_git_mode`. If `local` (no git):
 - **Next steps:** do NOT list slash commands. Instead: "¿Querés que revise la seguridad antes de darlo por terminado?"
 - **Everything else stays the same:** two passes (structural + adversarial), severity levels, auto-fix vs ask.
 
-## Step 0: Read Plan Context and Past Solutions
+## Step 0: Resolve Context
 
-Find the plan artifact and extract context for the review:
-
-```bash
-~/.claude/skills/nanostack/bin/find-artifact.sh plan 2
-```
-
-Search for past solutions related to the files being changed:
+Load plan artifact, matched solutions, conflict precedents, and diarizations in one call:
 
 ```bash
-~/.claude/skills/nanostack/bin/find-solution.sh --file <changed-file-path>
-~/.claude/skills/nanostack/bin/find-solution.sh "<relevant-keywords>"
+~/.claude/skills/nanostack/bin/resolve.sh review --diff
 ```
 
-The output shows ranked summaries. Read the summaries first, then load only the solutions relevant to the current review. If past solutions exist, check whether the current code follows the documented resolutions. If it contradicts a past solution, flag it.
+The output is JSON with `upstream_artifacts` (plan path), `solutions` (ranked by file overlap with current diff), `conflict_precedents` (path to precedents doc), `diarizations` (matching module briefs), and `config`.
 
-If found, read these fields:
+From the plan artifact (if present), read these fields:
 - **`planned_files[]`** → used by scope drift check (below)
 - **`risks[]`** → create a risk checklist. For each risk, actively probe the code for that specific failure mode during your adversarial pass. These risks were identified during planning and should be verified.
 - **`out_of_scope[]`** → verify none of these were implemented. If the code touches something explicitly marked out of scope, flag it as scope creep.
+
+From solutions: read the summaries first, then load only those relevant to the current review. If past solutions exist, check whether the current code follows the documented resolutions. If it contradicts a past solution, flag it.
+
+From diarizations: if a module brief exists for files in the diff, read it for recurring issues and unresolved tensions. Focus your adversarial pass on what the diarization flags.
+
+## Graduated Rules
+
+<!-- Auto-maintained by bin/graduate.sh. Do not edit manually. -->
+<!-- Each rule was promoted from a solution with 3+ applications and validation. -->
+<!-- END GRADUATED RULES -->
+
+Check these rules during your structural pass. Each one represents a proven pattern from past sprints.
 
 ## Step 0.5: Scope Drift Check
 
@@ -119,13 +124,7 @@ Then group by severity: **Blocking** (must fix), **Should Fix** (tech debt, conf
 
 ## Conflict Detection
 
-After completing both passes, check for conflicts with prior `/security` findings:
-
-```bash
-~/.claude/skills/nanostack/bin/find-artifact.sh security 30
-```
-
-If an artifact is found, cross-reference your findings against it. Read `reference/conflict-precedents.md` for known conflict patterns and resolutions.
+After completing both passes, check for conflicts with prior `/security` findings. The resolver output from Step 0 includes `conflict_precedents` (path to the precedents doc). If a security artifact exists from a prior sprint (check `.nanostack/security/`), cross-reference your findings against it.
 
 When a conflict is detected, mark it inline:
 ```

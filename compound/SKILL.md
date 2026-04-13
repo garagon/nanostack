@@ -22,18 +22,13 @@ After a sprint or a significant fix, extract what you learned into structured, s
 
 ### 1. Read the sprint artifacts
 
-Find what happened during this sprint:
+Resolve all sprint phase artifacts in one call:
 
 ```bash
-~/.claude/skills/nanostack/bin/find-artifact.sh think 2
-~/.claude/skills/nanostack/bin/find-artifact.sh plan 2
-~/.claude/skills/nanostack/bin/find-artifact.sh review 2
-~/.claude/skills/nanostack/bin/find-artifact.sh qa 2
-~/.claude/skills/nanostack/bin/find-artifact.sh security 2
-~/.claude/skills/nanostack/bin/find-artifact.sh ship 2
+~/.claude/skills/nanostack/bin/resolve.sh compound
 ```
 
-Not all artifacts will exist. Read what's available. Focus on:
+The output is JSON with `upstream_artifacts` containing paths for think, plan, review, security, qa, and ship artifacts (only those that exist within the last 2 days). Read what's available. Focus on:
 - `/review` findings that were fixed (these are bugs worth documenting)
 - `/security` findings that were resolved (these are patterns worth remembering)
 - `/think` scope decisions (these are decisions worth recording)
@@ -136,6 +131,32 @@ After reporting, save the artifact. Run this command now — do not skip it:
 
 ```bash
 ~/.claude/skills/nanostack/bin/save-artifact.sh compound '<json with phase, summary including solutions_created, solutions_updated, total_solutions, context_checkpoint including summary, key_files, decisions_made, open_questions>'
+```
+
+### 7. Check graduation candidates
+
+After saving solutions, check if any existing solutions now meet graduation criteria:
+
+```bash
+~/.claude/skills/nanostack/bin/graduate.sh
+```
+
+If candidates exist, report them:
+
+```
+N solutions ready to graduate into skill files.
+Run `graduate.sh --apply` to promote them, or review with `graduate.sh` (dry-run).
+```
+
+Graduation means a proven, validated solution gets baked directly into a SKILL.md file — no more runtime lookup needed. Only solutions with 3+ applications, validated status, and existing referenced files qualify.
+
+### 8. Check stale diarizations
+
+If `.nanostack/know-how/diarizations/` exists, check whether this sprint touched files covered by any existing diarization. If so, the diarization may be stale — suggest re-running it:
+
+```
+Diarization for <subject> is N days old and this sprint modified files it covers.
+Consider re-running: /investigate --diarize <subject>
 ```
 
 Then tell the user:

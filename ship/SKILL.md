@@ -48,13 +48,13 @@ ship/bin/quality-check.sh     # broken README links, stale references, writing q
 
 If either reports errors, fix them before proceeding. Warnings are informational but should be reviewed.
 
-**Verify review findings were resolved:**
+**Resolve context and verify review findings were resolved:**
 
 ```bash
-~/.claude/skills/nanostack/bin/find-artifact.sh review 2
+~/.claude/skills/nanostack/bin/resolve.sh ship
 ```
 
-If a review artifact exists, check that all **blocking** findings have been addressed. For each blocking finding, verify the code at the reported file and line no longer has the issue. If a blocking finding is still present, do NOT proceed. Flag it.
+The output is JSON with `upstream_artifacts` (review, security, qa paths). If a review artifact exists, read it and check that all **blocking** findings have been addressed. For each blocking finding, verify the code at the reported file and line no longer has the issue. If a blocking finding is still present, do NOT proceed. Flag it.
 
 Then verify:
 

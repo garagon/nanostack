@@ -31,17 +31,19 @@ Auto-suggest:
 
 ## Setup (first run per project)
 
-**Read the plan artifact** if one exists:
+**Resolve context** — load plan, review artifacts, matched solutions, and config:
 
 ```bash
-~/.claude/skills/nanostack/bin/find-artifact.sh plan 2
+~/.claude/skills/nanostack/bin/resolve.sh security --diff
 ```
 
-If found:
+The output is JSON with `upstream_artifacts` (plan and review paths), `solutions` (matched by file overlap and security tags), `conflict_precedents` (path to precedents doc), `diarizations` (module briefs), and `config` (intensity, detected stack, conflict precedence).
+
+From the plan artifact (if present):
 - **`planned_files[]`** → focus your audit on these files and their dependencies. Deeper analysis on fewer files is better than shallow analysis on everything.
 - **`risks[]`** → treat each planned risk as a security hypothesis to verify. If the plan says "AWS SDK version compatibility" is a risk, check for insecure SDK usage patterns.
 
-Then read project config: `bin/init-config.sh`. Use `detected` to scope which checks to run (skip Python checks in a Go project). Use `preferences.conflict_precedence` for cross-skill conflicts.
+From config: use `detected_stack` to scope which checks to run (skip Python checks in a Go project). Use `conflict_precedence` for cross-skill conflicts.
 
 Then check if `security/config.json` exists. If not, ask the user to classify the project:
 
@@ -70,6 +72,14 @@ This determines:
 - **OWASP priority:** public_facing → A01, A03, A07 first. internal → A02, A05, A09 first.
 
 If config already exists, read it and skip setup.
+
+## Graduated Rules
+
+<!-- Auto-maintained by bin/graduate.sh. Do not edit manually. -->
+<!-- Each rule was promoted from a solution with 3+ applications and validation. -->
+<!-- END GRADUATED RULES -->
+
+Check these rules during your audit. Each one represents a proven security pattern from past sprints.
 
 ## Process
 
@@ -177,13 +187,7 @@ Severity: Critical (RCE, unauth admin, hardcoded creds), High (stored XSS, IDOR,
 
 ## Conflict Detection
 
-Always check for conflicts with prior `/review` findings if a review artifact exists:
-
-```bash
-~/.claude/skills/nanostack/bin/find-artifact.sh review 30
-```
-
-Read `reference/conflict-precedents.md` for known conflict patterns. When detected, mark inline:
+Always check for conflicts with prior `/review` findings. The resolver output from Setup includes `upstream_artifacts.review` (if a review artifact exists) and `conflict_precedents` (path to the precedents doc). When a conflict is detected, mark inline:
 ```
 ### SEC-005: Excessive error detail
 **Conflicts with:** REV-003 → RESOLUTION: structured errors (code + generic msg to user, details to logs)
