@@ -106,7 +106,7 @@ Each skill feeds into the next. `/nano` writes an artifact that `/review` reads 
 
 | Skill | What it does |
 |-------|-------------|
-| `/compound` | **Knowledge** | Documents solved problems after each sprint. Three types: bug, pattern, decision. Solutions evolve across sprints: validated and applied_count track which solutions actually work. `/nano` and `/review` search past solutions automatically, ranked by proven value. |
+| `/compound` | **Knowledge** | Documents solved problems after each sprint. Three types: bug, pattern, decision. Solutions evolve across sprints: validated and applied_count track which solutions actually work. `/nano` and `/review` search past solutions automatically, ranked by proven value. Checks if any solutions are ready to graduate into skill files. |
 | `/guard` | **Safety** | Five-tier safety: allowlist, in-project bypass, phase-aware concurrency (blocks writes during read-only phases), phase gate (blocks commit/push until review+security+qa pass), and pattern matching with 33 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
 | `/conductor` | **Orchestrator** | Parallel agent sessions with auto-batching. `sprint.sh batch` reads skill concurrency metadata and groups parallel-safe phases. Session resume on crash. Dependency validation before each phase. No daemon, just atomic file ops. |
 | `/feature` | **Builder** | Add functionality to an existing project. Skips /think, goes straight to plan, build, review, audit, test, ship. |
@@ -406,23 +406,25 @@ Full schema in [`reference/artifact-schema.md`](reference/artifact-schema.md). T
 
 ### Skills read each other
 
-`/review` automatically finds the most recent `/nano` artifact and checks scope drift: did you touch files outside the plan? Did you skip files that were in it?
+Every skill starts with one call to `bin/resolve.sh`, a centralized context resolver. It loads upstream artifacts, past solutions, conflict precedents, diarizations and project config in one JSON blob. Each phase has its own routing table: `/review` gets the plan artifact and solutions matched by file overlap with the current diff. `/security` gets the plan, review artifact (up to 30 days back) and conflict precedents. `/compound` gets all six phase artifacts.
+
+`/review` checks scope drift: did you touch files outside the plan? Did you skip files that were in it?
 
 ```
 /nano     →  saves planned_files list
-/review   →  finds plan, compares against git diff, reports:
+/review   →  resolver loads plan, compares against git diff, reports:
               "drift_detected: src/unplanned.ts out of scope, tests/auth.test.ts missing"
 ```
 
-`/security` automatically finds the most recent `/review` artifact and detects conflicts. `/review` says "add detail to error messages." `/security` says "don't expose internals." The resolution gets matched against [10 built-in precedents](reference/conflict-precedents.md) and recorded.
+`/security` detects conflicts with `/review`. `/review` says "add detail to error messages." `/security` says "don't expose internals." The resolution gets matched against [10 built-in precedents](reference/conflict-precedents.md) and recorded.
 
 ```
 /review   →  saves "REV-003: error messages too vague"
-/security →  finds review, detects conflict, resolves:
+/security →  resolver loads review, detects conflict, resolves:
               "structured errors: code + generic msg to user, details to logs"
 ```
 
-This happens in all modes. No flags needed. If an artifact exists, the next skill reads it.
+No flags needed. The resolver knows what each phase needs. If an artifact exists, the next skill reads it.
 
 ### Sprint journal on /ship
 
@@ -461,6 +463,45 @@ bin/find-solution.sh --tag security          # by tag
 bin/find-solution.sh --file src/api/webhooks # by file
 ```
 
+### Skill graduation
+
+Solutions that prove themselves get promoted into skill files. When a solution has been applied 3+ times, is validated, and its referenced files still exist, `bin/graduate.sh` proposes inserting it as a permanent rule in the target skill's `## Graduated Rules` section.
+
+```bash
+bin/graduate.sh              # dry run: show candidates
+bin/graduate.sh --apply      # insert rules into SKILL.md files
+bin/graduate.sh --status     # show budget: how many rules per skill
+bin/graduate.sh --prune      # detect stale rules (referenced files gone)
+```
+
+Bug solutions graduate into `/review` (adversarial pass checklist). Pattern and decision solutions graduate into `/nano` (planning constraints). Security-tagged solutions graduate into `/security` (audit checklist). Each skill has a cap: review 10 rules, plan 8, security 8.
+
+A graduated rule is a one-line check the skill applies every sprint without searching for solutions at runtime. The original solution is marked `graduated: true` but not deleted — it retains the full history. If a graduated rule goes stale (source files deleted), `--prune` detects it.
+
+```
+Sprint 1:  /compound documents "webhook signature verification" bug
+Sprint 2:  /compound updates it, applied_count: 2, validated: true
+Sprint 3:  /compound updates it, applied_count: 3
+           /compound runs graduate.sh, reports:
+           "1 solution ready to graduate into security/SKILL.md"
+You:       bin/graduate.sh --apply
+           Rule is now baked into /security. No more runtime lookup.
+```
+
+### Diarization
+
+When you revisit a module after weeks, context is scattered across artifacts, solutions and git history. `bin/gather-subject.sh` collects everything about a subject into one JSON blob for synthesis.
+
+```bash
+bin/gather-subject.sh src/api/webhooks/    # directory
+bin/gather-subject.sh auth                 # keyword
+bin/gather-subject.sh src/lib/errors.ts    # exact file
+```
+
+Output includes: matched files, git history, ownership (who contributed most), related solutions, related artifacts from past sprints, and any existing diarization. The model reads the gathered sources and produces a structured brief: what the module does, who owns it, what keeps breaking, what the docs say versus what the code actually does, and unresolved tensions between skills.
+
+Diarizations are stored in `.nanostack/know-how/diarizations/` and surfaced by the resolver when changed files overlap with the subject. Skills decide whether to read one based on age and relevance.
+
 ### Analytics, token usage and patterns
 
 ```bash
@@ -468,6 +509,7 @@ bin/analytics.sh --tokens      # phase counts, security trends, token usage
 bin/token-report.sh            # token consumption per session and subagent
 bin/token-report.sh --all      # all projects with cost breakdown
 bin/pattern-report.sh          # recurring issues, risk accuracy, phase bottlenecks
+bin/graduate.sh --status       # graduation budget: rules per skill vs caps
 bin/capture-learning.sh "..."  # append a learning to the knowledge base
 ```
 
