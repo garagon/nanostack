@@ -67,15 +67,10 @@ If no sprint data exists (no artifacts, no journal, no sessions), tell the user:
 **1b. Gather git metrics:**
 
 ```bash
-# Lines changed in last sprint (commits since last session start)
-git log --oneline --since="7 days ago" --format="%h" | wc -l
-git diff --stat HEAD~10 2>/dev/null | tail -1
-
-# Cycle time: read session phase_log durations
-cat .nanostack/sessions/*.json 2>/dev/null | jq -r '.phase_log[]? | select(.status=="completed") | "\(.phase): \(.duration_seconds)s"' | tail -20
+~/.claude/skills/nanostack/bin/sprint-metrics.sh
 ```
 
-Use these numbers in your diagnostic. Lines changed gives scale. Phase durations reveal bottlenecks (review took 5 minutes but security took 45 = something to investigate). Commit frequency shows velocity.
+The output is JSON with `git` (commits, lines added/removed, files changed) and `cycle_time` (total seconds, slowest phase, per-phase durations). Use these numbers in your diagnostic. Lines changed gives scale. Phase durations reveal bottlenecks. Commit frequency shows velocity.
 
 **2. Retro diagnostic — four questions:**
 
