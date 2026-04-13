@@ -63,12 +63,12 @@ If a closely related solution exists:
 Do not create duplicates. One good document beats two partial ones.
 
 **When updating an existing solution, evolve it:**
-1. Update the rewritable sections (Problem, Solution, Prevention, etc.) if the new information improves them
+1. **Rewrite the compiled truth.** Read the current Problem, Solution, and Prevention sections. Do they reflect what you know NOW, or what you knew when the document was created? If the new sprint changed your understanding, rewrite these sections completely — don't append to them. The compiled truth must always reflect the current best understanding, not a history of partial fixes.
 2. Increment `applied_count` in the frontmatter
 3. Set `validated: true` and `last_validated` to today's date
 4. Append a `### YYYY-MM-DD — Context` entry to the `## History` section at the bottom, documenting what happened in this sprint and what changed
 
-The History section is append-only. The sections above it are rewritable. This way solutions get better with each sprint while preserving the evidence trail of how the understanding evolved.
+**Compiled truth is rewritten. Timeline is appended.** The sections above History always reflect the latest understanding. The History section is the immutable evidence trail of how that understanding evolved. If old information was wrong, rewrite the compiled truth — don't leave stale text. The History entry records what changed and why.
 
 ### 4. Write solution documents
 

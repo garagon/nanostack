@@ -522,7 +522,7 @@ After shipping, run `/compound` to document what you learned:
 
 Next sprint, `/nano` automatically searches past solutions before planning. `/review` checks if current code follows documented resolutions. Solutions that reference files no longer on disk are ranked lower automatically.
 
-Solutions evolve over time. Each time `/compound` confirms a solution was applied, it increments `applied_count`, marks it `validated`, and appends a History entry. The rewritable sections (Problem, Solution, Prevention) get updated with new information. The History section is append-only evidence of how the understanding evolved. Validated solutions rank higher in search than untested ones.
+Solutions evolve over time. Each time `/compound` confirms a solution was applied, it increments `applied_count`, marks it `validated`, and rewrites the compiled truth (Problem, Solution, Prevention) to reflect the current best understanding. The History section is append-only evidence of how that understanding evolved. Validated solutions rank higher in search than untested ones.
 
 Search manually:
 
@@ -580,12 +580,15 @@ bin/token-report.sh            # token consumption per session and subagent
 bin/token-report.sh --all      # all projects with cost breakdown
 bin/pattern-report.sh          # recurring issues, risk accuracy, phase bottlenecks
 bin/graduate.sh --status       # graduation budget: rules per skill vs caps
+bin/doctor.sh                  # know-how health: stale, unused, unvalidated solutions
 bin/capture-learning.sh "..."  # append a learning to the knowledge base
 ```
 
 `token-report.sh` reads Claude Code's session logs and breaks down where tokens go. Cache-aware pricing (reads at 10%, creation at 125%). Flags runaway sessions and heavy subagents. Requires Claude Code; skips silently on other agents.
 
 `pattern-report.sh` detects patterns across sprints: which findings keep recurring, whether predicted risks materialized, which phases take the longest, and how often solutions get reused.
+
+`doctor.sh` checks know-how health: solutions referencing deleted files (stale), solutions never applied after 60 days (unused), solutions unvalidated after 90 days. Scores 0-10, reports issues, and `--fix` auto-removes stale entries. Run it periodically to keep the knowledge base clean.
 
 Every sprint lifecycle event is logged to `.nanostack/audit.log` (JSONL, append-only): session init, phase start/complete with duration, artifact saves, solution creation, graduation. When a sprint goes wrong, the audit trail shows exactly what happened and when.
 
