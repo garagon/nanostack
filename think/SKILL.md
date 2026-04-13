@@ -64,6 +64,19 @@ ls -t .nanostack/know-how/journal/*.md 2>/dev/null | head -1
 
 If no sprint data exists (no artifacts, no journal, no sessions), tell the user: "No sprint data found. Run a sprint first, then come back with `/think --retro`." Stop here.
 
+**1b. Gather git metrics:**
+
+```bash
+# Lines changed in last sprint (commits since last session start)
+git log --oneline --since="7 days ago" --format="%h" | wc -l
+git diff --stat HEAD~10 2>/dev/null | tail -1
+
+# Cycle time: read session phase_log durations
+cat .nanostack/sessions/*.json 2>/dev/null | jq -r '.phase_log[]? | select(.status=="completed") | "\(.phase): \(.duration_seconds)s"' | tail -20
+```
+
+Use these numbers in your diagnostic. Lines changed gives scale. Phase durations reveal bottlenecks (review took 5 minutes but security took 45 = something to investigate). Commit frequency shows velocity.
+
 **2. Retro diagnostic — four questions:**
 
 Apply the same rigor as the forward-looking diagnostic, but to what was shipped:
@@ -71,7 +84,7 @@ Apply the same rigor as the forward-looking diagnostic, but to what was shipped:
 | # | Question | What to read |
 |---|----------|-------------|
 | 1 | **Did we solve the right problem?** Re-read the think artifact's value proposition. Does the shipped code actually address it, or did scope drift change the product? | Think artifact + ship artifact |
-| 2 | **What surprised us?** Which review/security/qa findings were unexpected? Which risks from the plan materialized and which didn't? | Review + security + qa artifacts, pattern-report risk accuracy |
+| 2 | **What surprised us?** Which review/security/qa findings were unexpected? Which risks materialized? Did cycle time or lines changed deviate from what the plan estimated? | Review + security + qa artifacts, pattern-report risk accuracy, git metrics |
 | 3 | **What's recurring?** Are the same findings showing up across sprints? If pattern-report shows a tag appearing 3+ times, that's a systemic issue, not a one-off. | pattern-report.sh recurring findings |
 | 4 | **What should the next sprint be?** Based on what was shipped, what was deferred, and what broke — what's the highest-value next thing? | Out-of-scope from plan, unresolved findings, deferred risks |
 
@@ -82,6 +95,8 @@ Apply the same rigor as the forward-looking diagnostic, but to what was shipped:
 
 **Sprint:** <session ID or date>
 **Shipped:** <what was built, one sentence>
+**Scale:** <N commits, N lines changed, N files touched>
+**Cycle time:** <total duration, slowest phase and why>
 
 **Right problem?** <yes/no — and why>
 **Surprises:** <unexpected findings or outcomes>
