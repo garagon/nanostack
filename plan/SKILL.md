@@ -33,16 +33,13 @@ Then run `session.sh phase-start plan`.
 
 ### 1. Understand the Request
 
-- **Read the /think artifact** if one exists for this project:
+- **Resolve context** — load upstream artifacts and past solutions in one call:
   ```bash
-  ~/.claude/skills/nanostack/bin/find-artifact.sh think 2
+  ~/.claude/skills/nanostack/bin/resolve.sh plan
   ```
-  If found, extract and use:
-  - `key_risk` → add to your Risks section. This was already validated by /think.
-  - `narrowest_wedge` → this is the scope constraint. Don't plan beyond it.
-  - `out_of_scope` items from /think → pre-populate your Out of Scope section.
-  - `scope_mode` → if /think said "reduce," plan the smallest version. If "expand," plan bigger.
-  - `premise_validated` → if false, flag it. Don't plan for an unvalidated premise.
+  The output is JSON with `upstream_artifacts` (think artifact path if recent), `solutions` (ranked matches), and `config`. Use what's relevant:
+  - If a think artifact exists, read it and extract: `key_risk` → add to Risks. `narrowest_wedge` → scope constraint. `out_of_scope` → pre-populate Out of Scope. `scope_mode` → if "reduce," plan smallest version. `premise_validated` → if false, flag it.
+  - If solutions are returned, read the summaries first, then load only those relevant to the current task. Past mistakes and patterns should inform the sprint.
 
   **If think artifact is missing but /think ran** (you can see a Think Summary in the conversation above), recover it now:
   ```bash
@@ -51,7 +48,7 @@ Then run `session.sh phase-start plan`.
   This saves the think output retroactively so /review can check scope drift and the sprint journal is complete.
 
 - Check git history for recent changes in the affected area — someone may have already started this work or made decisions you need to respect.
-- Search past solutions: run `~/.claude/skills/nanostack/bin/find-solution.sh` with keywords related to the technologies and files in scope. The output shows ranked summaries with title, severity, tags and files. Read the summaries first, then load only the solutions relevant to the current task. Past mistakes and patterns should inform the current sprint.
+- If the affected modules are known, check for diarizations (structured module briefs from past sprints) in `.nanostack/know-how/diarizations/`. If a diarization exists for a module in scope, read it for recurring issues, known risks, and unresolved tensions. These should inform your risk assessment.
 - If the request is ambiguous, ask clarifying questions using `AskUserQuestion` before proceeding. Do not guess scope.
 - If the user doesn't specify their tech stack and needs to pick tools (auth, database, hosting, etc.), check for overrides first, then fall back to defaults:
   1. Read `.nanostack/stack.json` if it exists (project-level preferences)
@@ -60,6 +57,14 @@ Then run `session.sh phase-start plan`.
   4. If the project already has a stack (check package.json, go.mod, requirements.txt), use what's there regardless of any config.
   Suggest, don't impose. The user always has the final say.
 - **Always use the latest stable version** of every dependency. Don't rely on versions from training data.
+
+## Graduated Rules
+
+<!-- Auto-maintained by bin/graduate.sh. Do not edit manually. -->
+<!-- Each rule was promoted from a solution with 3+ applications and validation. -->
+<!-- END GRADUATED RULES -->
+
+Apply these constraints during planning. Each one represents a proven pattern or decision from past sprints.
 
 ### 2. Evaluate Scope
 

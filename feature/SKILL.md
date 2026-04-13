@@ -43,15 +43,13 @@ You are an autonomous orchestrator. You run the entire sprint without stopping b
 
 ### Step 1: Context
 
-Read existing artifacts to understand the project:
+Resolve existing artifacts and solutions in one call:
 
 ```bash
-~/.claude/skills/nanostack/bin/find-artifact.sh think 30
-~/.claude/skills/nanostack/bin/find-artifact.sh plan 30
-~/.claude/skills/nanostack/bin/find-artifact.sh ship 30
+~/.claude/skills/nanostack/bin/resolve.sh feature
 ```
 
-Read the checkpoint summaries. If no artifacts exist, read the codebase directly.
+The output is JSON with `upstream_artifacts` (think, plan, ship paths if recent) and `solutions` (ranked past learnings). Read the checkpoint summaries. If no artifacts exist, read the codebase directly.
 
 ### Step 2: Plan
 
