@@ -37,9 +37,10 @@ Then run `session.sh phase-start plan`.
   ```bash
   ~/.claude/skills/nanostack/bin/resolve.sh plan
   ```
-  The output is JSON with `upstream_artifacts` (think artifact path if recent), `solutions` (ranked matches), and `config`. Use what's relevant:
+  The output is JSON with `upstream_artifacts` (think artifact path if recent), `solutions` (ranked matches), `config`, and `sprint_metrics` (git stats + cycle time from last sprint). Use what's relevant:
   - If a think artifact exists, read it and extract: `key_risk` → add to Risks. `narrowest_wedge` (starting point) → scope constraint. `out_of_scope` → pre-populate Out of Scope. `scope_mode` → if "reduce," plan smallest version. `premise_validated` → if false, flag it.
   - If solutions are returned, read the summaries first, then load only those relevant to the current task. Past mistakes and patterns should inform the sprint.
+  - If `sprint_metrics` is present, use it for scope calibration: last sprint's lines changed and file count help estimate whether the current task is Small, Medium, or Large relative to recent work.
 
   **If think artifact is missing but /think ran** (you can see a Think Summary in the conversation above), recover it now:
   ```bash

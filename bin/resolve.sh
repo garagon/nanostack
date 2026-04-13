@@ -210,6 +210,16 @@ if [ -f "$SESSION_FILE" ]; then
   [ -n "$SESSION_GOAL" ] && GOAL="\"$SESSION_GOAL\""
 fi
 
+# ─── 7. Load sprint metrics (plan + compound phases) ───────
+
+METRICS_JSON="null"
+if [ "$PHASE" = "plan" ] || [ "$PHASE" = "compound" ]; then
+  METRICS_SH="$SCRIPT_DIR/sprint-metrics.sh"
+  if [ -x "$METRICS_SH" ]; then
+    METRICS_JSON=$("$METRICS_SH" 2>/dev/null) || METRICS_JSON="null"
+  fi
+fi
+
 # ─── Output ─────────────────────────────────────────────────
 
 jq -n \
@@ -220,6 +230,7 @@ jq -n \
   --argjson diarizations "$DIARIZATIONS_JSON" \
   --argjson config "$CONFIG_JSON" \
   --argjson goal "$GOAL" \
+  --argjson metrics "$METRICS_JSON" \
   '{
     phase: $phase,
     upstream_artifacts: $artifacts,
@@ -227,5 +238,6 @@ jq -n \
     conflict_precedents: $precedents,
     diarizations: $diarizations,
     config: $config,
-    goal: $goal
+    goal: $goal,
+    sprint_metrics: $metrics
   }'
