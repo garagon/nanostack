@@ -230,9 +230,19 @@ No daemon. No message queue. Just `mkdir` for atomic locking, JSON for state, sy
 
 If the agent crashes mid-sprint, `session.sh resume` detects the last session state and `restore-context.sh` reads all completed phase checkpoints. The agent skips completed phases and restarts from where it left off. Each checkpoint is a compact summary (~50 tokens) with the key findings, files and decisions from that phase.
 
+### Goal context
+
+Pass a business objective when starting a sprint:
+
+```bash
+session.sh init development --goal "Pass SOC2 audit by July"
+```
+
+The goal propagates through the resolver to every phase. `/think` uses it to frame scope decisions: "does this feature serve the goal, or is it a tangent?" `/review` uses it to prioritize findings. `/security` uses it to weight compliance-related checks. The goal is optional — sprints work fine without one.
+
 ### Budget and circuit breaker
 
-`budget.sh set --max-usd 15 --model opus-4` sets a cost limit for the sprint. At each phase transition, `budget.sh check` calculates spent vs budget. Warns at 80%, stops at 95% with partial results preserved.
+`budget.sh set --max-usd 15 --model opus-4` sets a cost limit for the sprint. At each phase transition, `budget.sh check` calculates spent vs budget. Warns at 80%. At 95%, the guard pipeline hard-blocks all non-allowlisted commands — not a suggestion the model can ignore, a wall. The agent can still run `git status` and `ls` (to save work) but can't execute anything else. Override with `NANOSTACK_SKIP_BUDGET=1`.
 
 `circuit.sh` tracks consecutive failures. After 3 failures on the same approach, the circuit opens and the agent must pivot or stop. Changing approach resets the counter.
 
@@ -240,9 +250,9 @@ If the agent crashes mid-sprint, `session.sh resume` detects the last session st
 
 AI agents make mistakes. They run `rm -rf` when they mean `rm -r`, force push to main when they mean to push to a branch, pipe untrusted URLs to shell. `/guard` catches these before they execute.
 
-### Five tiers
+### Six tiers
 
-Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude-code-auto-mode), guard evaluates every command through five tiers:
+Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude-code-auto-mode), guard evaluates every command through six tiers:
 
 **Tier 1: Allowlist.** Commands like `git status`, `ls`, `cat`, `jq` skip all checks. They can't cause damage.
 
@@ -251,6 +261,8 @@ Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude
 **Tier 2.5: Phase-aware concurrency.** During read-only phases (review, qa, security), write operations are blocked. This prevents race conditions when multiple agents run in parallel. The agent reports findings instead of auto-fixing.
 
 **Tier 2.75: Phase gate.** When a sprint is active, `git commit` and `git push` are blocked until review, security and qa artifacts exist and are fresher than the latest code change. This is the enforcement that prevents the agent from skipping pipeline phases on simple tasks. Bypass with `NANOSTACK_SKIP_GATE=1` for non-sprint commits.
+
+**Tier 2.8: Budget gate.** When a sprint budget is set and 95%+ spent, all non-allowlisted commands are blocked. The agent can still run safe commands (`ls`, `git status`, `cat`) to save work, but can't execute builds, tests, or deploys. Bypass with `NANOSTACK_SKIP_BUDGET=1`.
 
 **Tier 3: Pattern matching.** Everything else is checked against block and warn rules. 33 block rules cover mass deletion, history destruction, database drops, production deploys, remote code execution, security degradation and safety bypasses. 9 warn rules cover operations that need attention but not blocking.
 
@@ -516,6 +528,8 @@ bin/capture-learning.sh "..."  # append a learning to the knowledge base
 `token-report.sh` reads Claude Code's session logs and breaks down where tokens go. Cache-aware pricing (reads at 10%, creation at 125%). Flags runaway sessions and heavy subagents. Requires Claude Code; skips silently on other agents.
 
 `pattern-report.sh` detects patterns across sprints: which findings keep recurring, whether predicted risks materialized, which phases take the longest, and how often solutions get reused.
+
+Every sprint lifecycle event is logged to `.nanostack/audit.log` (JSONL, append-only): session init, phase start/complete with duration, artifact saves, solution creation, graduation. When a sprint goes wrong, the audit trail shows exactly what happened and when.
 
 ### Discard a bad session
 
