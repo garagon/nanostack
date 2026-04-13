@@ -80,6 +80,10 @@ cmd_init() {
     }' > "$SESSION_FILE"
 
   audit_log "session_init" "$session_id" "$type"
+
+  # Snapshot git state for loop guard
+  "$SCRIPT_DIR/loop-guard.sh" snapshot 2>/dev/null || true
+
   echo "$SESSION_FILE"
 }
 
@@ -200,6 +204,13 @@ cmd_phase_complete() {
   mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
 
   audit_log "phase_complete" "$phase" "${duration}s"
+
+  # Loop guard: check for stalled autopilot (no git changes between phases)
+  LOOP_WARN=$("$SCRIPT_DIR/loop-guard.sh" check 2>/dev/null || true)
+  if [ -n "$LOOP_WARN" ]; then
+    echo "$LOOP_WARN"
+  fi
+
   echo "OK: $phase completed"
 }
 

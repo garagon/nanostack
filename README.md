@@ -261,6 +261,7 @@ Autopilot only stops if:
 - `/security` finds critical or high vulnerabilities
 - `/qa` tests fail
 - A product question comes up the agent can't answer from context
+- The loop guard detects 2+ phases with no repository changes (agent is stuck)
 
 Between steps the agent shows status:
 ```
@@ -594,6 +595,7 @@ bin/pattern-report.sh          # recurring issues, risk accuracy, phase bottlene
 bin/graduate.sh --status       # graduation budget: rules per skill vs caps
 bin/doctor.sh                  # know-how health: stale, unused, unvalidated solutions
 bin/sprint-metrics.sh          # git stats + cycle time per phase (used by /think --retro and /nano)
+bin/about.sh                   # generate .nanostack/ABOUT.md (compact self-description for any agent)
 bin/capture-learning.sh "..."  # append a learning to the knowledge base
 ```
 
