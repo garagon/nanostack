@@ -194,12 +194,20 @@ fi
 CONFIG_JSON="{}"
 CONFIG_FILE="$NANOSTACK_STORE/config.json"
 if [ -f "$CONFIG_FILE" ]; then
-  # Extract just the fields skills care about
   CONFIG_JSON=$(jq -c '{
     intensity: (.preferences.default_intensity // "standard"),
     conflict_precedence: (.preferences.conflict_precedence // "security"),
     detected_stack: (.detected // [])
   }' "$CONFIG_FILE" 2>/dev/null) || CONFIG_JSON="{}"
+fi
+
+# ─── 6. Load goal from session ─────────────────────────────
+
+GOAL="null"
+SESSION_FILE="$NANOSTACK_STORE/session.json"
+if [ -f "$SESSION_FILE" ]; then
+  SESSION_GOAL=$(jq -r '.goal // ""' "$SESSION_FILE" 2>/dev/null)
+  [ -n "$SESSION_GOAL" ] && GOAL="\"$SESSION_GOAL\""
 fi
 
 # ─── Output ─────────────────────────────────────────────────
@@ -211,11 +219,13 @@ jq -n \
   --argjson precedents "$PRECEDENTS_JSON" \
   --argjson diarizations "$DIARIZATIONS_JSON" \
   --argjson config "$CONFIG_JSON" \
+  --argjson goal "$GOAL" \
   '{
     phase: $phase,
     upstream_artifacts: $artifacts,
     solutions: $solutions,
     conflict_precedents: $precedents,
     diarizations: $diarizations,
-    config: $config
+    config: $config,
+    goal: $goal
   }'

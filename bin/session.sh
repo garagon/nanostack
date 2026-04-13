@@ -11,6 +11,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
+source "$SCRIPT_DIR/lib/audit.sh"
 
 SESSION_FILE="$NANOSTACK_STORE/session.json"
 PROJECT="$(pwd)"
@@ -22,12 +23,14 @@ cmd_init() {
   local type="${1:-development}"
   local issue_url=""
   local autopilot="false"
+  local goal=""
 
   shift || true
   while [ $# -gt 0 ]; do
     case "$1" in
       --issue) issue_url="$2"; shift 2 ;;
       --autopilot) autopilot="true"; shift ;;
+      --goal) goal="$2"; shift 2 ;;
       *) shift ;;
     esac
   done
@@ -49,6 +52,7 @@ cmd_init() {
     --arg id "$session_id" \
     --arg type "$type" \
     --arg issue "$issue_url" \
+    --arg goal "$goal" \
     --arg repo "$repo" \
     --arg workspace "$PROJECT" \
     --arg date "$NOW" \
@@ -57,6 +61,7 @@ cmd_init() {
       session_id: $id,
       type: $type,
       issue_url: (if $issue != "" then $issue else null end),
+      goal: (if $goal != "" then $goal else null end),
       repo: (if $repo != "" then $repo else null end),
       workspace: $workspace,
       current_phase: null,
@@ -74,6 +79,7 @@ cmd_init() {
       last_updated: $date
     }' > "$SESSION_FILE"
 
+  audit_log "session_init" "$session_id" "$type"
   echo "$SESSION_FILE"
 }
 
@@ -115,6 +121,7 @@ cmd_phase_start() {
      .last_updated = $date' "$SESSION_FILE" > "${SESSION_FILE}.tmp"
   mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
 
+  audit_log "phase_start" "$phase"
   echo "OK: $phase started"
 }
 
@@ -192,6 +199,7 @@ cmd_phase_complete() {
      .last_updated = $date' "$SESSION_FILE" > "${SESSION_FILE}.tmp"
   mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
 
+  audit_log "phase_complete" "$phase" "${duration}s"
   echo "OK: $phase completed"
 }
 

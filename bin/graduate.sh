@@ -23,6 +23,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
 
+source "$SCRIPT_DIR/lib/audit.sh"
+
 NANOSTACK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SOLUTIONS_DIR="$NANOSTACK_STORE/know-how/solutions"
 
@@ -331,6 +333,7 @@ graduated_to: $target/SKILL.md" "$filepath" 2>/dev/null || \
         sed -i "s|^graduated_to:.*|graduated_to: $target/SKILL.md|" "$filepath" 2>/dev/null || true
     fi
 
+    audit_log "solution_graduated" "$source_ref" "$target/SKILL.md"
     echo "  ✓ $source_ref → $target/SKILL.md"
   done
 

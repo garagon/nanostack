@@ -6,6 +6,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 source "$SCRIPT_DIR/bin/lib/store-path.sh"
+source "$SCRIPT_DIR/bin/lib/audit.sh"
 
 CONDUCTOR_DIR="$NANOSTACK_STORE/conductor"
 PROJECT="$(pwd)"
@@ -157,6 +158,7 @@ cmd_claim() {
     exit 1
   }
 
+  audit_log "sprint_claim" "$phase" "$agent"
   echo "OK"
 }
 
@@ -205,6 +207,7 @@ cmd_complete() {
     [ -f "$sprint_dir/$p/done" ] || { all_done=false; break; }
   done
 
+  audit_log "sprint_complete" "$phase" "$agent"
   echo "OK"
 }
 
