@@ -63,22 +63,22 @@ If nobody would use a broken v1, your v1 scope is wrong. Either narrow the audie
 
 ---
 
-## 4. Narrowest Wedge
+## 4. Starting Point
 
 **The question:** "What is the absolute minimum version that delivers the core value — and nothing else?"
 
 **How to find it:**
 1. List everything the product could do
 2. Cross out everything that isn't in the critical path of the one core value
-3. What's left? That's your wedge.
+3. What's left? That's your starting point.
 4. Now cross out half of what's left. Can it still work? If yes, you haven't narrowed enough.
 
 **Calibration:**
-- If your wedge takes more than 2 weeks to build, it's too wide
-- If your wedge has more than 3 features, it's too wide
-- If your wedge serves more than 1 user persona, it's too wide
+- If your starting point takes more than 2 weeks to build, it's too wide
+- If your starting point has more than 3 features, it's too wide
+- If your starting point serves more than 1 user persona, it's too wide
 
-**The test:** Can you describe the wedge in one sentence without using the word "and"?
+**The test:** Can you describe the starting point in one sentence without using the word "and"?
 
 **Manual delivery test:** Could you deliver this wedge by hand to one person today? No code, just you doing the work. If you can't describe the manual process (trigger, steps, tools, what you deliver), you don't understand the problem well enough to automate it. Build the process first, then the product.
 

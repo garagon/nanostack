@@ -1,9 +1,9 @@
 ---
 name: think
-description: Use before planning when you need strategic clarity — product discovery, scope decisions, premise validation. Applies YC-grade product thinking to challenge assumptions and find the narrowest valuable wedge. Supports --autopilot to run the full sprint automatically after approval. Use --retro after a sprint to reflect on what shipped. Triggers on /think, /office-hours, /ceo-review.
+description: Use before planning when you need strategic clarity — product discovery, scope decisions, premise validation. Applies YC-grade product thinking to challenge assumptions and find the smallest starting point. Supports --autopilot to run the full sprint automatically after approval. Use --retro after a sprint to reflect on what shipped. Triggers on /think, /office-hours, /ceo-review.
 concurrency: read
 depends_on: []
-summary: "Strategic product thinking. Challenges assumptions, finds narrowest valuable wedge, validates premise before planning."
+summary: "Strategic product thinking. Challenges assumptions, finds the smallest starting point, validates premise before planning."
 estimated_tokens: 450
 ---
 
@@ -135,7 +135,7 @@ Understand the landscape, then determine the mode.
 
 **If the user didn't provide an idea or problem** (e.g. they just said `/think` or `/think --autopilot` with no context), simply ask in your response: "What do you want to build?" Do NOT use `AskUserQuestion` for this. Just ask in plain text and wait for their reply.
 
-**If AUTOPILOT is active:** Do NOT ask clarifying questions. Work with the information provided. Default to Builder mode. If the description is clear enough to plan, skip the diagnostic questions and go straight to Phase 5 (scope recommendation) with a brief that covers value prop, scope, wedge and risk. The user chose autopilot because they want speed, not a conversation.
+**If AUTOPILOT is active:** Do NOT ask clarifying questions. Work with the information provided. Default to Builder mode. If the description is clear enough to plan, skip the diagnostic questions and go straight to Phase 5 (scope recommendation) with a brief that covers value prop, scope, starting point and risk. The user chose autopilot because they want speed, not a conversation.
 
 Determine the mode from the user's description:
 
@@ -146,7 +146,7 @@ Determine the mode from the user's description:
 
 **How to detect the mode:** If the user describes a personal pain ("I have this problem," "I need to..."), default to Startup or Builder. If the user pitches an idea for others ("I want to build X for Y market"), default to Startup. Only use Founder mode when the user asks for it or the context is clearly a high-stakes venture decision.
 
-**Local mode language:** Run `source bin/lib/git-context.sh && detect_git_mode`. If the result is `local` (no git repo), the user is likely non-technical. Adapt your language throughout the entire sprint: replace jargon with plain language. "Narrowest wedge" → "¿Cuál es lo mínimo que necesitás que funcione?" / "Status quo" → "¿Cómo lo estás resolviendo ahora?" / "Premise validated" → "Tiene sentido, avancemos." Same rigor, simpler words. Never mention git, branches, PRs, or diffs. Do NOT expose internal labels like "Phase 1", "Phase 1.5", "Startup mode", or "Builder mode" — these are your internal process, not something the user needs to see. Just do the work naturally.
+**Local mode language:** Run `source bin/lib/git-context.sh && detect_git_mode`. If the result is `local` (no git repo), the user is likely non-technical. Adapt your language throughout the entire sprint: replace jargon with plain language. "Starting point" → "¿Cuál es lo mínimo que necesitás que funcione?" / "Status quo" → "¿Cómo lo estás resolviendo ahora?" / "Premise validated" → "Tiene sentido, avancemos." Same rigor, simpler words. Never mention git, branches, PRs, or diffs. Do NOT expose internal labels like "Phase 1", "Phase 1.5", "Startup mode", or "Builder mode" — these are your internal process, not something the user needs to see. Just do the work naturally.
 
 ### Phase 1.5: Search Before Building
 
@@ -156,7 +156,7 @@ Read `think/references/search-before-building.md` and follow the instructions be
 
 #### Startup Mode — Six Forcing Questions
 
-Read `think/references/forcing-questions.md` and cover all six: Demand Reality, Status Quo, Desperate Specificity, Narrowest Wedge, Observation & Surprise, Future-Fit. Adapt order to conversation flow.
+Read `think/references/forcing-questions.md` and cover all six: Demand Reality, Status Quo, Desperate Specificity, Starting Point, Observation & Surprise, Future-Fit. Adapt order to conversation flow.
 
 Synthesize: What is the **one sentence** value proposition that survives all six questions?
 
@@ -183,7 +183,7 @@ Challenge the fundamental premise:
 
 > "The thing we haven't questioned is whether {{the core assumption}} is actually true."
 
-Apply CEO cognitive patterns from `think/references/cognitive-patterns.md` (Inversion, Customer Obsession, 10x vs 10%, Narrowest Wedge).
+Apply CEO cognitive patterns from `think/references/cognitive-patterns.md` (Inversion, Customer Obsession, 10x vs 10%, Starting Point).
 
 Then **argue the opposite**: construct the strongest case this should NOT be built. If the opposite argument is stronger, say so. If the original holds, it's battle-tested.
 
@@ -193,10 +193,10 @@ Based on the diagnostic, recommend one of four scope modes:
 
 | Mode | When to use | Behavior |
 |------|-------------|----------|
-| **Expand** | Strong demand signal, clear wedge, high conviction | Dream big. What's the full vision? |
+| **Expand** | Strong demand signal, clear starting point, high conviction | Dream big. What's the full vision? |
 | **Selective expand** | Good idea but some risk | Hold core scope + add 1-2 high-value extras |
 | **Hold** | Solid plan, no reason to change | Bulletproof the current scope |
-| **Reduce** | Weak demand signal, unclear wedge, too broad | Strip to absolute essentials |
+| **Reduce** | Weak demand signal, unclear starting point, too broad | Strip to absolute essentials |
 
 ### Phase 6: Handoff to /nano
 
@@ -208,7 +208,7 @@ Produce a clear brief for the next phase:
 **Value proposition:** {{one sentence}}
 **Scope mode:** {{Expand / Selective expand / Hold / Reduce}}
 **Target user:** {{who specifically}}
-**Narrowest wedge:** {{the smallest thing that delivers value}}
+**Starting point:** {{the smallest thing that delivers value}}
 **Key risk:** {{the one thing most likely to make this fail}}
 **Premise validated:** {{yes/no — and why}}
 ```
@@ -216,7 +216,7 @@ Produce a clear brief for the next phase:
 Immediately after writing the Think Summary — before anything else, before presenting next steps — save the artifact:
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh --from-session think 'Value prop: X. Scope: Y. Wedge: Z. Risk: W. Premise: validated/not.'
+~/.claude/skills/nanostack/bin/save-artifact.sh --from-session think 'Value prop: X. Scope: Y. Starting point: Z. Risk: W. Premise: validated/not.'
 ```
 
 This is the first thing you do after the summary. Not optional. Not "Step 2". The summary and the save are one action.
@@ -246,7 +246,7 @@ Write a file named `YYYY-MM-DD-<slug>.md` (slug from the value proposition) with
 ## Target User
 <who specifically, and why they'd use a broken v1>
 
-## Narrowest Wedge
+## Starting Point
 <the smallest thing that delivers value>
 
 ## Key Risk

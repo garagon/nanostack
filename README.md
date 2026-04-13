@@ -197,7 +197,7 @@ Prevent public S3 buckets from reaching production.
 ## Target User
 Platform team — they got paged for the incident.
 
-## Narrowest Wedge
+## Starting Point
 One rule: block S3 public access pre-deploy.
 
 ## Key Risk
