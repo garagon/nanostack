@@ -238,7 +238,7 @@ Agent:  Reading sprint data...
         checks — same gate pattern, broader coverage.
 ```
 
-Retro reads the sprint journal, compound solutions, and pattern report. It applies the same forcing questions to what was built, not what will be built. It doesn't start a new sprint — it's standalone reflection.
+Retro reads the sprint journal, compound solutions, pattern report, and git metrics (`bin/sprint-metrics.sh` — commits, lines changed, cycle time per phase). It applies the same forcing questions to what was built, not what will be built. It doesn't start a new sprint — it's standalone reflection.
 
 ## Autopilot
 
@@ -593,6 +593,7 @@ bin/token-report.sh --all      # all projects with cost breakdown
 bin/pattern-report.sh          # recurring issues, risk accuracy, phase bottlenecks
 bin/graduate.sh --status       # graduation budget: rules per skill vs caps
 bin/doctor.sh                  # know-how health: stale, unused, unvalidated solutions
+bin/sprint-metrics.sh          # git stats + cycle time per phase (used by /think --retro)
 bin/capture-learning.sh "..."  # append a learning to the knowledge base
 ```
 
