@@ -593,7 +593,7 @@ bin/token-report.sh --all      # all projects with cost breakdown
 bin/pattern-report.sh          # recurring issues, risk accuracy, phase bottlenecks
 bin/graduate.sh --status       # graduation budget: rules per skill vs caps
 bin/doctor.sh                  # know-how health: stale, unused, unvalidated solutions
-bin/sprint-metrics.sh          # git stats + cycle time per phase (used by /think --retro)
+bin/sprint-metrics.sh          # git stats + cycle time per phase (used by /think --retro and /nano)
 bin/capture-learning.sh "..."  # append a learning to the knowledge base
 ```
 
