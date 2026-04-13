@@ -1,6 +1,6 @@
 ---
 name: think
-description: Use before planning when you need strategic clarity — product discovery, scope decisions, premise validation. Applies YC-grade product thinking to challenge assumptions and find the narrowest valuable wedge. Supports --autopilot to run the full sprint automatically after approval. Triggers on /think, /office-hours, /ceo-review.
+description: Use before planning when you need strategic clarity — product discovery, scope decisions, premise validation. Applies YC-grade product thinking to challenge assumptions and find the narrowest valuable wedge. Supports --autopilot to run the full sprint automatically after approval. Use --retro after a sprint to reflect on what shipped. Triggers on /think, /office-hours, /ceo-review.
 concurrency: read
 depends_on: []
 summary: "Strategic product thinking. Challenges assumptions, finds narrowest valuable wedge, validates premise before planning."
@@ -42,6 +42,66 @@ Before anything else, ensure the project is configured. Run this once (skips if 
 ```bash
 [ -f .claude/settings.json ] || ~/.claude/skills/nanostack/bin/init-project.sh
 ```
+
+## Retro Mode
+
+If the user said `/think --retro` or `/think retro` or "retrospective", run the retrospective process instead of the normal diagnostic. **Do not initialize a new session.** Retro looks backward at what was shipped, not forward at what to build.
+
+### Retro Process
+
+**1. Gather sprint data:**
+
+```bash
+~/.claude/skills/nanostack/bin/resolve.sh compound
+~/.claude/skills/nanostack/bin/pattern-report.sh --json
+```
+
+Also read the most recent sprint journal if one exists:
+
+```bash
+ls -t .nanostack/know-how/journal/*.md 2>/dev/null | head -1
+```
+
+If no sprint data exists (no artifacts, no journal, no sessions), tell the user: "No sprint data found. Run a sprint first, then come back with `/think --retro`." Stop here.
+
+**2. Retro diagnostic — four questions:**
+
+Apply the same rigor as the forward-looking diagnostic, but to what was shipped:
+
+| # | Question | What to read |
+|---|----------|-------------|
+| 1 | **Did we solve the right problem?** Re-read the think artifact's value proposition. Does the shipped code actually address it, or did scope drift change the product? | Think artifact + ship artifact |
+| 2 | **What surprised us?** Which review/security/qa findings were unexpected? Which risks from the plan materialized and which didn't? | Review + security + qa artifacts, pattern-report risk accuracy |
+| 3 | **What's recurring?** Are the same findings showing up across sprints? If pattern-report shows a tag appearing 3+ times, that's a systemic issue, not a one-off. | pattern-report.sh recurring findings |
+| 4 | **What should the next sprint be?** Based on what was shipped, what was deferred, and what broke — what's the highest-value next thing? | Out-of-scope from plan, unresolved findings, deferred risks |
+
+**3. Retro output:**
+
+```
+## Sprint Retro
+
+**Sprint:** <session ID or date>
+**Shipped:** <what was built, one sentence>
+
+**Right problem?** <yes/no — and why>
+**Surprises:** <unexpected findings or outcomes>
+**Recurring patterns:** <systemic issues from pattern-report>
+**Recommendation:** The next sprint should be: <specific, actionable>
+```
+
+Save the retro as a brief:
+
+```bash
+mkdir -p .nanostack/know-how/briefs
+```
+
+Write to `.nanostack/know-how/briefs/YYYY-MM-DD-retro.md` with the retro output above.
+
+**Do not continue to /nano.** Retro is a standalone reflection, not a sprint kickoff. If the user wants to act on the recommendation, they start a new `/think` or `/think --autopilot` with the suggested next sprint.
+
+**End of retro mode.** The sections below are for the normal forward-looking /think process.
+
+---
 
 ## Session
 
@@ -161,17 +221,75 @@ Immediately after writing the Think Summary — before anything else, before pre
 
 This is the first thing you do after the summary. Not optional. Not "Step 2". The summary and the save are one action.
 
-**Next phase.**
+### Phase 6.5: Think Brief (shareable)
 
-If `--autopilot` was used (or the user said "autopilot", "run everything", "ship it end to end"):
+Save a clean markdown brief to `.nanostack/know-how/briefs/`. This is a human-readable version of the Think Summary that the user can share with their team, open in Obsidian, or paste into a doc.
+
+Write the brief file directly (do not use save-artifact.sh — this is a markdown doc, not a JSON artifact):
+
+```bash
+mkdir -p .nanostack/know-how/briefs
+```
+
+Write a file named `YYYY-MM-DD-<slug>.md` (slug from the value proposition) with this format:
+
+```markdown
+# Think Brief: <value proposition short title>
+
+**Date:** YYYY-MM-DD
+**Mode:** Startup / Builder / Founder
+**Scope:** Expand / Hold / Reduce
+
+## Value Proposition
+<one sentence>
+
+## Target User
+<who specifically, and why they'd use a broken v1>
+
+## Narrowest Wedge
+<the smallest thing that delivers value>
+
+## Key Risk
+<the one thing most likely to make this fail>
+
+## What We Decided NOT to Build
+<out of scope items from the diagnostic>
+
+## Premise
+<validated or not — and the argument that tested it>
+```
+
+Keep it under 20 lines. No filler, no headers without content. Skip sections that don't apply (e.g., skip "What We Decided NOT to Build" if nothing was excluded).
+
+### Phase 7: Next Step
+
+**If `--autopilot` was used** (or the user said "autopilot", "run everything", "ship it end to end"):
 
 > Autopilot active. Proceeding with the full sprint: /nano, build, /review, /qa, /security, /ship. I'll only stop for blocking issues or product questions I can't answer.
 
 Then proceed directly to `/nano` without waiting. Set `AUTOPILOT=true` in your context and carry it through every subsequent skill.
 
-Otherwise:
+**Otherwise, check if this is an early sprint** (first or second for this project):
 
-> Ready for `/nano`. Say `/nano` to create the implementation plan, or adjust the brief first.
+```bash
+ls .nanostack/sessions/ 2>/dev/null | wc -l
+```
+
+If 0 or 1 archived sessions (new user), show the sprint guide:
+
+> Your brief is ready. Here's the full sprint:
+>
+> 1. `/nano` — I turn this into concrete steps with file names and risks
+> 2. Build the feature
+> 3. `/review` — two-pass code review (structure + adversarial edge cases)
+> 4. `/security` — OWASP audit + secrets scan
+> 5. `/ship` — PR, CI verification, sprint journal
+>
+> Or say `/think --autopilot` next time and I run everything after you approve the brief.
+
+If 2+ archived sessions (returning user), keep it short:
+
+> Ready for `/nano`. Say `/nano` to plan, or adjust the brief first.
 
 Wait for the user to invoke `/nano`.
 
@@ -182,3 +300,5 @@ Wait for the user to invoke `/nano`.
 - **/think produces a brief, not a plan.** If you're writing implementation steps, hand off to /nano.
 - **Calibrate intensity by mode.** Founder pushes hard. Builder respects stated pain.
 - **"Fix this bug" doesn't need six forcing questions.** Skip to the brief when the user already knows what they want.
+- **Always save the brief file.** The markdown brief in `.nanostack/know-how/briefs/` is as important as the JSON artifact. Users share briefs with their team.
+- **--retro is standalone.** It does not start a new sprint or invoke /nano. It's a reflection, not a kickoff.

@@ -36,7 +36,7 @@ npx create-nanostack
 
 One command. Detects your agents, installs everything, runs setup. Works with Claude Code, Cursor, Codex, Gemini CLI, Amp, Cline, OpenCode, and Antigravity.
 
-Then run `/nano-run` in your agent to configure your project through a conversation.
+Then run `/nano-run` in your agent to configure your project through a conversation. On your first sprint, `/think` shows the full pipeline so you know what comes next.
 
 Or jump straight in:
 
@@ -95,7 +95,7 @@ Each skill feeds into the next. `/nano` writes an artifact that `/review` reads 
 
 | Skill | Your specialist | What they do |
 |-------|----------------|--------------|
-| `/think` | **CEO / Founder** | Three intensity modes: Founder (full pushback), Startup (challenges scope, respects pain) and Builder (minimal pushback). Six forcing questions including manual delivery test. Auto-detects non-technical users and adapts language. `--autopilot` runs the full sprint after approval. |
+| `/think` | **CEO / Founder** | Three intensity modes: Founder (full pushback), Startup (challenges scope, respects pain) and Builder (minimal pushback). Six forcing questions including manual delivery test. Auto-detects non-technical users and adapts language. `--autopilot` runs the full sprint after approval. `--retro` reflects on what shipped. Saves a shareable markdown brief. New users get a sprint guide showing the full pipeline. |
 | `/nano` | **Eng Manager** | Auto-generates product specs (Medium scope) or product + technical specs (Large scope) before implementation steps. Product standards for web (shadcn/ui), CLI/TUI (Bubble Tea, Rich, Ink, Ratatui). Stack defaults with CLI preference for beginners. |
 | `/review` | **Staff Engineer** | Two-pass code review: structural then adversarial. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan. Cross-references `/security` with 10 conflict precedents. |
 | `/qa` | **QA Lead** | Functional testing + Visual QA. Takes screenshots and analyzes UI against product standards. Browser, API, CLI and debug modes. WTF heuristic stops before fixes cause regressions. |
@@ -179,6 +179,64 @@ You:    /ship
 ```
 
 You said "security scanner." The agent said "you're building a prevention gate" because it listened to your pain, not your feature request. Six commands, start to shipped.
+
+## Think brief
+
+Every `/think` run saves a shareable markdown brief to `.nanostack/know-how/briefs/`. Not the JSON artifact — a clean document you can send to your team, paste into a doc, or open in Obsidian.
+
+```markdown
+# Think Brief: S3 Public Access Prevention Gate
+
+**Date:** 2026-04-12
+**Mode:** Startup
+**Scope:** Reduce
+
+## Value Proposition
+Prevent public S3 buckets from reaching production.
+
+## Target User
+Platform team — they got paged for the incident.
+
+## Narrowest Wedge
+One rule: block S3 public access pre-deploy.
+
+## Key Risk
+False positives blocking legitimate public assets (CDN, static sites).
+
+## Premise
+Validated — scanner finds problems after they exist, gate prevents them.
+```
+
+The brief answers: what are we building, for whom, why this scope, and what could go wrong. Share it before writing code.
+
+## Retro
+
+After a sprint, use `/think --retro` to reflect on what shipped:
+
+```
+You:    /think --retro
+
+Agent:  Reading sprint data...
+
+        Sprint Retro
+
+        Shipped: S3 public access gate (4 files, PR #42)
+
+        Right problem? Yes — prevention, not detection. The gate
+        blocked 2 misconfigs in staging within 24 hours of deploy.
+
+        Surprises: /security found the gate itself had no rate
+        limiting. Fixed in the sprint but wasn't in the plan.
+
+        Recurring: This is the third sprint with missing rate
+        limiting findings. Consider adding it to /review's
+        graduated rules.
+
+        Recommendation: Next sprint should add IAM role scope
+        checks — same gate pattern, broader coverage.
+```
+
+Retro reads the sprint journal, compound solutions, and pattern report. It applies the same forcing questions to what was built, not what will be built. It doesn't start a new sprint — it's standalone reflection.
 
 ## Autopilot
 
