@@ -11,6 +11,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
+source "$SCRIPT_DIR/lib/audit.sh"
 
 TYPE="${1:?Usage: save-solution.sh <type> <title> [tags]}"
 TITLE="${2:?Missing title}"
@@ -133,4 +134,5 @@ TEMPLATE
     ;;
 esac
 
+audit_log "solution_created" "$TYPE" "$SAFE_TITLE"
 echo "created:$FILEPATH"

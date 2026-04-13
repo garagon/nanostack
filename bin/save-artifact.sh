@@ -13,6 +13,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
+source "$SCRIPT_DIR/lib/audit.sh"
 
 # ─── Session mode: build JSON from git state + summary ──────
 if [ "${1:-}" = "--from-session" ]; then
@@ -137,6 +138,7 @@ CHECKSUM=$(echo "$ENRICHED" | jq -Sc '.' | shasum -a 256 | cut -d' ' -f1)
 ENRICHED=$(echo "$ENRICHED" | jq --arg cs "$CHECKSUM" '. + {integrity: $cs}')
 
 echo "$ENRICHED" | jq '.' > "$FILENAME"
+audit_log "artifact_saved" "$PHASE" "$(basename "$FILENAME")"
 echo "$FILENAME"
 
 # ─── Auto-complete phase in session ──────────────────────────

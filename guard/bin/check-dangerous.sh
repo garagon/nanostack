@@ -139,6 +139,18 @@ if [ -x "$PHASE_GATE" ]; then
   [ -n "$GATE_OUTPUT" ] && echo "$GATE_OUTPUT"
 fi
 
+# ─── Tier 2.8: Budget gate ────────────────────────────────────
+# If a sprint budget is set and exceeded, block ALL commands.
+if [ -z "${NANOSTACK_SKIP_BUDGET:-}" ]; then
+  BUDGET_GATE="$(dirname "$0")/budget-gate.sh"
+  if [ -x "$BUDGET_GATE" ]; then
+    BGATE_OUTPUT=$("$BUDGET_GATE" 2>&1) || {
+      echo "$BGATE_OUTPUT"
+      exit 1
+    }
+  fi
+fi
+
 # ─── Tier 3: Pattern matching ───────────────────────────────
 # 1 jq call extracts all patterns. 1 combined grep for fast pre-check.
 # Only loop individual patterns if the pre-check hits.

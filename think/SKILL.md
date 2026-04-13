@@ -57,6 +57,14 @@ If the user said `--autopilot`, `autopilot`, `run everything`, or `ship it end t
 ~/.claude/skills/nanostack/bin/session.sh init development --autopilot
 ```
 
+If the user provides a high-level goal (business objective, deadline, strategic context), pass it:
+
+```bash
+~/.claude/skills/nanostack/bin/session.sh init development --goal "Pass SOC2 audit by July"
+```
+
+The goal propagates through the resolver to every phase. Use it to frame scope decisions: "does this feature serve the goal, or is it a tangent?"
+
 Then run `session.sh phase-start think`.
 
 ## Process
