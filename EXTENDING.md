@@ -2,6 +2,8 @@
 
 Add your own skills that plug into nanostack's workflow. Your skills save artifacts, read what other skills produced, and compose with /think, /review and /ship.
 
+> **Quickest way to start:** copy `examples/custom-skill-template/audit-licenses/` and edit it. The template is a working `/audit-licenses` skill (~100 lines) that demonstrates frontmatter, the artifact store, stack detection and the standard output format. See `examples/custom-skill-template/README.md` for the walkthrough.
+
 ## Configure your stack
 
 nanostack has opinionated defaults for new projects (Next.js, Supabase, Drizzle, etc.). You can override any of them with your own preferences.
