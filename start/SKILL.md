@@ -67,17 +67,20 @@ When they describe something, invoke the appropriate skill:
 
 If they chose "step by step":
 
-> You're all set. When you're ready, describe what you want to build. I'll walk you through each step:
+> You're all set. When you're ready, tell me what you want to build or change.
 >
-> 1. We think about the scope (/think)
-> 2. We plan the implementation (/nano)
-> 3. We build it
-> 4. We review, audit, and test (/review, /security, /qa)
-> 5. We ship it (/ship)
+> We'll go one step at a time:
+> 1. First we talk about the idea — is it the right size, the right shape?
+> 2. Then we make a plan — which files we touch, what could go wrong.
+> 3. Then we build it.
+> 4. I review the code, check it for security issues, and make sure it works.
+> 5. We save and ship it when you're happy.
 >
-> You control the pace. Tell me when you're ready.
->
-> Tip: for adding features to an existing project, try `/feature` — it skips the scope discussion and goes straight to planning.
+> You stay in control between each step. Tell me when you're ready.
+
+If the user is technical and wants the slash commands, also offer:
+
+> Quick reference: `/think` → `/nano` → build → `/review` → `/security` → `/qa` → `/ship`. For adding to an existing project, use `/feature` instead.
 
 When they describe something, invoke: use Skill tool: skill="think"
 
