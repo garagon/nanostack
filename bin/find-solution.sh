@@ -11,6 +11,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
 [ -f "$SCRIPT_DIR/lib/preflight.sh" ] && { source "$SCRIPT_DIR/lib/preflight.sh"; nanostack_require jq; }
+[ -f "$SCRIPT_DIR/lib/cache.sh" ] && source "$SCRIPT_DIR/lib/cache.sh"
+[ -f "$SCRIPT_DIR/lib/solutions-index.sh" ] && source "$SCRIPT_DIR/lib/solutions-index.sh"
 
 SOLUTIONS_DIR="$NANOSTACK_STORE/know-how/solutions"
 
@@ -42,7 +44,33 @@ done
 FILES=$(find "$SOLUTIONS_DIR" -name "*.md" -type f 2>/dev/null | sort -r)
 [ -z "$FILES" ] && exit 1
 
-# Extract frontmatter field from a file
+# Load the solutions index once (cached at .nanostack/.cache/solutions-index.json,
+# regenerated when the solutions dir mtime changes). Replaces N file-by-file
+# sed/grep frontmatter parses with a single jq scan up front.
+INDEX=""
+if declare -F nano_solutions_index >/dev/null 2>&1; then
+  INDEX=$(nano_solutions_index "$SOLUTIONS_DIR" 2>/dev/null || echo "[]")
+fi
+
+# Pre-compute a tab-separated stream of every solution and all its frontmatter
+# fields with a single jq call. The main loop iterates this stream directly,
+# so no get_field calls are needed and the per-file sed+grep parse cost goes
+# from N x fields to zero (one jq up front).
+INDEX_TSV=""
+USE_INDEX_TSV=false
+if [ -n "$INDEX" ] && [ "$INDEX" != "[]" ]; then
+  INDEX_TSV=$(printf '%s' "$INDEX" | jq -r '
+    def fmt: if type == "array" then "[" + (map(tostring) | join(",")) + "]"
+             elif . == null then "" else tostring end;
+    .[] | [.path, (.title|fmt), (.severity|fmt), (.date|fmt), (.tags|fmt),
+           (.files|fmt), (.validated|fmt), (.applied_count|fmt),
+           (.confidence|fmt), (.last_validated|fmt)] | @tsv' 2>/dev/null) || INDEX_TSV=""
+  [ -n "$INDEX_TSV" ] && USE_INDEX_TSV=true
+fi
+
+# Legacy get_field — only called on the slow path when the index is unavailable
+# (no lib/solutions-index.sh, or index build failed). Kept verbatim so existing
+# behaviour is preserved when the cache cannot be loaded.
 get_field() {
   local file="$1" field="$2"
   sed -n '/^---$/,/^---$/p' "$file" | grep -i "^${field}:" | head -1 | sed "s/^${field}: *//i"
@@ -58,37 +86,59 @@ severity_score() {
 # Collect matches with scores
 RESULTS=""
 
-while IFS= read -r filepath; do
-  [ -z "$filepath" ] && continue
-  MATCH=true
+# Iterate either the TSV stream (fast: all fields already extracted by jq)
+# or the legacy file list (slow: per-file get_field). The matching logic is
+# identical in both branches; only the field source changes.
+process_one() {
+  # Inputs: filepath title severity date tags fm_files validated applied_count
+  #         confidence last_validated   (last six may be empty in legacy mode)
+  local filepath="$1" title="$2" severity="$3" date="$4" tags="$5" fm_files="$6"
+  local validated="$7" applied_count="$8" confidence="$9" last_validated="${10}"
+  local TYPE_DIR
+  TYPE_DIR=$(basename "$(dirname "$filepath")")
+
+  local MATCH=true
 
   # Filter by type (directory name)
-  if [ -n "$FILTER_TYPE" ]; then
-    DIR_TYPE=$(basename "$(dirname "$filepath")")
-    [ "$DIR_TYPE" != "$FILTER_TYPE" ] && MATCH=false
+  if [ -n "$FILTER_TYPE" ] && [ "$TYPE_DIR" != "$FILTER_TYPE" ]; then
+    MATCH=false
   fi
 
-  # Filter by tag (search frontmatter)
+  # Filter by tag — prefer the in-memory tags string when present,
+  # fall back to a file scan when the index is unavailable.
   if [ -n "$FILTER_TAG" ] && [ "$MATCH" = true ]; then
-    if ! grep -qi "tags:.*$FILTER_TAG" "$filepath" 2>/dev/null; then
-      if ! grep -qi "\"$FILTER_TAG\"" "$filepath" 2>/dev/null; then
-        MATCH=false
+    if [ -n "$tags" ]; then
+      echo "$tags" | grep -qi "$FILTER_TAG" 2>/dev/null || MATCH=false
+    else
+      if ! grep -qi "tags:.*$FILTER_TAG" "$filepath" 2>/dev/null; then
+        grep -qi "\"$FILTER_TAG\"" "$filepath" 2>/dev/null || MATCH=false
       fi
     fi
   fi
 
-  # Filter by file path (search frontmatter files field)
+  # Filter by file path — index files field first, file scan as fallback.
   if [ -n "$FILTER_FILE" ] && [ "$MATCH" = true ]; then
-    if ! grep -qi "$FILTER_FILE" "$filepath" 2>/dev/null; then
-      MATCH=false
+    if [ -n "$fm_files" ]; then
+      echo "$fm_files" | grep -qi "$FILTER_FILE" 2>/dev/null || MATCH=false
+    else
+      grep -qi "$FILTER_FILE" "$filepath" 2>/dev/null || MATCH=false
     fi
   fi
 
-  # Search query in title, tags, and body
+  # Query may match title/tags (cheap) or body (file scan). Try cheap fields
+  # first per word; only open the file when the field check misses.
   if [ -n "$QUERY" ] && [ "$MATCH" = true ]; then
-    ALL_WORDS_MATCH=true
+    local ALL_WORDS_MATCH=true
     for word in $QUERY; do
-      if ! grep -qi "$word" "$filepath" 2>/dev/null; then
+      local word_match=false
+      if [ -n "$title" ] && echo "$title" | grep -qi "$word" 2>/dev/null; then
+        word_match=true
+      elif [ -n "$tags" ] && echo "$tags" | grep -qi "$word" 2>/dev/null; then
+        word_match=true
+      elif grep -qi "$word" "$filepath" 2>/dev/null; then
+        word_match=true
+      fi
+      if [ "$word_match" = false ]; then
         ALL_WORDS_MATCH=false
         break
       fi
@@ -96,14 +146,24 @@ while IFS= read -r filepath; do
     [ "$ALL_WORDS_MATCH" = false ] && MATCH=false
   fi
 
-  if [ "$MATCH" = true ]; then
-    # Extract frontmatter for scoring and display
-    TITLE=$(get_field "$filepath" "title")
-    SEVERITY=$(get_field "$filepath" "severity")
-    DATE=$(get_field "$filepath" "date")
-    TAGS=$(get_field "$filepath" "tags")
-    FM_FILES=$(get_field "$filepath" "files")
-    TYPE_DIR=$(basename "$(dirname "$filepath")")
+  [ "$MATCH" = true ] || return 0
+
+  # Fields not in the TSV (legacy path) need to be fetched lazily.
+  if [ -z "$title" ] && [ -z "$severity" ]; then
+    title=$(get_field "$filepath" "title")
+    severity=$(get_field "$filepath" "severity")
+    date=$(get_field "$filepath" "date")
+    tags=$(get_field "$filepath" "tags")
+    fm_files=$(get_field "$filepath" "files")
+    validated=$(get_field "$filepath" "validated")
+    applied_count=$(get_field "$filepath" "applied_count")
+    confidence=$(get_field "$filepath" "confidence")
+    last_validated=$(get_field "$filepath" "last_validated")
+  fi
+
+  TITLE="$title"; SEVERITY="$severity"; DATE="$date"; TAGS="$tags"
+  FM_FILES="$fm_files"; VALIDATED="$validated"; APPLIED_COUNT="$applied_count"
+  CONFIDENCE="$confidence"; LAST_VALIDATED="$last_validated"
 
     # Score: severity + tag match density + recency
     SCORE=$(severity_score "$SEVERITY")
@@ -132,10 +192,6 @@ while IFS= read -r filepath; do
     fi
 
     # Validation bonus: +2 if validated, +1 per applied_count (cap 5)
-    VALIDATED=$(get_field "$filepath" "validated")
-    APPLIED_COUNT=$(get_field "$filepath" "applied_count")
-    LAST_VALIDATED=$(get_field "$filepath" "last_validated")
-
     if [ "$VALIDATED" = "true" ]; then
       SCORE=$((SCORE + 2))
     fi
@@ -147,7 +203,6 @@ while IFS= read -r filepath; do
     fi
 
     # Confidence bonus: scale by confidence (1-10, default 5)
-    CONFIDENCE=$(get_field "$filepath" "confidence")
     if [ -n "$CONFIDENCE" ] && [ "$CONFIDENCE" != "0" ]; then
       # Confidence 5 = neutral (+0), 8 = +3, 10 = +5, 2 = -3
       CONF_BONUS=$((CONFIDENCE - 5))
@@ -180,10 +235,23 @@ while IFS= read -r filepath; do
       fi
     fi
 
-    RESULTS="${RESULTS}${SCORE}|${filepath}|${TITLE}|${SEVERITY}|${DATE}|${TAGS}|${FM_FILES}|${TYPE_DIR}
+  RESULTS="${RESULTS}${SCORE}|${filepath}|${TITLE}|${SEVERITY}|${DATE}|${TAGS}|${FM_FILES}|${TYPE_DIR}
 "
-  fi
-done <<< "$FILES"
+}
+
+# Drive process_one with either the pre-extracted TSV (fast) or the legacy
+# file list (one process_one call per path; get_field re-fetches inside).
+if [ "$USE_INDEX_TSV" = true ]; then
+  while IFS=$'\t' read -r p title severity date tags fm_files validated applied_count confidence last_validated; do
+    [ -z "$p" ] && continue
+    process_one "$p" "$title" "$severity" "$date" "$tags" "$fm_files" "$validated" "$applied_count" "$confidence" "$last_validated"
+  done <<< "$INDEX_TSV"
+else
+  while IFS= read -r filepath; do
+    [ -z "$filepath" ] && continue
+    process_one "$filepath" "" "" "" "" "" "" "" "" ""
+  done <<< "$FILES"
+fi
 
 [ -z "$RESULTS" ] && exit 1
 
