@@ -38,6 +38,8 @@ One command. Detects your agents, installs everything, runs setup. Works with Cl
 
 Then run `/nano-run` in your agent to configure your project through a conversation. On your first sprint, `/think` shows the full pipeline so you know what comes next.
 
+Want to try it on a sandbox first? `examples/starter-todo/` is a tiny TODO app with three suggested features to learn the sprint flow without touching a real project. See [`examples/starter-todo/README.md`](examples/starter-todo/README.md).
+
 Or jump straight in:
 
 ```

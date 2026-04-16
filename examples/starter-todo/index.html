@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Starter TODO — nanostack example</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font: 16px/1.5 system-ui, -apple-system, sans-serif;
+      max-width: 32rem;
+      margin: 4rem auto;
+      padding: 0 1rem;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 1.5rem; }
+    form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+    input[type=text] {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      font: inherit;
+      border: 1px solid currentColor;
+      border-radius: 0.375rem;
+      background: transparent;
+      color: inherit;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      font: inherit;
+      border: 1px solid currentColor;
+      border-radius: 0.375rem;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+    }
+    ul { list-style: none; padding: 0; }
+    li {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+    }
+    li.done span { opacity: 0.5; text-decoration: line-through; }
+    li span { flex: 1; }
+    .empty { opacity: 0.6; font-style: italic; }
+  </style>
+</head>
+<body>
+  <h1>Starter TODO</h1>
+  <p>A tiny example to practice nanostack on. See <a href="README.md">README</a>.</p>
+
+  <form id="add">
+    <input type="text" name="task" placeholder="What needs doing?" required autofocus>
+    <button type="submit">Add</button>
+  </form>
+
+  <ul id="list"></ul>
+
+  <script>
+    const list = document.getElementById('list');
+    const form = document.getElementById('add');
+    const tasks = [];
+
+    function render() {
+      list.innerHTML = tasks.length
+        ? tasks.map((t, i) => `
+            <li class="${t.done ? 'done' : ''}">
+              <input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}>
+              <span>${t.text}</span>
+            </li>`).join('')
+        : '<li class="empty">No tasks yet.</li>';
+    }
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const text = form.task.value.trim();
+      if (text) tasks.push({ text, done: false });
+      form.reset();
+      render();
+    });
+
+    list.addEventListener('change', e => {
+      const i = e.target.dataset.i;
+      if (i !== undefined) tasks[i].done = e.target.checked;
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
