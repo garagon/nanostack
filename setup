@@ -487,3 +487,14 @@ echo "Per-project setup (run once in each project):"
 echo "  ~/.claude/skills/nanostack/bin/init-project.sh"
 echo ""
 echo "Update:    ~/.claude/skills/nanostack/bin/upgrade.sh"
+
+# ─── Per-agent activation guidance ───────────────────────────
+# Tell the user how to actually see the skills in the agents they installed
+# for. Cursor and Codex need a restart that the install step does not perform.
+echo ""
+echo "Next step — activate the skills in your agent:"
+[ "$INSTALL_CLAUDE" -eq 1 ]   && echo "  Claude Code:  ready now. Type /nano-help to see all commands."
+[ "$INSTALL_CURSOR" -eq 1 ]   && echo "  Cursor:       restart Cursor (close and reopen), then type /nano-help."
+[ "$INSTALL_CODEX" -eq 1 ]    && echo "  Codex:        run \`codex\` in a new terminal, then type /nano-help."
+[ "$INSTALL_OPENCODE" -eq 1 ] && echo "  OpenCode:     restart your OpenCode session, then type /nano-help."
+[ "$INSTALL_GEMINI" -eq 1 ]   && echo "  Gemini CLI:   run \`gemini\` in a new terminal, then type /nano-help."
