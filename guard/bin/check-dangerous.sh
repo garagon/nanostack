@@ -118,7 +118,8 @@ if [ -f "$STORE_PATH_SH" ]; then
             echo "Category: concurrency-safety"
             echo "Command: $CMD"
             echo ""
-            echo "Phase '$CURRENT_PHASE' has concurrency=read. Write operations are blocked to prevent race conditions in parallel execution. Report as a finding instead of auto-fixing."
+            echo "Action: report this as a finding instead of auto-fixing. The current phase is read-only to prevent race conditions when multiple agents run in parallel."
+            echo "Bypass: complete the current phase first (\`bin/session.sh phase-complete $CURRENT_PHASE\`), or end the session if you're not in a sprint."
             exit 1
             ;;
         esac

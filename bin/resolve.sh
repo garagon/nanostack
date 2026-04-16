@@ -4,9 +4,12 @@
 # Routes context based on phase: loads upstream artifacts, matched solutions,
 # conflict precedents, diarizations, and config.
 #
-# Usage: resolve.sh <phase> [--diff]
+# Usage: resolve.sh <phase> [--diff] [--skip-solutions] [--max-age <phase>:<days>]...
 #   phase: plan, review, security, qa, ship, compound, feature
-#   --diff: match solutions against current git diff file paths
+#   --diff:                match solutions against current git diff file paths
+#   --skip-solutions:      do not load solutions (for fast/CI runs)
+#   --max-age <phase>:<n>: override per-phase upstream artifact age window in days
+#                          (e.g., --max-age plan:5 --max-age think:30). Repeatable.
 #
 # Output: JSON blob with all resolved context paths and summaries.
 # Exit 0 on success (even if some lookups return empty).
@@ -30,11 +33,27 @@ _nano_timeout() {
   fi
 }
 
-PHASE="${1:?Usage: resolve.sh <phase> [--diff]}"
+PHASE="${1:?Usage: resolve.sh <phase> [--diff] [--skip-solutions] [--max-age <phase>:<days>]...}"
 shift
 USE_DIFF=false
-for arg in "$@"; do
-  [ "$arg" = "--diff" ] && USE_DIFF=true
+SKIP_SOLUTIONS_FLAG=false
+MAX_AGE_OVERRIDES=""  # space-separated "phase:days" pairs from --max-age flags
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --diff) USE_DIFF=true; shift ;;
+    --skip-solutions) SKIP_SOLUTIONS_FLAG=true; shift ;;
+    --max-age)
+      if [ -n "${2:-}" ]; then
+        MAX_AGE_OVERRIDES="${MAX_AGE_OVERRIDES:+$MAX_AGE_OVERRIDES }$2"
+        shift 2
+      else
+        echo "ERROR: --max-age requires <phase>:<days> argument" >&2
+        exit 2
+      fi
+      ;;
+    *) shift ;;  # unknown flag: ignore (forward compatibility)
+  esac
 done
 
 # ─── Routing table ─────────────────────────────────────────
@@ -96,6 +115,14 @@ for entry in $UPSTREAM; do
   phase="${entry%%:*}"
   age="${entry#*:}"
   [ "$age" = "$entry" ] && age=2  # default if no colon
+  # Apply --max-age override if one matches this phase
+  for override in $MAX_AGE_OVERRIDES; do
+    o_phase="${override%%:*}"
+    o_age="${override#*:}"
+    if [ "$o_phase" = "$phase" ] && [ -n "$o_age" ] && [ "$o_age" != "$override" ]; then
+      age="$o_age"
+    fi
+  done
   RESULT=$("$SCRIPT_DIR/find-artifact.sh" "$phase" "$age" 2>/dev/null) || RESULT=""
   if [ -n "$RESULT" ]; then
     $FIRST || ARTIFACTS_JSON="$ARTIFACTS_JSON,"
@@ -108,7 +135,7 @@ ARTIFACTS_JSON="$ARTIFACTS_JSON}"
 # ─── 2. Resolve solutions ──────────────────────────────────
 
 SOLUTIONS_JSON="[]"
-if [ "$LOAD_SOLUTIONS" = true ]; then
+if [ "$LOAD_SOLUTIONS" = true ] && [ "$SKIP_SOLUTIONS_FLAG" = false ]; then
   DIFF_FILES=""
   if [ "$USE_DIFF" = true ]; then
     # Cache the diff keyed on HEAD rev so multiple resolve.sh invocations in

@@ -26,6 +26,7 @@ if [ "$ACTION" = "stop" ]; then
   echo "Category: cost-control"
   echo "Spent: \$${SPENT} / \$${MAX}"
   echo ""
-  echo "Save your work and stop. To override: NANOSTACK_SKIP_BUDGET=1"
+  echo "Action: save your work and stop the sprint. Run \`bin/budget.sh check\` for details, or raise the limit with \`bin/budget.sh set --max-usd N\`."
+  echo "Bypass: NANOSTACK_SKIP_BUDGET=1   (use sparingly)"
   exit 1
 fi

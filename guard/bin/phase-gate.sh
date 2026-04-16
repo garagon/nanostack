@@ -81,8 +81,9 @@ check_phases() {
 print_block() {
   local missing="$1"
   echo "BLOCKED [PHASE-GATE] Sprint phases incomplete: $(echo "$missing" | tr ' ' ', ')"
+  echo "Category: sprint-pipeline"
   echo ""
-  echo "A sprint is active. Complete these phases before committing:"
+  echo "Action: complete these phases before committing:"
   for phase in $missing; do
     case "$phase" in
       review)   echo "  /review   — Code review" ;;
@@ -91,7 +92,7 @@ print_block() {
     esac
   done
   echo ""
-  echo "To bypass (non-sprint commit): NANOSTACK_SKIP_GATE=1 git commit ..."
+  echo "Bypass: NANOSTACK_SKIP_GATE=1 git commit ...   (non-sprint commits only)"
 }
 
 print_warning() {
