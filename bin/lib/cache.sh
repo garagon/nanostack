@@ -5,18 +5,28 @@
 # Cache files live under "$NANOSTACK_STORE/.cache/". Set NANOSTACK_NO_CACHE=1
 # to force callers to bypass caches (useful for debugging stale data).
 
-# Cross-platform file mtime in epoch seconds. Echo 0 on failure.
-nano_mtime() {
-  local f="$1"
-  [ -e "$f" ] || { echo 0; return; }
-  if stat -f %m "$f" >/dev/null 2>&1; then
-    stat -f %m "$f"
-  elif stat -c %Y "$f" >/dev/null 2>&1; then
-    stat -c %Y "$f"
-  else
-    echo 0
-  fi
-}
+# nano_mtime moved to lib/portable.sh in V4 so it can be reused outside the
+# cache layer. Source it transparently here so existing callers of cache.sh
+# get nano_mtime as before, with no change to their source pattern.
+_NANO_CACHE_DIR_OF_THIS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$_NANO_CACHE_DIR_OF_THIS/portable.sh" ]; then
+  source "$_NANO_CACHE_DIR_OF_THIS/portable.sh"
+else
+  # Fallback if portable.sh is missing (older install): keep the original
+  # local definition so cache.sh still works standalone.
+  nano_mtime() {
+    local f="$1"
+    [ -e "$f" ] || { echo 0; return; }
+    if stat -f %m "$f" >/dev/null 2>&1; then
+      stat -f %m "$f"
+    elif stat -c %Y "$f" >/dev/null 2>&1; then
+      stat -c %Y "$f"
+    else
+      echo 0
+    fi
+  }
+fi
+unset _NANO_CACHE_DIR_OF_THIS
 
 # Age of a file in seconds. Echo a very large number on failure so callers
 # treat missing files as expired.

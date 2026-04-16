@@ -30,6 +30,8 @@ STORE_PATH_SH="$NANOSTACK_ROOT/bin/lib/store-path.sh"
 
 [ -f "$STORE_PATH_SH" ] || exit 0
 source "$STORE_PATH_SH"
+PORTABLE_SH="$NANOSTACK_ROOT/bin/lib/portable.sh"
+[ -f "$PORTABLE_SH" ] && source "$PORTABLE_SH"
 
 FIND_ARTIFACT="$NANOSTACK_ROOT/bin/find-artifact.sh"
 SESSION_SH="$NANOSTACK_ROOT/bin/session.sh"
@@ -42,9 +44,24 @@ last_code_timestamp() {
   local ts
   ts=$(git log -1 --format=%ct 2>/dev/null || echo 0)
   if [ "$ts" -eq 0 ]; then
-    # No commits yet — use newest source file
-    ts=$(find . -maxdepth 3 \( -name '*.js' -o -name '*.ts' -o -name '*.py' -o -name '*.go' -o -name '*.html' -o -name '*.css' -o -name '*.sh' \) 2>/dev/null \
-      | head -20 | xargs stat -f %m 2>/dev/null | sort -rn | head -1 || echo 0)
+    # No commits yet: use newest source file mtime. Use nano_mtime so this
+    # works on Linux too (the previous `xargs stat -f %m` was BSD-only and
+    # silently returned 0 on Linux, neutering the phase gate).
+    if declare -F nano_mtime >/dev/null 2>&1; then
+      local newest=0 candidate
+      while IFS= read -r f; do
+        candidate=$(nano_mtime "$f")
+        [ "$candidate" -gt "$newest" ] && newest="$candidate"
+      done < <(find . -maxdepth 3 \( -name '*.js' -o -name '*.ts' -o -name '*.py' -o -name '*.go' -o -name '*.html' -o -name '*.css' -o -name '*.sh' \) 2>/dev/null | head -20)
+      ts="$newest"
+    else
+      # Fallback: try BSD stat then GNU stat in one go.
+      ts=$(find . -maxdepth 3 \( -name '*.js' -o -name '*.ts' -o -name '*.py' -o -name '*.go' -o -name '*.html' -o -name '*.css' -o -name '*.sh' \) 2>/dev/null \
+        | head -20 | xargs stat -f %m 2>/dev/null | sort -rn | head -1)
+      [ -z "$ts" ] && ts=$(find . -maxdepth 3 \( -name '*.js' -o -name '*.ts' -o -name '*.py' -o -name '*.go' -o -name '*.html' -o -name '*.css' -o -name '*.sh' \) 2>/dev/null \
+        | head -20 | xargs stat -c %Y 2>/dev/null | sort -rn | head -1)
+      [ -z "$ts" ] && ts=0
+    fi
   fi
   echo "$ts"
 }

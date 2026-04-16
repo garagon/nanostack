@@ -15,6 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
 source "$SCRIPT_DIR/lib/audit.sh"
 [ -f "$SCRIPT_DIR/lib/preflight.sh" ] && { source "$SCRIPT_DIR/lib/preflight.sh"; nanostack_require jq; }
+[ -f "$SCRIPT_DIR/lib/portable.sh" ] && source "$SCRIPT_DIR/lib/portable.sh"
 
 # ─── Session mode: build JSON from git state + summary ──────
 if [ "${1:-}" = "--from-session" ]; then
@@ -134,8 +135,12 @@ ENRICHED=$(echo "$JSON" | jq \
   --arg branch "$(git branch --show-current 2>/dev/null || echo 'unknown')" \
   '. + {timestamp: ($ts), project: ($proj), branch: ($branch)}')
 
-# ── Integrity checksum ──
-CHECKSUM=$(echo "$ENRICHED" | jq -Sc '.' | shasum -a 256 | cut -d' ' -f1)
+# ── Integrity checksum (portable: nano_sha256 or shasum fallback) ──
+if declare -F nano_sha256 >/dev/null 2>&1; then
+  CHECKSUM=$(echo "$ENRICHED" | jq -Sc '.' | nano_sha256 | cut -d' ' -f1)
+else
+  CHECKSUM=$(echo "$ENRICHED" | jq -Sc '.' | shasum -a 256 | cut -d' ' -f1)
+fi
 ENRICHED=$(echo "$ENRICHED" | jq --arg cs "$CHECKSUM" '. + {integrity: $cs}')
 
 echo "$ENRICHED" | jq '.' > "$FILENAME"

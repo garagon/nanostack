@@ -13,6 +13,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
 source "$SCRIPT_DIR/lib/audit.sh"
+[ -f "$SCRIPT_DIR/lib/portable.sh" ] && source "$SCRIPT_DIR/lib/portable.sh"
 
 STATE_FILE="$NANOSTACK_STORE/loop-guard.json"
 CMD="${1:-check}"
@@ -22,7 +23,11 @@ git_fingerprint() {
   if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     local head diff_hash
     head=$(git rev-parse HEAD 2>/dev/null || echo "none")
-    diff_hash=$(git diff HEAD 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+    if declare -F nano_sha256 >/dev/null 2>&1; then
+      diff_hash=$(git diff HEAD 2>/dev/null | nano_sha256 | cut -d' ' -f1)
+    else
+      diff_hash=$(git diff HEAD 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+    fi
     echo "${head}:${diff_hash}"
   else
     echo "no-git"
