@@ -14,6 +14,20 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
+[ -f "$SCRIPT_DIR/lib/preflight.sh" ] && { source "$SCRIPT_DIR/lib/preflight.sh"; nanostack_require jq; }
+
+# Portable timeout wrapper: gtimeout (coreutils on macOS) → timeout (Linux) → run as-is.
+# Used to bound expensive solution lookups so resolve.sh never hangs the sprint.
+_nano_timeout() {
+  local secs="$1"; shift
+  if command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$secs" "$@"
+  elif command -v timeout >/dev/null 2>&1; then
+    timeout "$secs" "$@"
+  else
+    "$@"
+  fi
+}
 
 PHASE="${1:?Usage: resolve.sh <phase> [--diff]}"
 shift
@@ -111,7 +125,12 @@ $STAGED"
         # Search by each changed file path (take top 5 unique dirs)
         DIRS=$(echo "$DIFF_FILES" | xargs -I{} dirname {} 2>/dev/null | sort -u | head -5)
         for dir in $DIRS; do
-          RESULT=$("$SCRIPT_DIR/find-solution.sh" --file "$dir" 2>/dev/null) || true
+          # Bound find-solution at 3s; on timeout/failure fall back to a direct
+          # listing of files under that dir so the model still sees candidates.
+          RESULT=$(_nano_timeout 3 "$SCRIPT_DIR/find-solution.sh" --file "$dir" 2>/dev/null || true)
+          if [ -z "$RESULT" ] && [ -d "$NANOSTACK_STORE/know-how/solutions" ]; then
+            RESULT=$(find "$NANOSTACK_STORE/know-how/solutions" -name "*.md" -type f -path "*${dir}*" 2>/dev/null | head -5)
+          fi
           [ -n "$RESULT" ] && SOLUTION_OUTPUT="$SOLUTION_OUTPUT
 $RESULT"
         done

@@ -12,6 +12,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
 source "$SCRIPT_DIR/lib/audit.sh"
+[ -f "$SCRIPT_DIR/lib/preflight.sh" ] && { source "$SCRIPT_DIR/lib/preflight.sh"; nanostack_require jq; }
 
 SESSION_FILE="$NANOSTACK_STORE/session.json"
 PROJECT="$(pwd)"
@@ -88,6 +89,9 @@ cmd_init() {
 }
 
 # ─── phase-start ────────────────────────────────────────────
+# Uses an atomic mkdir-lock so concurrent agents (e.g., /conductor) cannot
+# double-register the same phase. mkdir is atomic on every POSIX filesystem;
+# flock would not work on macOS without coreutils.
 cmd_phase_start() {
   local phase="${1:?Usage: session.sh phase-start <phase>}"
 
@@ -96,12 +100,26 @@ cmd_phase_start() {
     exit 1
   fi
 
-  # Idempotent: skip if phase already completed or in progress
+  local lockdir="${SESSION_FILE}.lockdir"
+  local waited=0
+  while ! mkdir "$lockdir" 2>/dev/null; do
+    waited=$((waited + 1))
+    if [ "$waited" -gt 50 ]; then
+      # Stale lock or true contention: clear and proceed (best effort).
+      rmdir "$lockdir" 2>/dev/null || true
+      echo "WARN: session lock held >5s, proceeding without it" >&2
+      break
+    fi
+    sleep 0.1
+  done
+
+  # Re-check inside the lock (idempotent under concurrency)
   local existing
   existing=$(jq -r --arg p "$phase" \
     '[.phase_log[] | select(.phase == $p and (.status == "completed" or .status == "in_progress"))] | length' \
     "$SESSION_FILE" 2>/dev/null || echo "0")
   if [ "$existing" -gt 0 ]; then
+    rmdir "$lockdir" 2>/dev/null || true
     echo "OK: $phase already in log"
     return 0
   fi
@@ -124,6 +142,8 @@ cmd_phase_start() {
      }] |
      .last_updated = $date' "$SESSION_FILE" > "${SESSION_FILE}.tmp"
   mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
+
+  rmdir "$lockdir" 2>/dev/null || true
 
   audit_log "phase_start" "$phase"
   echo "OK: $phase started"
