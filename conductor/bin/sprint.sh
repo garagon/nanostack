@@ -36,19 +36,39 @@ DEFAULT_PHASES='[
   {"name":"ship","depends_on":["review","qa","security"]}
 ]'
 
-# Detect agent name (must be stable across invocations)
+# Detect agent name. Identity must be stable within one process and unique
+# across processes — two terminals running the same agent (e.g., two Claude
+# Code sessions on the same machine) used to both resolve to "claude" and
+# collide on the same lock.
+#
+# Strategy: <agent-family>-<short-id>, where short-id is the agent's session
+# id when exposed, otherwise the parent shell PID. NANOSTACK_AGENT overrides
+# everything for tests and explicit naming.
 detect_agent() {
   if [ -n "${NANOSTACK_AGENT:-}" ]; then
     echo "$NANOSTACK_AGENT"
-  elif [ -n "${CLAUDE_SESSION_ID:-}" ] || [ -n "${CLAUDE_CODE:-}" ]; then
-    echo "claude"
-  elif [ -n "${CODEX_SESSION_ID:-}" ]; then
-    echo "codex"
-  elif [ -n "${OPENCODE_SESSION_ID:-}" ]; then
-    echo "opencode"
-  else
-    echo "agent-$(whoami)"
+    return
   fi
+
+  local family="" short_id=""
+  if [ -n "${CLAUDE_SESSION_ID:-}" ]; then
+    family="claude"
+    short_id="${CLAUDE_SESSION_ID:0:8}"
+  elif [ -n "${CLAUDE_CODE:-}" ]; then
+    family="claude"
+    short_id="$PPID"
+  elif [ -n "${CODEX_SESSION_ID:-}" ]; then
+    family="codex"
+    short_id="${CODEX_SESSION_ID:0:8}"
+  elif [ -n "${OPENCODE_SESSION_ID:-}" ]; then
+    family="opencode"
+    short_id="${OPENCODE_SESSION_ID:0:8}"
+  else
+    family="agent-$(whoami)"
+    short_id="$PPID"
+  fi
+
+  echo "${family}-${short_id}"
 }
 
 # Find active sprint for this project
@@ -265,6 +285,74 @@ cmd_status() {
     '{sprint_id: $sid, project: $project, phases: $phases}'
 }
 
+# ─── next ────────────────────────────────────────────────────
+# Print the first phase that is not done, has all dependencies met, and is
+# not currently locked by anyone. Empty output means nothing is claimable
+# right now (sprint complete, or all available phases held by other agents).
+cmd_next() {
+  local sprint_dir
+  sprint_dir=$(find_sprint) || { echo "ERROR: no active sprint" >&2; exit 1; }
+
+  jq -r '.phases[].name' "$sprint_dir/sprint.json" | while read -r phase; do
+    # Skip done and locked phases
+    [ -f "$sprint_dir/$phase/done" ] && continue
+    [ -d "$sprint_dir/$phase/lock" ] && continue
+
+    # Check deps
+    local deps_met=true
+    local deps
+    deps=$(jq -r --arg p "$phase" '.phases[] | select(.name == $p) | .depends_on[]' "$sprint_dir/sprint.json" 2>/dev/null)
+    for dep in $deps; do
+      if [ ! -f "$sprint_dir/$dep/done" ]; then
+        deps_met=false
+        break
+      fi
+    done
+
+    if [ "$deps_met" = true ]; then
+      echo "$phase"
+      return
+    fi
+  done
+}
+
+# ─── unstuck ─────────────────────────────────────────────────
+# Force-release a lock when its owner PID is dead, without waiting the 1h
+# grace period that claim's auto-recovery uses. Refuses if the PID is alive
+# (you must let the owner finish or call abort yourself). Pass --force to
+# release a lock with a live PID; required when stdin is not a TTY.
+cmd_unstuck() {
+  local phase="${1:?Usage: sprint.sh unstuck <phase> [--force]}"
+  local force=false
+  [ "${2:-}" = "--force" ] && force=true
+
+  local sprint_dir
+  sprint_dir=$(find_sprint) || { echo "ERROR: no active sprint" >&2; exit 1; }
+
+  local lock_dir="$sprint_dir/$phase/lock"
+  if [ ! -d "$lock_dir" ]; then
+    echo "OK: '$phase' has no lock"
+    return 0
+  fi
+
+  local lock_pid lock_agent
+  lock_pid=$(jq -r '.pid // 0' "$lock_dir/meta.json" 2>/dev/null)
+  lock_agent=$(jq -r '.agent // "unknown"' "$lock_dir/meta.json" 2>/dev/null)
+
+  if [ "$lock_pid" -gt 0 ] && kill -0 "$lock_pid" 2>/dev/null; then
+    if [ "$force" != true ]; then
+      echo "REFUSED: '$phase' is held by '$lock_agent' (PID $lock_pid is alive)" >&2
+      echo "Pass --force only if you are sure that process is no longer doing useful work." >&2
+      exit 1
+    fi
+    echo "WARNING: forcing release of lock held by alive PID $lock_pid ($lock_agent)" >&2
+  fi
+
+  rm -rf "$lock_dir"
+  audit_log "sprint_unstuck" "$phase" "$lock_agent"
+  echo "OK: released '$phase' (was held by '$lock_agent')"
+}
+
 # ─── clean ───────────────────────────────────────────────────
 cmd_clean() {
   # Remove archived sprints older than 7 days
@@ -379,8 +467,10 @@ case "$CMD" in
   status)   cmd_status "$@" ;;
   batch)    cmd_batch "$@" ;;
   clean)    cmd_clean "$@" ;;
+  next)     cmd_next "$@" ;;
+  unstuck)  cmd_unstuck "$@" ;;
   *)
-    echo "Usage: sprint.sh <start|claim|complete|abort|status|batch|clean>" >&2
+    echo "Usage: sprint.sh <start|claim|complete|abort|status|batch|clean|next|unstuck>" >&2
     exit 1
     ;;
 esac

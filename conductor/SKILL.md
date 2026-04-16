@@ -98,6 +98,22 @@ conductor/bin/sprint.sh abort [phase]
 
 Release a claim without completing. Use when an agent encounters a blocker.
 
+### Next
+
+```bash
+conductor/bin/sprint.sh next
+```
+
+Print the first phase that is not done, has all dependencies met, and is not currently locked. Empty output means nothing is claimable right now (sprint complete, or all available phases are held by other agents). Use this so an agent that just joined the sprint does not have to parse `status` to know what to claim.
+
+### Unstuck
+
+```bash
+conductor/bin/sprint.sh unstuck <phase> [--force]
+```
+
+Force-release a lock when its owner PID is dead, without waiting the 1-hour grace period that `claim` uses for auto-recovery. Refuses if the PID is alive (you should let the owner finish or call `abort` yourself); pass `--force` to release a lock with a live PID. Use this when an agent crashed without releasing its lock and you need to keep moving.
+
 ### Batch (auto-parallelize)
 
 ```bash
