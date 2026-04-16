@@ -644,7 +644,7 @@ Your skills use the same infrastructure: `save-artifact.sh` persists artifacts, 
 
 A marketing team builds `/audience` and `/campaign`. A data team builds `/explore` and `/model`. A design team builds `/wireframe` and `/usability`. All compose with nanostack's `/think` for ideation, `/review` for quality and `/ship` for delivery.
 
-Full guide: [`EXTENDING.md`](EXTENDING.md).
+Full guide: [`EXTENDING.md`](EXTENDING.md). Working starting point: [`examples/custom-skill-template/`](examples/custom-skill-template/) is a `/audit-licenses` skill you can copy and adapt.
 
 ## Privacy
 
