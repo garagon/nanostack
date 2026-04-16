@@ -255,43 +255,13 @@ This is the first thing you do after the summary. Not optional. Not "Step 2". Th
 
 ### Phase 6.5: Think Brief (shareable)
 
-Save a clean markdown brief to `.nanostack/know-how/briefs/`. This is a human-readable version of the Think Summary that the user can share with their team, open in Obsidian, or paste into a doc.
-
-Write the brief file directly (do not use save-artifact.sh — this is a markdown doc, not a JSON artifact):
+Save a clean markdown brief to `.nanostack/know-how/briefs/YYYY-MM-DD-<slug>.md` (slug from the value proposition). This is a human-readable version of the Think Summary the user can share with their team, open in Obsidian, or paste into a doc. Do NOT use `save-artifact.sh` — this is a markdown doc, not a JSON artifact.
 
 ```bash
 mkdir -p .nanostack/know-how/briefs
 ```
 
-Write a file named `YYYY-MM-DD-<slug>.md` (slug from the value proposition) with this format:
-
-```markdown
-# Think Brief: <value proposition short title>
-
-**Date:** YYYY-MM-DD
-**Mode:** Startup / Builder / Founder
-**Scope:** Expand / Hold / Reduce
-
-## Value Proposition
-<one sentence>
-
-## Target User
-<who specifically, and why they'd use a broken v1>
-
-## Starting Point
-<the smallest thing that delivers value>
-
-## Key Risk
-<the one thing most likely to make this fail>
-
-## What We Decided NOT to Build
-<out of scope items from the diagnostic>
-
-## Premise
-<validated or not — and the argument that tested it>
-```
-
-Keep it under 20 lines. No filler, no headers without content. Skip sections that don't apply (e.g., skip "What We Decided NOT to Build" if nothing was excluded).
+Format and rules: see `think/references/brief-template.md`. Keep under 20 lines, skip sections that don't apply.
 
 ### Phase 7: Next Step
 
