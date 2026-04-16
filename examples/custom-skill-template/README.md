@@ -1,6 +1,6 @@
 # Custom Skill Template
 
-A working example you can copy and adapt to build your own nanostack skill. Sister to `examples/starter-todo` (which teaches the sprint flow) — this one teaches you how to extend it.
+A working example you can copy and adapt to build your own nanostack skill. Sister to `examples/starter-todo`, which teaches the sprint flow; this one teaches you how to extend it.
 
 The included example is `/audit-licenses`: a small skill that scans your project's direct dependencies and flags GPL or AGPL licenses. It is not a production license scanner; it is small enough to read end-to-end and shows every pattern a custom skill needs.
 
@@ -40,8 +40,8 @@ For other agents, follow the install pattern documented in `EXTENDING.md` at the
 
 The example skill is just bash + jq. To build your own, copy `audit-licenses/` to a new directory and edit:
 
-1. **Frontmatter in `SKILL.md`** (`name`, `description`, `concurrency`, `summary`). The `name` is what the user types after `/`. The `description` is what the agent reads to decide when to invoke your skill — write it as the agent will see it, not as documentation.
-2. **The `Process` section in `SKILL.md`** — describe step by step what the agent should do. Keep it directives, not narrative. Reference your `bin/` scripts with absolute or relative paths.
+1. **Frontmatter in `SKILL.md`** (`name`, `description`, `concurrency`, `summary`). The `name` is what the user types after `/`. The `description` is what the agent reads to decide when to invoke your skill, so write it as the agent will see it, not as documentation.
+2. **The `Process` section in `SKILL.md`**. Describe step by step what the agent should do. Keep it directives, not narrative. Reference your `bin/` scripts with absolute or relative paths.
 3. **Your bash helper(s)** under `bin/`. Use the same conventions as the built-in skills: `set -e`, source `lib/store-path.sh` if you need `$NANOSTACK_STORE`, output JSON, exit non-zero on failure.
 4. **Save an artifact** when your skill has a result worth keeping. The artifact ends up in `.nanostack/<your-skill-name>/` and is automatically picked up by `/compound`, `bin/find-artifact.sh`, and the conductor.
 
@@ -62,7 +62,7 @@ Once your skill is in place, you get this for free:
 
 ## Further reading
 
-- `EXTENDING.md` at the repo root — the full guide to extending nanostack.
-- `bin/save-artifact.sh --help` — the artifact contract.
-- `bin/find-artifact.sh` — how skills look up upstream artifacts.
+- `EXTENDING.md` at the repo root: the full guide to extending nanostack.
+- `bin/save-artifact.sh --help`: the artifact contract.
+- `bin/find-artifact.sh`: how skills look up upstream artifacts.
 - The built-in skills (`think/`, `plan/`, `review/`, etc.) are the canonical reference for advanced patterns.
