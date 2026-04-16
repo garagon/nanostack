@@ -14,6 +14,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
 source "$SCRIPT_DIR/lib/audit.sh"
+[ -f "$SCRIPT_DIR/lib/preflight.sh" ] && { source "$SCRIPT_DIR/lib/preflight.sh"; nanostack_require jq; }
 
 # ─── Session mode: build JSON from git state + summary ──────
 if [ "${1:-}" = "--from-session" ]; then
