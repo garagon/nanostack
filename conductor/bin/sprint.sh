@@ -11,18 +11,23 @@ source "$SCRIPT_DIR/bin/lib/audit.sh"
 CONDUCTOR_DIR="$NANOSTACK_STORE/conductor"
 PROJECT="$(pwd)"
 
-# Portable sha256: sha256sum (most Linux), shasum -a 256 (macOS, perl-shasum).
-# Without this, /conductor breaks on Alpine and slim Docker images.
-nano_sha256() {
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum
-  elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256
-  else
-    echo "ERROR: need sha256sum or shasum to compute project hash" >&2
-    return 1
-  fi
-}
+# Use the centralized nano_sha256 from bin/lib/portable.sh (V4). Falls back
+# to a local copy if that file is missing (older install) so sprint.sh stays
+# standalone-runnable.
+if [ -f "$SCRIPT_DIR/bin/lib/portable.sh" ]; then
+  source "$SCRIPT_DIR/bin/lib/portable.sh"
+else
+  nano_sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+      sha256sum
+    elif command -v shasum >/dev/null 2>&1; then
+      shasum -a 256
+    else
+      echo "ERROR: need sha256sum or shasum to compute project hash" >&2
+      return 1
+    fi
+  }
+fi
 PROJECT_HASH=$(printf '%s' "$PROJECT" | nano_sha256 | cut -c1-12)
 
 # Default phases and dependency graph
