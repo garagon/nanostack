@@ -15,6 +15,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
 [ -f "$SCRIPT_DIR/lib/preflight.sh" ] && { source "$SCRIPT_DIR/lib/preflight.sh"; nanostack_require jq; }
+[ -f "$SCRIPT_DIR/lib/cache.sh" ] && source "$SCRIPT_DIR/lib/cache.sh"
 
 # Portable timeout wrapper: gtimeout (coreutils on macOS) → timeout (Linux) → run as-is.
 # Used to bound expensive solution lookups so resolve.sh never hangs the sprint.
@@ -110,12 +111,23 @@ SOLUTIONS_JSON="[]"
 if [ "$LOAD_SOLUTIONS" = true ]; then
   DIFF_FILES=""
   if [ "$USE_DIFF" = true ]; then
-    DIFF_FILES=$(git diff --name-only HEAD 2>/dev/null || git diff --name-only 2>/dev/null || echo "")
-    # Also include staged files
-    STAGED=$(git diff --cached --name-only 2>/dev/null || echo "")
-    [ -n "$STAGED" ] && DIFF_FILES="$DIFF_FILES
+    # Cache the diff keyed on HEAD rev so multiple resolve.sh invocations in
+    # the same sprint reuse one git call. New commits invalidate via the key.
+    DIFF_CACHE=""
+    if declare -F nano_cache_dir >/dev/null 2>&1; then
+      HEAD_REV=$(git rev-parse --short HEAD 2>/dev/null || echo "no-head")
+      DIFF_CACHE="$(nano_cache_dir)/git-diff-${HEAD_REV}"
+    fi
+    if [ -n "$DIFF_CACHE" ] && nano_cache_fresh "$DIFF_CACHE" 30 2>/dev/null; then
+      DIFF_FILES=$(cat "$DIFF_CACHE")
+    else
+      DIFF_FILES=$(git diff --name-only HEAD 2>/dev/null || git diff --name-only 2>/dev/null || echo "")
+      STAGED=$(git diff --cached --name-only 2>/dev/null || echo "")
+      [ -n "$STAGED" ] && DIFF_FILES="$DIFF_FILES
 $STAGED"
-    DIFF_FILES=$(echo "$DIFF_FILES" | sort -u | head -20)
+      DIFF_FILES=$(echo "$DIFF_FILES" | sort -u | head -20)
+      [ -n "$DIFF_CACHE" ] && printf '%s\n' "$DIFF_FILES" > "$DIFF_CACHE" 2>/dev/null || true
+    fi
   fi
 
   SOLUTION_OUTPUT=""

@@ -7,6 +7,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
+[ -f "$SCRIPT_DIR/lib/cache.sh" ] && source "$SCRIPT_DIR/lib/cache.sh"
 
 PHASE="${1:?Usage: find-artifact.sh <phase> [max-age-days]}"
 MAX_AGE="${2:-30}"
@@ -38,12 +39,22 @@ done | sort -r | head -1)
 # "in_progress" until save-artifact.sh completes it.
 SESSION_FILE="$NANOSTACK_STORE/session.json"
 if [ -f "$SESSION_FILE" ]; then
-  # Check if phase already in session (avoid unnecessary jq calls)
-  PHASE_EXISTS=$(jq -r --arg p "$PHASE" \
-    '[.phase_log[] | select(.phase == $p)] | length' \
-    "$SESSION_FILE" 2>/dev/null)
-  PHASE_EXISTS="${PHASE_EXISTS:-0}"
-  if [ "$PHASE_EXISTS" -eq 0 ]; then
+  # Cache the phase list extracted from session.json. Multiple find-artifact.sh
+  # calls in one resolve.sh run reuse the same list; session.sh writes bump
+  # session.json's mtime which invalidates the cache automatically.
+  PHASE_LIST_CACHE=""
+  if declare -F nano_cache_dir >/dev/null 2>&1; then
+    PHASE_LIST_CACHE="$(nano_cache_dir)/session-phases"
+  fi
+
+  if [ -n "$PHASE_LIST_CACHE" ] && nano_cache_fresh "$PHASE_LIST_CACHE" 60 "$SESSION_FILE" 2>/dev/null; then
+    PHASE_LIST=$(cat "$PHASE_LIST_CACHE")
+  else
+    PHASE_LIST=$(jq -r '.phase_log[].phase' "$SESSION_FILE" 2>/dev/null || echo "")
+    [ -n "$PHASE_LIST_CACHE" ] && printf '%s\n' "$PHASE_LIST" > "$PHASE_LIST_CACHE" 2>/dev/null || true
+  fi
+
+  if ! printf '%s\n' "$PHASE_LIST" | grep -qx "$PHASE" 2>/dev/null; then
     SESSION_SH="$SCRIPT_DIR/session.sh"
     if [ -x "$SESSION_SH" ]; then
       "$SESSION_SH" phase-start "$PHASE" >/dev/null 2>&1 || true
