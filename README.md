@@ -113,7 +113,7 @@ Each skill feeds into the next. `/nano` writes an artifact that `/review` reads 
 | Skill | What it does |
 |-------|-------------|
 | `/compound` | **Knowledge** | Documents solved problems after each sprint. Three types: bug, pattern, decision. Solutions evolve across sprints: validated and applied_count track which solutions actually work. `/nano` and `/review` search past solutions automatically, ranked by proven value. Checks if any solutions are ready to graduate into skill files. |
-| `/guard` | **Safety** | Five-tier safety: allowlist, in-project bypass, phase-aware concurrency (blocks writes during read-only phases), phase gate (blocks commit/push until review+security+qa pass), and pattern matching with 33 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
+| `/guard` | **Safety** | Six-tier safety: allowlist, in-project bypass, phase-aware concurrency (blocks writes during read-only phases), phase gate (blocks commit/push until review+security+qa pass), budget gate (blocks all commands when sprint cost exceeds the limit), and pattern matching with 33 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
 | `/conductor` | **Orchestrator** | Parallel agent sessions with auto-batching. `sprint.sh batch` reads skill concurrency metadata and groups parallel-safe phases. Session resume on crash. Dependency validation before each phase. No daemon, just atomic file ops. |
 | `/feature` | **Builder** | Add functionality to an existing project. Skips /think, goes straight to plan, build, review, audit, test, ship. |
 | `/nano-run` | **Onboarding** | First-time setup. Configures stack, permissions, and work preferences through a conversation. Auto-detects your project and guides your first sprint. |
@@ -292,6 +292,12 @@ Nanostack works well with one agent. It gets interesting with three running at o
 No daemon. No message queue. Just `mkdir` for atomic locking, JSON for state, symlinks for artifact handoff.
 
 `sprint.sh batch` reads each skill's `concurrency` metadata (read, write, exclusive) and outputs execution batches. Review, QA and security are all `read` and share the same dependency, so they batch together automatically.
+
+### Coordination commands
+
+`sprint.sh next` prints the first phase that is not done, has all dependencies met, and is not currently locked. An agent that just joined the sprint runs this to know what to claim, without parsing `status` JSON.
+
+`sprint.sh unstuck <phase>` force-releases a stuck lock when its owner PID is dead, so a crashed agent does not block the sprint for the 1-hour grace period that auto-recovery uses. Refuses if the PID is alive; pass `--force` to override with a warning.
 
 ### Session resume
 
