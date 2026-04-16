@@ -10,7 +10,20 @@ source "$SCRIPT_DIR/bin/lib/audit.sh"
 
 CONDUCTOR_DIR="$NANOSTACK_STORE/conductor"
 PROJECT="$(pwd)"
-PROJECT_HASH=$(echo -n "$PROJECT" | shasum -a 256 | cut -c1-12)
+
+# Portable sha256: sha256sum (most Linux), shasum -a 256 (macOS, perl-shasum).
+# Without this, /conductor breaks on Alpine and slim Docker images.
+nano_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256
+  else
+    echo "ERROR: need sha256sum or shasum to compute project hash" >&2
+    return 1
+  fi
+}
+PROJECT_HASH=$(printf '%s' "$PROJECT" | nano_sha256 | cut -c1-12)
 
 # Default phases and dependency graph
 DEFAULT_PHASES='[
@@ -201,12 +214,6 @@ cmd_complete() {
   # Release lock
   rm -rf "$phase_dir/lock"
 
-  # Check if sprint is complete
-  local all_done=true
-  jq -r '.phases[].name' "$sprint_dir/sprint.json" | while read -r p; do
-    [ -f "$sprint_dir/$p/done" ] || { all_done=false; break; }
-  done
-
   audit_log "sprint_complete" "$phase" "$agent"
   echo "OK"
 }
@@ -222,6 +229,9 @@ cmd_abort() {
 }
 
 # ─── status ──────────────────────────────────────────────────
+# Build the JSON entirely with jq so an agent name with quotes or backslashes
+# cannot break the output. Previous version assembled it with printf and was
+# brittle for any value with shell-special characters.
 cmd_status() {
   local sprint_dir
   sprint_dir=$(find_sprint) || { echo '{"status":"no_sprint"}'; exit 0; }
@@ -229,32 +239,30 @@ cmd_status() {
   local sprint_id
   sprint_id=$(jq -r '.sprint_id' "$sprint_dir/sprint.json")
 
-  echo "{"
-  echo "  \"sprint_id\": \"$sprint_id\","
-  echo "  \"project\": \"$PROJECT\","
-  echo "  \"phases\": {"
-
-  local first=true
-  jq -r '.phases[].name' "$sprint_dir/sprint.json" | while read -r phase; do
+  # Walk each phase and emit one JSON object per line; jq -s wraps them in an
+  # array which we then convert into the {phase: {state, agent, at}} map.
+  local phases_json
+  phases_json=$(jq -r '.phases[].name' "$sprint_dir/sprint.json" | while read -r phase; do
     local state="pending" agent="" ts=""
     if [ -f "$sprint_dir/$phase/done" ]; then
       state="done"
-      agent=$(jq -r '.agent' "$sprint_dir/$phase/done" 2>/dev/null)
-      ts=$(jq -r '.completed_at' "$sprint_dir/$phase/done" 2>/dev/null)
+      agent=$(jq -r '.agent // ""' "$sprint_dir/$phase/done" 2>/dev/null)
+      ts=$(jq -r '.completed_at // ""' "$sprint_dir/$phase/done" 2>/dev/null)
     elif [ -d "$sprint_dir/$phase/lock" ]; then
       state="running"
-      agent=$(jq -r '.agent' "$sprint_dir/$phase/lock/meta.json" 2>/dev/null)
-      ts=$(jq -r '.claimed_at' "$sprint_dir/$phase/lock/meta.json" 2>/dev/null)
+      agent=$(jq -r '.agent // ""' "$sprint_dir/$phase/lock/meta.json" 2>/dev/null)
+      ts=$(jq -r '.claimed_at // ""' "$sprint_dir/$phase/lock/meta.json" 2>/dev/null)
     fi
+    jq -n \
+      --arg name "$phase" --arg state "$state" --arg agent "$agent" --arg at "$ts" \
+      '{name: $name, state: $state, agent: $agent, at: $at}'
+  done | jq -s 'map({(.name): {state: .state, agent: .agent, at: .at}}) | add // {}')
 
-    $first || echo ","
-    first=false
-    printf '    "%s": {"state":"%s","agent":"%s","at":"%s"}' "$phase" "$state" "$agent" "$ts"
-  done
-
-  echo ""
-  echo "  }"
-  echo "}"
+  jq -n \
+    --arg sid "$sprint_id" \
+    --arg project "$PROJECT" \
+    --argjson phases "$phases_json" \
+    '{sprint_id: $sid, project: $project, phases: $phases}'
 }
 
 # ─── clean ───────────────────────────────────────────────────
