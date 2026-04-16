@@ -115,40 +115,7 @@ Skip this for Small scope — it's overkill for a 3-file change.
 
 ### 6. Product Standards (if the plan includes user-facing output)
 
-If the plan produces anything a user will see or interact with, apply these standards. They are not optional. A product built with an AI agent should look and feel better than one built without it.
-
-**UI/Frontend:**
-- Use a component library. Default: shadcn/ui + Tailwind. Not raw CSS, not Bootstrap, not Material UI from 2019. The bar is professional SaaS quality.
-- Dark mode support from day one. Not as a follow-up. It takes 5 minutes more with Tailwind.
-- Mobile responsive. If it doesn't work on a phone, half the users can't use it.
-- No AI slop: no purple gradients, no centered-everything landing pages, no generic hero copy, no Inter font as the only choice. If it looks like every other AI-generated site, it's wrong.
-
-**SEO (if web-facing):**
-- Semantic HTML. `<main>`, `<article>`, `<nav>`, `<h1>` hierarchy. Not a div soup.
-- Meta tags: title, description, og:image, og:title, og:description. Every page.
-- Performance: images optimized, no layout shift, Core Web Vitals passing.
-- Sitemap and robots.txt if the site has more than one page.
-
-**LLM SEO (if the product should be discoverable by AI):**
-- Structured data (JSON-LD) for the content type: Product, Article, FAQ, HowTo, SoftwareApplication.
-- `llms.txt` at the root describing what the site/product does in plain language.
-- Clean, descriptive URLs. `/pricing` not `/page?id=3`.
-- Content that answers questions directly in the first paragraph. LLMs extract from the top, not the bottom.
-
-**CLI/TUI (if the plan produces a command-line tool):**
-- Use a TUI framework. Default by language:
-  - **Go:** [Bubble Tea](https://github.com/charmbracelet/bubbletea) + [Lip Gloss](https://github.com/charmbracelet/lipgloss) for interactive TUIs. [Cobra](https://github.com/spf13/cobra) for command structure. [Glamour](https://github.com/charmbracelet/glamour) for markdown rendering.
-  - **Python:** [Rich](https://github.com/Textualize/rich) for output formatting. [Textual](https://github.com/Textualize/textual) for interactive TUIs. [Click](https://github.com/pallets/click) or [Typer](https://github.com/tiangolo/typer) for command structure.
-  - **Node/TypeScript:** [Ink](https://github.com/vadimdemedes/ink) for interactive TUIs. [Commander](https://github.com/tj/commander.js) for command structure. [Chalk](https://github.com/chalk/chalk) for colors.
-  - **Rust:** [Ratatui](https://github.com/ratatui-org/ratatui) for interactive TUIs. [Clap](https://github.com/clap-rs/clap) for command structure.
-- Color output by default. Respect `NO_COLOR` env var and `--no-color` flag.
-- Structured output: support `--json` flag for machine-readable output. Human-readable is default.
-- Progress indicators for operations that take more than 1 second (spinners, progress bars).
-- Error messages must be actionable: what went wrong, why, and what the user should do. Not stack traces.
-- Exit codes: 0 for success, 1 for user error, 2 for system error. Consistent across all subcommands.
-- Help text: every command and flag has a description. `--help` works on every subcommand.
-- No wall of text output. Use tables, columns, indentation and color to make output scannable.
-- Version flag: `--version` prints version and exits.
+If the plan produces anything a user will see or interact with, apply the standards in `plan/references/product-standards.md`. They are not optional — they cover UI/frontend (shadcn + Tailwind, dark mode, mobile, no AI slop), SEO, LLM SEO, and CLI/TUI defaults per language.
 
 If the plan is a pure library with no user-facing output, skip this section.
 

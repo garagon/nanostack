@@ -174,32 +174,7 @@ Document what went wrong for the team.
 
 ### 7. Repo Quality Standards
 
-Before creating the PR, verify these standards. The public repo is the face of the project.
-
-**README:**
-- All internal links resolve (check every `[text](path)` reference)
-- No stale command names or paths from previous versions
-- No AI writing tells: em dashes, en dashes, Oxford commas
-- Examples are accurate and runnable
-- Install instructions work on a clean machine
-
-**PR quality:**
-- Title under 70 characters, starts with a verb
-- Body explains what changed and why, not just what files were touched
-- Test plan is specific enough that someone else could verify it
-- No "Generated with" badges or AI attribution
-
-**Commit quality:**
-- Commit messages explain the why, not just the what
-- One concern per commit when possible
-- No AI attribution in commit messages
-
-**Repo hygiene:**
-- No secrets in the diff (API keys, tokens, passwords)
-- No large binary files committed
-- .gitignore covers editor files, OS files, build artifacts
-
-`ship/bin/quality-check.sh` automates the checks it can. Use your judgment for the rest.
+Before creating the PR, verify the standards in `ship/references/repo-quality-standards.md` (README links, PR/commit quality, repo hygiene). The public repo is the face of the project. `ship/bin/quality-check.sh` automates the checks it can; use judgment for the rest.
 
 After shipping, do these steps in order:
 
