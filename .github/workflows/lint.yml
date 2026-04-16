@@ -1,0 +1,75 @@
+name: lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  shell-syntax:
+    name: Shell syntax (bash -n)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n on every shell script
+        run: |
+          set -e
+          fail=0
+          while IFS= read -r script; do
+            if ! bash -n "$script" 2>/dev/null; then
+              echo "FAIL: $script"
+              bash -n "$script" || true
+              fail=1
+            fi
+          done < <(find . -type f \( -name '*.sh' -o -name 'setup' \) \
+                     ! -path './.git/*' \
+                     ! -path './Nanostack/*' \
+                     ! -path './fetched-skills/*' \
+                     ! -path './node_modules/*' 2>/dev/null)
+          exit $fail
+
+  skill-frontmatter:
+    name: SKILL.md frontmatter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Required fields present in every SKILL.md
+        run: |
+          set -e
+          missing=0
+          while IFS= read -r f; do
+            for field in name description; do
+              if ! grep -qE "^${field}:" "$f"; then
+                echo "MISSING $field: $f"
+                missing=1
+              fi
+            done
+          done < <(find . -name 'SKILL.md' \
+                     ! -path './.git/*' \
+                     ! -path './Nanostack/*' \
+                     ! -path './fetched-skills/*' 2>/dev/null)
+          exit $missing
+
+  copy-style:
+    name: No em-dashes in public copy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Em-dash check on top-level docs and examples READMEs
+        run: |
+          set -e
+          # Repo's own rule (see ship/references/repo-quality-standards.md):
+          # no em-dashes in public copy. SKILL.md files are internal agent
+          # instructions and are intentionally exempt.
+          fail=0
+          targets=$(ls *.md 2>/dev/null; find examples -name 'README.md' 2>/dev/null)
+          for f in $targets; do
+            count=$(grep -c '—' "$f" 2>/dev/null || true)
+            count=${count:-0}
+            if [ "$count" -gt 0 ]; then
+              echo "FAIL: $f has $count em-dash(es)"
+              grep -n '—' "$f" || true
+              fail=1
+            fi
+          done
+          exit $fail

@@ -188,7 +188,7 @@ You said "security scanner." The agent said "you're building a prevention gate" 
 
 ## Think brief
 
-Every `/think` run saves a shareable markdown brief to `.nanostack/know-how/briefs/`. Not the JSON artifact — a clean document you can send to your team, paste into a doc, or open in Obsidian.
+Every `/think` run saves a shareable markdown brief to `.nanostack/know-how/briefs/`. Not the JSON artifact. A clean document you can send to your team, paste into a doc, or open in Obsidian.
 
 ```markdown
 # Think Brief: S3 Public Access Prevention Gate
@@ -201,7 +201,7 @@ Every `/think` run saves a shareable markdown brief to `.nanostack/know-how/brie
 Prevent public S3 buckets from reaching production.
 
 ## Target User
-Platform team — they got paged for the incident.
+Platform team. They got paged for the incident.
 
 ## Starting Point
 One rule: block S3 public access pre-deploy.
@@ -210,7 +210,7 @@ One rule: block S3 public access pre-deploy.
 False positives blocking legitimate public assets (CDN, static sites).
 
 ## Premise
-Validated — scanner finds problems after they exist, gate prevents them.
+Validated. Scanner finds problems after they exist, gate prevents them.
 ```
 
 The brief answers: what are we building, for whom, why this scope, and what could go wrong. Share it before writing code.
@@ -230,7 +230,7 @@ Agent:  Reading sprint data...
 
         Shipped: S3 public access gate (4 files, PR #42)
 
-        Right problem? Yes — prevention, not detection. The gate
+        Right problem? Yes, prevention not detection. The gate
         blocked 2 misconfigs in staging within 24 hours of deploy.
 
         Surprises: /security found the gate itself had no rate
@@ -241,10 +241,10 @@ Agent:  Reading sprint data...
         graduated rules.
 
         Recommendation: Next sprint should add IAM role scope
-        checks — same gate pattern, broader coverage.
+        checks. Same gate pattern, broader coverage.
 ```
 
-Retro reads the sprint journal, compound solutions, pattern report, and git metrics (`bin/sprint-metrics.sh` — commits, lines changed, cycle time per phase). It applies the same forcing questions to what was built, not what will be built. It doesn't start a new sprint — it's standalone reflection.
+Retro reads the sprint journal, compound solutions, pattern report, and git metrics (`bin/sprint-metrics.sh` for commits, lines changed, cycle time per phase). It applies the same forcing questions to what was built, not what will be built. It doesn't start a new sprint. It's standalone reflection.
 
 ## Autopilot
 
@@ -260,7 +260,7 @@ Discuss the idea, approve the brief, walk away. The agent runs the full sprint:
 /nano → build → /review → /security → /qa → /ship
 ```
 
-The phase gate enforces the pipeline. Even if the agent judges a task as "simple" and tries to skip review or security, `git commit` is blocked until all phases have fresh artifacts. No instructions to follow — the hook stops the commit.
+The phase gate enforces the pipeline. Even if the agent judges a task as "simple" and tries to skip review or security, `git commit` is blocked until all phases have fresh artifacts. No instructions to follow. The hook stops the commit.
 
 Autopilot only stops if:
 - `/review` finds blocking issues that need your decision
@@ -305,11 +305,11 @@ Pass a business objective when starting a sprint:
 session.sh init development --goal "Pass SOC2 audit by July"
 ```
 
-The goal propagates through the resolver to every phase. `/think` uses it to frame scope decisions: "does this feature serve the goal, or is it a tangent?" `/review` uses it to prioritize findings. `/security` uses it to weight compliance-related checks. The goal is optional — sprints work fine without one.
+The goal propagates through the resolver to every phase. `/think` uses it to frame scope decisions: "does this feature serve the goal, or is it a tangent?" `/review` uses it to prioritize findings. `/security` uses it to weight compliance-related checks. The goal is optional; sprints work fine without one.
 
 ### Budget and circuit breaker
 
-`budget.sh set --max-usd 15 --model opus-4` sets a cost limit for the sprint. At each phase transition, `budget.sh check` calculates spent vs budget. Warns at 80%. At 95%, the guard pipeline hard-blocks all non-allowlisted commands — not a suggestion the model can ignore, a wall. The agent can still run `git status` and `ls` (to save work) but can't execute anything else. Override with `NANOSTACK_SKIP_BUDGET=1`.
+`budget.sh set --max-usd 15 --model opus-4` sets a cost limit for the sprint. At each phase transition, `budget.sh check` calculates spent vs budget. Warns at 80%. At 95%, the guard pipeline hard-blocks all non-allowlisted commands. Not a suggestion the model can ignore, a wall. The agent can still run `git status` and `ls` (to save work) but can't execute anything else. Override with `NANOSTACK_SKIP_BUDGET=1`.
 
 `circuit.sh` tracks consecutive failures. After 3 failures on the same approach, the circuit opens and the agent must pivot or stop. Changing approach resets the counter.
 
@@ -531,7 +531,7 @@ After shipping, run `/compound` to document what you learned:
 
 Next sprint, `/nano` automatically searches past solutions before planning. `/review` checks if current code follows documented resolutions. Solutions that reference files no longer on disk are ranked lower automatically.
 
-Solutions evolve over time. Each time `/compound` confirms a solution was applied, it increments `applied_count`, marks it `validated`, adjusts `confidence` (1-10 scale: +2 if it worked perfectly, -2 if it failed), and rewrites the compiled truth (Problem, Solution, Prevention) to reflect the current best understanding. The History section is append-only evidence of how that understanding evolved. Solutions are ranked by confidence, validation status, severity, and recency — high-confidence proven solutions surface first.
+Solutions evolve over time. Each time `/compound` confirms a solution was applied, it increments `applied_count`, marks it `validated`, adjusts `confidence` (1-10 scale: +2 if it worked perfectly, -2 if it failed), and rewrites the compiled truth (Problem, Solution, Prevention) to reflect the current best understanding. The History section is append-only evidence of how that understanding evolved. Solutions are ranked by confidence, validation status, severity, and recency, so high-confidence proven solutions surface first.
 
 Search manually:
 
@@ -544,13 +544,13 @@ bin/find-solution.sh --file src/api/webhooks # by file
 
 ### Failure capture
 
-`/compound` captures what worked. Failures get captured too — automatically, without waiting for a successful ship.
+`/compound` captures what worked. Failures get captured too, automatically, without waiting for a successful ship.
 
 ```bash
 bin/capture-failure.sh review "scope-drift.sh failed" "manual file comparison" "save plan artifact first"
 ```
 
-Appends to `.nanostack/know-how/learnings/failures.jsonl`. Every skill can call this when something goes wrong: CLI errors, wrong approaches, project quirks. Next sprint, the same mistake is avoided. No `/compound` needed, no success needed — just log and move on.
+Appends to `.nanostack/know-how/learnings/failures.jsonl`. Every skill can call this when something goes wrong: CLI errors, wrong approaches, project quirks. Next sprint, the same mistake is avoided. No `/compound` needed, no success needed. Just log and move on.
 
 ### Skill graduation
 
@@ -565,7 +565,7 @@ bin/graduate.sh --prune      # detect stale rules (referenced files gone)
 
 Bug solutions graduate into `/review` (adversarial pass checklist). Pattern and decision solutions graduate into `/nano` (planning constraints). Security-tagged solutions graduate into `/security` (audit checklist). Each skill has a cap: review 10 rules, plan 8, security 8.
 
-A graduated rule is a one-line check the skill applies every sprint without searching for solutions at runtime. The original solution is marked `graduated: true` but not deleted — it retains the full history. If a graduated rule goes stale (source files deleted), `--prune` detects it.
+A graduated rule is a one-line check the skill applies every sprint without searching for solutions at runtime. The original solution is marked `graduated: true` but not deleted, so it retains the full history. If a graduated rule goes stale (source files deleted), `--prune` detects it.
 
 ```
 Sprint 1:  /compound documents "webhook signature verification" bug

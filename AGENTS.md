@@ -1,4 +1,4 @@
-# Nanostack — Agent Discovery
+# Nanostack: Agent Discovery
 
 This file lists all available skills for all supported agents (Claude Code, Cursor, Codex, OpenCode, Gemini CLI).
 Each skill folder contains a `SKILL.md` for agent discovery and an `agents/openai.yaml` for OpenAI-compatible agents.
