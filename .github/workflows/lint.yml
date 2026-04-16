@@ -59,11 +59,15 @@ jobs:
         run: |
           set -e
           # Repo's own rule (see ship/references/repo-quality-standards.md):
-          # no em-dashes in public copy. SKILL.md files are internal agent
-          # instructions and are intentionally exempt.
+          # no em-dashes in public copy. Any *.md file named SKILL.md is
+          # internal agent instructions, not user-facing copy, so they are
+          # intentionally exempt — including the root SKILL.md (the manifest
+          # for the /nanostack meta-skill).
           fail=0
-          targets=$(ls *.md 2>/dev/null; find examples -name 'README.md' 2>/dev/null)
+          targets=$(ls *.md 2>/dev/null | grep -v '^SKILL\.md$' || true)
+          targets="$targets $(find examples -name 'README.md' 2>/dev/null)"
           for f in $targets; do
+            [ -f "$f" ] || continue
             count=$(grep -c '—' "$f" 2>/dev/null || true)
             count=${count:-0}
             if [ "$count" -gt 0 ]; then
