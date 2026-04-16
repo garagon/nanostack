@@ -648,8 +648,10 @@ Run `bin/analytics.sh` to see your own usage: which skills you run, how often, i
 
 ## Troubleshooting
 
+Quick fixes for the most common issues. For the full guide (Windows setup, proxy installs, stuck sprints, name conflicts, autopilot loops), see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
 **Skills don't appear as slash commands.**
-The setup script creates symlinks. If they broke, re-run `./setup`.
+Restart your agent (Cursor and Codex need this; Claude Code does not). Re-run `./setup` if symlinks broke.
 
 **`jq: command not found` when running scripts.**
 Install jq: `brew install jq` (macOS) or `apt install jq` (Linux).
@@ -659,6 +661,9 @@ Find it: `lsof -ti:3000`. Kill it: `kill $(lsof -ti:3000)`.
 
 **`/conductor` claim fails with BLOCKED.**
 Dependencies not finished. Run `conductor/bin/sprint.sh status` to check.
+
+**Phase gate blocked my git commit.**
+Complete `/review`, `/security`, `/qa` for the active sprint, or bypass with `NANOSTACK_SKIP_GATE=1 git commit ...` for non-sprint commits.
 
 **Skills seem outdated.**
 Run `/nano-update` from Claude Code, or `~/.claude/skills/nanostack/bin/upgrade.sh` from the terminal.
