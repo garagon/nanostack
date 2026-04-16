@@ -22,6 +22,10 @@
   <a href="#contributing">Contributing</a>
 </p>
 
+<p align="center">
+  <a href="README.es.md">Leer en español</a>
+</p>
+
 ---
 
 Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). 13 skills. Zero dependencies. Zero build step.
