@@ -202,11 +202,27 @@ After QA is complete and the artifact is saved:
 
 **If AUTOPILOT is active but tests fail:** Stop and ask the user. Show failures and wait.
 
-**Otherwise:** Tell the user:
-> QA complete. Remaining steps:
-> - `/review` to run code review (if not done yet)
-> - `/security` to audit for vulnerabilities (if not done yet)
-> - `/ship` to create the PR (after review, security and qa pass)
+**Otherwise:** Determine which phases still need to run (do not suggest skills the user already ran). Run:
+
+```bash
+~/.claude/skills/nanostack/bin/next-step.sh qa
+```
+
+The script outputs a space-separated list of pending phases. Tell the user only what is pending. Examples:
+- Output `review security ship` → "QA complete. Next: `/review`, then `/security`, then `/ship`."
+- Output `security ship`        → "QA complete. Next: `/security`, then `/ship`."
+- Output `ship`                 → "QA complete. Ready for `/ship`."
+- Empty output                  → "QA complete. Sprint is fully verified."
+
+## Final Headline
+
+After the user-facing message above, print one summary line as the very last thing — useful for autopilot logs and quick scanning:
+
+```
+[qa] OK: <N tests, M failed>. Next: <first pending skill or "/ship">.
+```
+
+Use `WARN` instead of `OK` if any tests failed.
 
 ## Gotchas
 

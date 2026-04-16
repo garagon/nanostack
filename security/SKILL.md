@@ -227,11 +227,27 @@ After the security audit is complete and the artifact is saved:
 
 **If AUTOPILOT is active but critical or high findings found:** Stop and ask the user to review. Show the findings and wait. After resolution, continue autopilot.
 
-**Otherwise:** Tell the user:
-> Security audit complete. Remaining steps:
-> - `/review` to run code review (if not done yet)
-> - `/qa` to test that everything works (if not done yet)
-> - `/ship` to create the PR (after review, security and qa pass)
+**Otherwise:** Determine which phases still need to run (do not suggest skills the user already ran). Run:
+
+```bash
+~/.claude/skills/nanostack/bin/next-step.sh security
+```
+
+The script outputs a space-separated list of pending phases. Tell the user only what is pending. Examples:
+- Output `review qa ship` → "Security audit complete. Next: `/review`, then `/qa`, then `/ship`."
+- Output `qa ship`        → "Security audit complete. Next: `/qa`, then `/ship`."
+- Output `ship`           → "Security audit complete. Ready for `/ship`."
+- Empty output            → "Security audit complete. Sprint is fully verified."
+
+## Final Headline
+
+After the user-facing message above, print one summary line as the very last thing — useful for autopilot logs and quick scanning:
+
+```
+[security] OK: grade <A-F>, <N critical, M high>. Next: <first pending skill or "/ship">.
+```
+
+Use `WARN` instead of `OK` if any critical or high findings exist.
 
 ## After Fixes
 

@@ -19,6 +19,17 @@ Print this directly:
 nanostack
 Make your AI agent think first.
 
+What do you want to do?
+
+  Start a brand new project       → /think (or /think --autopilot)
+  Add to a project that exists    → /feature <what to add>
+  Already wrote code, check it    → /review  (then /security, /qa)
+  Ready to save / publish         → /ship
+  First time using nanostack      → /nano-run
+  Not sure where to start         → /think (it helps you decide)
+
+Reference — every command:
+
 Getting started:
   /nano-run              First-time setup. Configures your project conversationally.
   /nano-help             You are here.

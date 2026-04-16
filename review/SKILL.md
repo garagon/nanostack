@@ -165,11 +165,27 @@ After the review is complete and the artifact is saved, proceed:
 
 **If AUTOPILOT is active but blocking issues found:** Stop and ask the user to resolve. Show the blocking issues and wait. After resolution, continue autopilot.
 
-**Otherwise:** Tell the user:
-> Review complete. Remaining steps:
-> - `/security` to audit for vulnerabilities (if not done yet)
-> - `/qa` to test that everything works (if not done yet)
-> - `/ship` to create the PR (after review, security and qa pass)
+**Otherwise:** Determine which phases still need to run (do not suggest skills the user already ran). Run:
+
+```bash
+~/.claude/skills/nanostack/bin/next-step.sh review
+```
+
+The script outputs a space-separated list of pending phases (e.g. `security qa ship`). Tell the user only what is pending. Examples:
+- Output `security qa ship` → "Review complete. Next: `/security`, then `/qa`, then `/ship`."
+- Output `qa ship`          → "Review complete. Next: `/qa`, then `/ship`."
+- Output `ship`             → "Review complete. Ready for `/ship`."
+- Empty output              → "Review complete. Sprint is fully verified."
+
+## Final Headline
+
+After the user-facing message above, print one summary line as the very last thing — useful for autopilot logs and quick scanning:
+
+```
+[review] OK: <N findings, M blocking>. Next: <first pending skill or "/ship">.
+```
+
+Use `WARN` instead of `OK` if there are any blocking findings.
 
 ## Gotchas
 
