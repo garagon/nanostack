@@ -654,7 +654,17 @@ Full guide: [`EXTENDING.md`](EXTENDING.md). Working starting point: [`examples/c
 
 ## Privacy
 
-All data stays on your machine in `.nanostack/`. No remote calls. No telemetry.
+Sprint data (briefs, plans, artifacts, journals) stays on your machine in `.nanostack/`. That has not changed.
+
+v0.5 adds **opt-in telemetry** about skill usage. Three tiers: `off`, `anonymous`, `community`. Installs from v0.4 and earlier default to `off` and see no prompt. New installs see a one-time prompt on first skill run. Nothing is sent over the network in the initial v0.5 release; a remote endpoint lands in a later PR. Full disclosure of what is collected, what is never collected, and how to audit or opt out: [TELEMETRY.md](TELEMETRY.md).
+
+Change your tier at any time:
+
+```sh
+nanostack-config set telemetry off
+nanostack-config set telemetry anonymous
+nanostack-config set telemetry community
+```
 
 Run `bin/analytics.sh` to see your own usage: which skills you run, how often, in what mode. Reads local artifacts only.
 

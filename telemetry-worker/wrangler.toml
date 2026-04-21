@@ -1,0 +1,24 @@
+name = "nanostack-telemetry"
+main = "src/index.ts"
+compatibility_date = "2026-04-21"
+
+# D1: stores validated events. Filled in after `wrangler d1 create nanostack-telemetry`.
+# The literal database_id below is a placeholder; replace with the value wrangler
+# prints when the DB is created, then commit. The binding name `DB` is referenced
+# by src/index.ts and must not change without updating code.
+[[d1_databases]]
+binding = "DB"
+database_name = "nanostack-telemetry"
+database_id = "114409d1-3e6b-4c57-a88a-3604d48cbbc6"
+
+# KV: stores per-minute rate-limit counters, keyed by sha256(ip + daily_salt).
+# TTL-scoped so entries self-expire. Filled in after
+# `wrangler kv namespace create rate-limit`. Binding name `RATE_LIMIT`
+# is referenced by src/index.ts.
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "51e20ad3ae9d4333a2c86ec397b9c91a"
+
+# MASTER_SALT: set via `wrangler secret put MASTER_SALT`.
+# Daily effective salt = sha256(MASTER_SALT || YYYYMMDD_UTC).
+# Rotate the master when you want to guarantee no cross-day correlation.

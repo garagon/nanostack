@@ -43,6 +43,57 @@ Before anything else, ensure the project is configured. Run this once (skips if 
 [ -f .claude/settings.json ] || ~/.claude/skills/nanostack/bin/init-project.sh
 ```
 
+### Telemetry preamble
+
+Telemetry is optional and defensive. The skill must run identically whether the telemetry helper is present, disabled, or removed. A sysadmin can disable telemetry in three ways:
+
+- Set `NANOSTACK_NO_TELEMETRY=1` in the environment.
+- Create `~/.nanostack/.telemetry-disabled` as an empty file.
+- Delete `bin/lib/telemetry.sh` and `bin/telemetry-config.sh` from the install.
+
+Any of the three makes the block below a no-op. The skill continues normally.
+
+Run this block:
+
+```bash
+if [ -z "${NANOSTACK_NO_TELEMETRY:-}" ] \
+   && [ ! -f "$HOME/.nanostack/.telemetry-disabled" ] \
+   && [ -f "$HOME/.claude/skills/nanostack/bin/lib/telemetry.sh" ]; then
+  source "$HOME/.claude/skills/nanostack/bin/lib/telemetry.sh" 2>/dev/null
+  nano_telemetry_init 2>/dev/null
+  command -v nano_telemetry_pending_write >/dev/null 2>&1 && \
+    nano_telemetry_pending_write think 2>/dev/null
+fi
+echo "TEL_TIER=${NANO_TEL_TIER:-off}"
+echo "TEL_SKIP_PROMPT=${NANO_TEL_SKIP_PROMPT:-1}"
+```
+
+If telemetry was disabled or stripped, `TEL_TIER=off` and `TEL_SKIP_PROMPT=1` fall through from the defaults, and the skill simply does not prompt or record anything.
+
+**If `TEL_TIER` is not `off` AND `TEL_SKIP_PROMPT=0`**, show the opt-in prompt using `AskUserQuestion`. The helper already checks whether the user was prompted before or is a pre-existing install. Use exactly this wording:
+
+> nanostack supports opt-in telemetry. Asking once.
+>
+> **(a) Community** — sends: which skill you ran, duration, outcome, version, os/arch, a random UUID (not derived from your machine). Helps prioritize what to fix.
+>
+> **(b) Anonymous** — same data without the UUID. Events cannot be tied together.
+>
+> **(c) Off** — nothing leaves your machine. Recommended default if unsure.
+>
+> Never sent: code, prompts, briefs, repo name, paths, email, hostname. See `~/.claude/skills/nanostack/TELEMETRY.md`.
+> Change later: `nanostack-config set telemetry <off|anonymous|community>`.
+
+Map the answer to a tier and persist (only if telemetry is available; skip silently otherwise):
+
+```bash
+if command -v nano_tel_set_tier >/dev/null 2>&1; then
+  "$HOME/.claude/skills/nanostack/bin/telemetry-config.sh" set telemetry <tier>
+  touch "$HOME/.nanostack/.telemetry-prompted"
+fi
+```
+
+If `TEL_SKIP_PROMPT=1` (pre-existing install) or the marker already exists, skip the prompt entirely. Pre-existing users stay at default `off` unless they opt in manually.
+
 ## Retro Mode
 
 If the user said `/think --retro` or `/think retro` or "retrospective", run the retrospective process instead of the normal diagnostic. **Do not initialize a new session.** Retro looks backward at what was shipped, not forward at what to build.
@@ -294,6 +345,19 @@ If 2+ archived sessions (returning user), keep it short:
 > Ready for `/nano`. Say `/nano` to plan, or adjust the brief first.
 
 Wait for the user to invoke `/nano`.
+
+### Telemetry finalize
+
+Before handing control back to the user (or to `/nano` in autopilot), close out telemetry if it is available:
+
+```bash
+command -v nano_telemetry_finalize >/dev/null 2>&1 && \
+  nano_telemetry_finalize think success 2>/dev/null
+```
+
+If the flow aborted (user interrupted, blocked on missing info, error in a phase), pass `abort` or `error` instead of `success`. The `command -v` guard keeps the line harmless when telemetry is disabled or stripped. The function itself is also a no-op if tier is `off`.
+
+For retro mode (`/think --retro`), same rule applies at the end of the retro brief output.
 
 ## Gotchas
 

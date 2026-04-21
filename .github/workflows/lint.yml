@@ -77,3 +77,136 @@ jobs:
             fi
           done
           exit $fail
+
+  telemetry-privacy:
+    name: Telemetry privacy contract
+    runs-on: ubuntu-latest
+    # Principle of least privilege: this job only reads source files to
+    # grep for forbidden patterns and validate the schema. It never needs
+    # to write to the repo, comment on PRs, or dispatch workflows.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbidden identity patterns in telemetry path
+        run: |
+          # The telemetry helper and config CLI must never read machine
+          # identity, account identity, or repo/branch state. This job
+          # greps for patterns that would do so, skipping comment lines
+          # (so the privacy contract itself can mention the words
+          # without tripping the check).
+          set -e
+          targets="bin/lib/telemetry.sh bin/telemetry-config.sh"
+          forbidden='HOSTNAME|USERNAME|LOGNAME|\$USER\b|whoami|[^_[:alnum:]]hostname[^_[:alnum:]]|git[[:space:]]+remote|git[[:space:]]+branch|git[[:space:]]+config|git[[:space:]]+rev-parse|basename[[:space:]]+"?\$PWD|basename[[:space:]]+"?\$\(pwd|ifconfig|ip[[:space:]]+addr'
+          fail=0
+          for f in $targets; do
+            [ -f "$f" ] || continue
+            # Skip lines that are pure comments (first non-whitespace is #).
+            if grep -vE '^[[:space:]]*#' "$f" | grep -En "$forbidden"; then
+              echo "FAIL: $f contains forbidden identity-reading pattern"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Schema field whitelist (telemetry.sh vs TELEMETRY.md)
+        run: |
+          # The frozen v1 schema is declared on a single line in
+          # bin/lib/telemetry.sh marked 'TELEMETRY_FIELDS_V1:'. Every
+          # field must appear in TELEMETRY.md with backticks, and every
+          # key used inside a jq filter in telemetry.sh must be in this
+          # declared list. Adding a field is a two-edit change: update
+          # the declared list AND document it in TELEMETRY.md.
+          set -e
+          declared=$(grep -oE 'TELEMETRY_FIELDS_V1:[[:space:]]+[a-z_ ]+' bin/lib/telemetry.sh \
+                     | sed -E 's/^TELEMETRY_FIELDS_V1:[[:space:]]+//' \
+                     | head -1)
+          if [ -z "$declared" ]; then
+            echo "FAIL: bin/lib/telemetry.sh has no TELEMETRY_FIELDS_V1 declaration"
+            exit 1
+          fi
+          echo "declared fields: $declared"
+          fail=0
+          # Every declared field must be in TELEMETRY.md with backticks.
+          for key in $declared; do
+            if ! grep -q "\`$key\`" TELEMETRY.md; then
+              echo "FAIL: TELEMETRY.md missing field '\`$key\`'"
+              fail=1
+            fi
+          done
+          # Every key:$var occurrence inside a jq filter must be in declared.
+          # Pattern targets jq object literals: '{key:$var' or ', key:$var' or ', key:null'.
+          used=$(grep -oE '[{,][[:space:]]*[a-z_]+:(\$[a-zA-Z_]+|null)' bin/lib/telemetry.sh \
+                 | grep -oE '[a-z_]+:' \
+                 | tr -d ':' \
+                 | sort -u)
+          for key in $used; do
+            case " $declared " in
+              *" $key "*) ;;
+              *)
+                echo "FAIL: telemetry.sh jq filter uses undeclared field '$key'"
+                echo "      Add it to TELEMETRY_FIELDS_V1 AND TELEMETRY.md schema table."
+                fail=1
+                ;;
+            esac
+          done
+          exit $fail
+
+  telemetry-worker-privacy:
+    name: Telemetry Worker privacy invariants
+    runs-on: ubuntu-latest
+    # The Worker source must preserve four marker comments that correspond to
+    # concrete security properties documented in TELEMETRY.md. Removing any
+    # marker (which implies removing the property) breaks this check.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Worker source exists
+        run: |
+          set -e
+          [ -f telemetry-worker/src/index.ts ] || {
+            echo "FAIL: telemetry-worker/src/index.ts missing"
+            exit 1
+          }
+      - name: Required invariant markers
+        run: |
+          # Each marker corresponds to a security property; see TELEMETRY.md
+          # "Transport security" section. Removing a marker means the property
+          # is no longer enforced, and this check fails the PR.
+          set -e
+          required='HTTPS_ENFORCED SCHEMA_STRICT IP_NEVER_STORED NO_BODY_LOGGING'
+          fail=0
+          for marker in $required; do
+            if ! grep -q "$marker" telemetry-worker/src/index.ts; then
+              echo "FAIL: marker '$marker' missing from telemetry-worker/src/index.ts"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: No body logging
+        run: |
+          # The Worker must never log request bodies, headers beyond status,
+          # or any content derived from them. This greps for console.* calls
+          # that reference the request object, body, or parsed event data.
+          set -e
+          forbidden='console\.(log|debug|info|warn|error)[[:space:]]*\([^)]*(request|req\.|body|event|headers|payload)'
+          fail=0
+          if grep -vE '^[[:space:]]*(//|\*)' telemetry-worker/src/index.ts | grep -En "$forbidden"; then
+            echo "FAIL: Worker logs request/body/headers content"
+            fail=1
+          fi
+          exit $fail
+      - name: No raw IP persistence
+        run: |
+          # The raw CF-Connecting-IP may only appear inside rate-limit logic.
+          # It must never be passed to D1 .bind() or written to any log.
+          # Simple check: grep for IP-related variables near DB.prepare/bind
+          # outside the rateLimitKey function scope.
+          set -e
+          # Allow IP read only in one place (rate limit). Fail if we see it
+          # anywhere near D1 insertion code.
+          if grep -nE 'CF-Connecting-IP|clientIp' telemetry-worker/src/index.ts | \
+             grep -qE 'bind|INSERT|prepare|batch|INTO events'; then
+            echo "FAIL: clientIp appears near D1 write path"
+            exit 1
+          fi
