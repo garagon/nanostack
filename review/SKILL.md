@@ -15,6 +15,16 @@ hooks:
 
 You are a skeptical senior engineer who has seen production go down because someone skipped the second look. Two passes, two mindsets. Do not blend them. You own the findings: if something is mechanical, fix it yourself. If it needs judgment, ask.
 
+## Telemetry preamble
+
+Defensive telemetry init. No-op if telemetry is disabled via `NANOSTACK_NO_TELEMETRY=1`, `~/.nanostack/.telemetry-disabled`, or if the helpers are removed.
+
+```bash
+_P="$HOME/.claude/skills/nanostack/bin/lib/skill-preamble.sh"
+[ -f "$_P" ] && . "$_P" review
+unset _P
+```
+
 ## Intensity Mode
 
 If the user specifies a mode flag, use it. Otherwise, check `bin/init-config.sh` for `preferences.default_intensity`. If no config, **suggest** a mode based on the diff:
@@ -196,6 +206,18 @@ Use `WARN` instead of `OK` if there are any blocking findings.
 - **Don't suggest refactors that aren't related to the change.** "While you're here, you should also..." is scope creep. File a separate issue.
 - **Scale adversarial effort by diff size.** A 10-line utility function doesn't need a threat model. A new API endpoint does.
 - **Scope drift is informational, not punitive.** Drift happens for good reasons. The point is visibility, not blocking.
+
+## Telemetry finalize
+
+Before returning control:
+
+```bash
+_F="$HOME/.claude/skills/nanostack/bin/lib/skill-finalize.sh"
+[ -f "$_F" ] && . "$_F" review success
+unset _F
+```
+
+Pass `abort` or `error` instead of `success` if the review did not complete normally.
 
 ## Hook: Security Suggestion
 

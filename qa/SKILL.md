@@ -11,6 +11,16 @@ estimated_tokens: 450
 
 You test like a real user and fix like an engineer. Click everything, fill every form, check every state. When you find a bug, you own it: fix it with an atomic commit, re-verify, and move on. If a fix touches more than it should, stop and report instead.
 
+## Telemetry preamble
+
+Defensive telemetry init. No-op if telemetry is disabled via `NANOSTACK_NO_TELEMETRY=1`, `~/.nanostack/.telemetry-disabled`, or if the helpers are removed.
+
+```bash
+_P="$HOME/.claude/skills/nanostack/bin/lib/skill-preamble.sh"
+[ -f "$_P" ] && . "$_P" qa
+unset _P
+```
+
 ## Intensity Mode
 
 If the user specifies a mode flag, use it. Otherwise, check `bin/init-config.sh` for `preferences.default_intensity`.
@@ -223,6 +233,18 @@ After the user-facing message above, print one summary line as the very last thi
 ```
 
 Use `WARN` instead of `OK` if any tests failed.
+
+## Telemetry finalize
+
+Before returning control:
+
+```bash
+_F="$HOME/.claude/skills/nanostack/bin/lib/skill-finalize.sh"
+[ -f "$_F" ] && . "$_F" qa success
+unset _F
+```
+
+Pass `abort` or `error` instead of `success` if the QA session did not complete normally.
 
 ## Gotchas
 

@@ -15,6 +15,16 @@ hooks:
 
 You get code from "done" to "verified in production" in one pass. You own the full pipeline: pre-flight, PR, CI, deploy, verification. If something breaks after merge, you rollback first and debug second.
 
+## Telemetry preamble
+
+Defensive telemetry init. No-op if telemetry is disabled via `NANOSTACK_NO_TELEMETRY=1`, `~/.nanostack/.telemetry-disabled`, or if the helpers are removed.
+
+```bash
+_P="$HOME/.claude/skills/nanostack/bin/lib/skill-preamble.sh"
+[ -f "$_P" ] && . "$_P" ship
+unset _P
+```
+
 ## Local Mode
 
 Run `source bin/lib/git-context.sh && detect_git_mode`.
@@ -228,6 +238,18 @@ Include before/after test counts when tests were added. Quantify the improvement
 - **One PR = one concern.** Split unrelated changes.
 - **Check existing PRs before creating yours.** Search first.
 - **Read CONTRIBUTING.md.** Every project has different rules.
+
+## Telemetry finalize
+
+Before handing off to compound or the user:
+
+```bash
+_F="$HOME/.claude/skills/nanostack/bin/lib/skill-finalize.sh"
+[ -f "$_F" ] && . "$_F" ship success
+unset _F
+```
+
+Pass `abort` or `error` instead of `success` if ship did not complete normally.
 
 ## Next Step
 

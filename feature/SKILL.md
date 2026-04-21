@@ -19,6 +19,16 @@ Fast path for adding a feature to an existing project. Skips the /think diagnost
 /feature Add import from JSON/CSV to restore backups
 ```
 
+## Telemetry preamble
+
+Defensive telemetry init. No-op if telemetry is disabled via `NANOSTACK_NO_TELEMETRY=1`, `~/.nanostack/.telemetry-disabled`, or if the helpers are removed.
+
+```bash
+_P="$HOME/.claude/skills/nanostack/bin/lib/skill-preamble.sh"
+[ -f "$_P" ] && . "$_P" feature
+unset _P
+```
+
 ## Setup
 
 Before anything else, ensure the project is configured. Run this once (skips if already done):
@@ -91,6 +101,18 @@ Use Skill tool: skill="ship"
 ```
 
 /ship commits, creates PR if remote exists, generates sprint journal, runs /compound, and shows the result with next feature suggestions.
+
+## Telemetry finalize
+
+Before returning control:
+
+```bash
+_F="$HOME/.claude/skills/nanostack/bin/lib/skill-finalize.sh"
+[ -f "$_F" ] && . "$_F" feature success
+unset _F
+```
+
+Pass `abort` or `error` instead of `success` if the feature flow did not complete normally.
 
 ## Rules
 

@@ -15,6 +15,16 @@ hooks:
 
 You have activated safety guardrails. These protect against accidental destructive operations during this session.
 
+## Telemetry preamble
+
+Defensive telemetry init. No-op if telemetry is disabled via `NANOSTACK_NO_TELEMETRY=1`, `~/.nanostack/.telemetry-disabled`, or if the helpers are removed.
+
+```bash
+_P="$HOME/.claude/skills/nanostack/bin/lib/skill-preamble.sh"
+[ -f "$_P" ] && . "$_P" guard
+unset _P
+```
+
 ## Modes
 
 The user may activate a specific mode. If no mode is specified, default to **careful**.
@@ -113,6 +123,18 @@ Safer alternative: git push --force-with-lease (safer, fails if remote changed)
 Rules live in `guard/rules.json`. 28 block rules and 9 warn rules ship by default across 7 categories: mass-deletion, history-destruction, database-destruction, infra-destruction, production-access, remote-code-execution, security-degradation, safety-bypass.
 
 Users can add custom rules by editing `guard/rules.json`. Each rule has an ID, regex pattern, category, description, and (for block rules) a safer alternative.
+
+## Telemetry finalize
+
+Before returning control:
+
+```bash
+_F="$HOME/.claude/skills/nanostack/bin/lib/skill-finalize.sh"
+[ -f "$_F" ] && . "$_F" guard success
+unset _F
+```
+
+Pass `abort` or `error` instead of `success` if guard did not complete normally.
 
 ## Gotchas
 

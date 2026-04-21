@@ -96,7 +96,10 @@ jobs:
           # (so the privacy contract itself can mention the words
           # without tripping the check).
           set -e
-          targets="bin/lib/telemetry.sh bin/telemetry-config.sh"
+          # Scan every file in the telemetry code path: helper, config CLI,
+          # async sender, and the two skill-level wrappers. If a new file
+          # enters this path it must be added here explicitly.
+          targets="bin/lib/telemetry.sh bin/telemetry-config.sh bin/telemetry-log.sh bin/lib/skill-preamble.sh bin/lib/skill-finalize.sh"
           forbidden='HOSTNAME|USERNAME|LOGNAME|\$USER\b|whoami|[^_[:alnum:]]hostname[^_[:alnum:]]|git[[:space:]]+remote|git[[:space:]]+branch|git[[:space:]]+config|git[[:space:]]+rev-parse|basename[[:space:]]+"?\$PWD|basename[[:space:]]+"?\$\(pwd|ifconfig|ip[[:space:]]+addr'
           fail=0
           for f in $targets; do
@@ -107,6 +110,66 @@ jobs:
               fail=1
             fi
           done
+          exit $fail
+      - name: telemetry-log.sh sender safety
+        run: |
+          # The async sender in bin/telemetry-log.sh is the only place in
+          # nanostack that initiates a network request. Its curl invocation
+          # is constrained to a short, audited flag list. This job verifies
+          # the sender has what it needs and none of what it must not.
+          set -e
+          f=bin/telemetry-log.sh
+          [ -f "$f" ] || { echo "FAIL: $f missing"; exit 1; }
+          fail=0
+
+          # Required flags + configuration.
+          # grep -F -- used because most required strings start with `--`
+          # which grep interprets as an option otherwise. Regex for the URL
+          # uses -E -e to pass the pattern past the option parser.
+          for required in '--user-agent' '--max-time' '--connect-timeout' '--request POST' 'nanostack-telemetry/' 'NANOSTACK_NO_TELEMETRY' '.telemetry-disabled'; do
+            if ! grep -qF -- "$required" "$f"; then
+              echo "FAIL: $f missing required element '$required'"
+              fail=1
+            fi
+          done
+          if ! grep -qE -e 'https://nanostack-telemetry\.remoto\.workers\.dev' "$f"; then
+            echo "FAIL: $f missing endpoint URL"
+            fail=1
+          fi
+
+          # Forbidden flags (exclude comment lines so doc can mention them).
+          # Patterns target curl argv; matching `command -v` or docs is avoided.
+          non_comment=$(grep -vE '^[[:space:]]*#' "$f")
+          for pattern in \
+            '^[^#]*curl[[:space:]].*--cookie([^a-zA-Z]|$)' \
+            '^[^#]*curl[[:space:]].*--cookie-jar' \
+            '^[^#]*curl[[:space:]].*--user[[:space:]]' \
+            '^[^#]*curl[[:space:]].*--location' \
+            '^[^#]*curl[[:space:]].*--verbose' \
+            '^[^#]*curl[[:space:]].*--dump-header' \
+            '^[^#]*curl[[:space:]].*--trace' \
+            '^[^#]*--header[[:space:]]+"?Cookie' \
+            '^[^#]*--header[[:space:]]+"?Authorization' \
+            '^[^#]*--header[[:space:]]+"?Referer' \
+            '^[^#]*curl[[:space:]].*http://' \
+          ; do
+            if printf '%s\n' "$non_comment" | grep -E "$pattern" >/dev/null; then
+              echo "FAIL: $f contains forbidden pattern '$pattern'"
+              fail=1
+            fi
+          done
+
+          # The sender must hardcode exactly one endpoint URL. A second
+          # URL would mean the contract-preview and the actual send could
+          # diverge. Count distinct https://...workers.dev URLs.
+          urls=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev[a-zA-Z0-9/._-]*' "$f" | sort -u)
+          url_count=$(printf '%s\n' "$urls" | grep -c . || echo 0)
+          if [ "$url_count" -ne 1 ]; then
+            echo "FAIL: $f must hardcode exactly one workers.dev URL (found $url_count)"
+            printf '%s\n' "$urls"
+            fail=1
+          fi
+
           exit $fail
       - name: Schema field whitelist (telemetry.sh vs TELEMETRY.md)
         run: |
