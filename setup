@@ -498,3 +498,9 @@ echo "Next step — activate the skills in your agent:"
 [ "$INSTALL_CODEX" -eq 1 ]    && echo "  Codex:        run \`codex\` in a new terminal, then type /nano-help."
 [ "$INSTALL_OPENCODE" -eq 1 ] && echo "  OpenCode:     restart your OpenCode session, then type /nano-help."
 [ "$INSTALL_GEMINI" -eq 1 ]   && echo "  Gemini CLI:   run \`gemini\` in a new terminal, then type /nano-help."
+
+# The `[ test ] && echo` lines above each return 1 for any agent the user
+# did NOT install. Without an explicit success at the end, the script's
+# exit code would be the last test's result — making a clean setup look
+# failed to upgrade.sh (which runs under `set -e`) and to any CI path.
+exit 0
