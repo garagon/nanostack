@@ -133,6 +133,23 @@ VALID_WITH_JUNK='{"v":1,"ts":"2026-04-21T12:00:00Z","skill":"verify_test","outco
 assert_json_field "unknown fields silently dropped (hostname/repo/ip) → inserted:1" "inserted" "1" \
   -X POST -H "Content-Type: application/json" -d "$VALID_WITH_JUNK" "$EVENT_URL"
 
+# ─── Real-client simulation (bin/telemetry-log.sh style) ────────────────
+printf "\nReal-client batch:\n"
+# Simulate what bin/telemetry-log.sh sends: batch of 3 events with the
+# same flags the sender uses. Tests the full contract end to end.
+BATCH='[
+  {"v":1,"ts":"2026-04-21T12:00:00Z","skill":"verify_test","outcome":"success","os":"darwin","arch":"arm64","nanostack_version":"0.5.0-test","duration_s":10},
+  {"v":1,"ts":"2026-04-21T12:00:11Z","skill":"verify_test","outcome":"error","os":"darwin","arch":"arm64","nanostack_version":"0.5.0-test","duration_s":5,"error_class":"lint_error"},
+  {"v":1,"ts":"2026-04-21T12:00:16Z","skill":"verify_test","outcome":"abort","os":"linux","arch":"x86_64","nanostack_version":"0.5.0-test"}
+]'
+assert_json_field "batch of 3 valid events → inserted:3" "inserted" "3" \
+  --user-agent "nanostack-telemetry/0.5.0-test" \
+  --max-time 5 --connect-timeout 2 \
+  --request POST \
+  --header "Content-Type: application/json" \
+  --data-binary "$BATCH" \
+  "$EVENT_URL"
+
 # ─── Summary ────────────────────────────────────────────────────
 printf "\n%d passed, %d failed\n" "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1

@@ -11,6 +11,16 @@ estimated_tokens: 400
 
 You turn validated ideas into executable steps. Every file gets named. Every step gets a verification. Every unknown gets surfaced. The plan is a contract: if it says 4 files, the PR should touch 4 files.
 
+## Telemetry preamble
+
+Defensive telemetry init. No-op if telemetry is disabled via `NANOSTACK_NO_TELEMETRY=1`, `~/.nanostack/.telemetry-disabled`, or if the helpers are removed.
+
+```bash
+_P="$HOME/.claude/skills/nanostack/bin/lib/skill-preamble.sh"
+[ -f "$_P" ] && . "$_P" nano
+unset _P
+```
+
 ## Session
 
 If no active session exists, initialize one:
@@ -173,6 +183,18 @@ Tell the user:
 > These three can run in any order. After all pass, `/ship` to create the PR.
 
 Wait for the user to invoke each one.
+
+## Telemetry finalize
+
+Before returning control:
+
+```bash
+_F="$HOME/.claude/skills/nanostack/bin/lib/skill-finalize.sh"
+[ -f "$_F" ] && . "$_F" nano success
+unset _F
+```
+
+Pass `abort` or `error` instead of `success` if the plan did not complete normally.
 
 ## Gotchas
 

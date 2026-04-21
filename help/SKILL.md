@@ -11,6 +11,16 @@ estimated_tokens: 100
 
 Show the user a concise overview of nanostack. No walls of text. Organized by what they want to do.
 
+## Telemetry preamble
+
+Defensive telemetry init. No-op if telemetry is disabled via `NANOSTACK_NO_TELEMETRY=1`, `~/.nanostack/.telemetry-disabled`, or if the helpers are removed.
+
+```bash
+_P="$HOME/.claude/skills/nanostack/bin/lib/skill-preamble.sh"
+[ -f "$_P" ] && . "$_P" nano-help
+unset _P
+```
+
 ## Response
 
 Print this directly:
@@ -68,3 +78,15 @@ github.com/garagon/nanostack
 ```
 
 If the user asks about a specific skill, invoke it: use Skill tool with the skill name. Don't explain the skill yourself — let the skill's own SKILL.md handle it.
+
+## Telemetry finalize
+
+Before returning control:
+
+```bash
+_F="$HOME/.claude/skills/nanostack/bin/lib/skill-finalize.sh"
+[ -f "$_F" ] && . "$_F" nano-help success
+unset _F
+```
+
+Pass `abort` or `error` instead of `success` if help did not complete normally.

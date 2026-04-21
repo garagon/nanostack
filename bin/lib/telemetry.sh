@@ -351,7 +351,10 @@ _nano_tel_finalize_stale_markers() {
   local self="$NANO_TEL_ANALYTICS_DIR/.pending-$NANO_TEL_SESSION_ID"
   [ -d "$NANO_TEL_ANALYTICS_DIR" ] || return 0
   local marker skill ts
-  for marker in "$NANO_TEL_ANALYTICS_DIR"/.pending-*; do
+  # Use find instead of a shell glob. Bash would need `shopt -s nullglob`
+  # to avoid iterating the literal pattern when nothing matches; zsh throws
+  # on unmatched globs by default. find handles both uniformly.
+  while IFS= read -r marker; do
     [ -f "$marker" ] || continue
     [ "$marker" = "$self" ] && continue
     skill=$(jq -r '.skill // "unknown"' "$marker" 2>/dev/null)
@@ -359,7 +362,7 @@ _nano_tel_finalize_stale_markers() {
     [ -z "$ts" ] && ts=$(_nano_tel_ts)
     _nano_tel_write_event "$skill" "" "unknown" "other" "$ts"
     rm -f "$marker" 2>/dev/null
-  done
+  done < <(find "$NANO_TEL_ANALYTICS_DIR" -maxdepth 1 -name '.pending-*' -type f 2>/dev/null)
 }
 
 # ─── Write a single event to the JSONL ─────────────────────────────────
@@ -431,6 +434,34 @@ _nano_tel_write_event() {
   chmod 600 "$NANO_TEL_JSONL" 2>/dev/null
 }
 
+# Fire-and-forget remote sync. Spawns telemetry-log.sh in the background
+# and disowns so the parent skill never waits. All safety is inside the
+# sender script: rate limit, tier check, kill switches, curl budget.
+# Calling this function does not guarantee a send; the sender itself may
+# exit silently for many reasons. That is by design.
+_nano_tel_send_async() {
+  # Respect the same three kill switches as the sender does. Checking here
+  # avoids even spawning a process when telemetry is disabled, which is
+  # cleaner for `ps` audits on enterprise systems. The marker path uses
+  # NANO_TEL_HOME to respect the same env override the helper uses, so
+  # a sysadmin testing disable behavior hits the expected path.
+  [ -n "${NANOSTACK_NO_TELEMETRY:-}" ] && return 0
+  [ -f "${NANO_TEL_HOME:-$HOME/.nanostack}/.telemetry-disabled" ] && return 0
+
+  local sender
+  sender="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)/telemetry-log.sh"
+  if [ ! -x "$sender" ]; then
+    # Fallback: look in the standard install path. If neither exists, no send.
+    sender="$HOME/.claude/skills/nanostack/bin/telemetry-log.sh"
+    [ -x "$sender" ] || return 0
+  fi
+
+  # Background + detach. nohup + redirects mean the sender survives if the
+  # parent exits and never writes to the parent's stdout/stderr.
+  (nohup "$sender" >/dev/null 2>&1 &) >/dev/null 2>&1
+  return 0
+}
+
 # ─── Finalize (called at skill end) ────────────────────────────────────
 nano_telemetry_finalize() {
   local skill="$1" outcome="${2:-success}" error_class="${3:-}"
@@ -452,4 +483,9 @@ nano_telemetry_finalize() {
   _nano_tel_write_event "$skill" "$duration" "$outcome" "$error_class" ""
   rm -f "$NANO_TEL_ANALYTICS_DIR/.pending-$NANO_TEL_SESSION_ID" 2>/dev/null
   _nano_tel_finalize_stale_markers
+
+  # Trigger background sync to the Worker. Fire-and-forget; the sender
+  # enforces its own rate limit (5 min between attempts) so calling this
+  # on every skill completion does not generate traffic proportional.
+  _nano_tel_send_async
 }

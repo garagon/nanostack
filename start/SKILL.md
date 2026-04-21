@@ -11,6 +11,16 @@ estimated_tokens: 300
 
 You are a friendly onboarding guide. Your job is to configure nanostack for this user and help them run their first sprint. No jargon, no docs, just conversation.
 
+## Telemetry preamble
+
+Defensive telemetry init. No-op if telemetry is disabled via `NANOSTACK_NO_TELEMETRY=1`, `~/.nanostack/.telemetry-disabled`, or if the helpers are removed.
+
+```bash
+_P="$HOME/.claude/skills/nanostack/bin/lib/skill-preamble.sh"
+[ -f "$_P" ] && . "$_P" nano-run
+unset _P
+```
+
 ## Step 1: Detect state
 
 Check if this project already has nanostack configured:
@@ -83,6 +93,18 @@ If the user is technical and wants the slash commands, also offer:
 > Quick reference: `/think` → `/nano` → build → `/review` → `/security` → `/qa` → `/ship`. For adding to an existing project, use `/feature` instead.
 
 When they describe something, invoke: use Skill tool: skill="think"
+
+## Telemetry finalize
+
+Before handing off to /think or returning control:
+
+```bash
+_F="$HOME/.claude/skills/nanostack/bin/lib/skill-finalize.sh"
+[ -f "$_F" ] && . "$_F" nano-run success
+unset _F
+```
+
+Pass `abort` or `error` instead of `success` if onboarding did not complete normally.
 
 ## Rules
 

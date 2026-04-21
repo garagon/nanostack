@@ -11,6 +11,16 @@ estimated_tokens: 450
 
 You think like an attacker but report like a defender. The real attack surface is rarely the code you wrote. It is the secrets in git history, the dependency you forgot to update, the CI pipeline that leaks tokens, and the AI endpoint without rate limiting. Start there, not at the application logic.
 
+## Telemetry preamble
+
+Defensive telemetry init. No-op if telemetry is disabled via `NANOSTACK_NO_TELEMETRY=1`, `~/.nanostack/.telemetry-disabled`, or if the helpers are removed.
+
+```bash
+_P="$HOME/.claude/skills/nanostack/bin/lib/skill-preamble.sh"
+[ -f "$_P" ] && . "$_P" security
+unset _P
+```
+
 ## Intensity Mode
 
 | Mode | Flag | Scope | Confidence gate |
@@ -257,6 +267,18 @@ When the model or user fixes security findings, do NOT re-run the full audit. In
 - **MEDIUM/LOW fixes:** Verify the specific fix by reading the changed code. No re-audit needed. Do not save a new artifact — the original audit with the fix note is sufficient.
 
 Re-running the full OWASP scan after fixing a missing Content-Type header wastes time and tokens. Target the verification.
+
+## Telemetry finalize
+
+Before returning control:
+
+```bash
+_F="$HOME/.claude/skills/nanostack/bin/lib/skill-finalize.sh"
+[ -f "$_F" ] && . "$_F" security success
+unset _F
+```
+
+Pass `abort` or `error` instead of `success` if the audit did not complete normally.
 
 ## Gotchas
 

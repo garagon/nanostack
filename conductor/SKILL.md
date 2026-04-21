@@ -13,6 +13,16 @@ Coordinate multiple agent sessions working on the same project. Each agent claim
 
 **No daemon. No service. No IPC.** Just atomic file operations on `.nanostack/conductor/`.
 
+## Telemetry preamble
+
+Defensive telemetry init. No-op if telemetry is disabled via `NANOSTACK_NO_TELEMETRY=1`, `~/.nanostack/.telemetry-disabled`, or if the helpers are removed.
+
+```bash
+_P="$HOME/.claude/skills/nanostack/bin/lib/skill-preamble.sh"
+[ -f "$_P" ] && . "$_P" conductor
+unset _P
+```
+
 ## How it works
 
 ```
@@ -242,6 +252,18 @@ Every phase transition follows this protocol. The agent executes these steps at 
 1. `bin/session.sh resume` detects the last session state
 2. `bin/restore-context.sh` reads all completed phase checkpoints
 3. Skip completed phases, restart the in-progress phase from scratch
+
+## Telemetry finalize
+
+Before returning control:
+
+```bash
+_F="$HOME/.claude/skills/nanostack/bin/lib/skill-finalize.sh"
+[ -f "$_F" ] && . "$_F" conductor success
+unset _F
+```
+
+Pass `abort` or `error` instead of `success` if conductor did not complete normally.
 
 ## Gotchas
 

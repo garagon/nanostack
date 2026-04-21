@@ -11,6 +11,16 @@ estimated_tokens: 250
 
 After a sprint or a significant fix, extract what you learned into structured, searchable documents. Next time the agent plans or reviews, it finds these automatically.
 
+## Telemetry preamble
+
+Defensive telemetry init. No-op if telemetry is disabled via `NANOSTACK_NO_TELEMETRY=1`, `~/.nanostack/.telemetry-disabled`, or if the helpers are removed.
+
+```bash
+_P="$HOME/.claude/skills/nanostack/bin/lib/skill-preamble.sh"
+[ -f "$_P" ] && . "$_P" compound
+unset _P
+```
+
 ## When to run
 
 - After `/ship` completes a sprint
@@ -163,6 +173,18 @@ Consider re-running: /investigate --diarize <subject>
 Then tell the user:
 
 > Knowledge captured. These solutions will be found automatically by /nano during planning and /review during code review.
+
+## Telemetry finalize
+
+Before returning control:
+
+```bash
+_F="$HOME/.claude/skills/nanostack/bin/lib/skill-finalize.sh"
+[ -f "$_F" ] && . "$_F" compound success
+unset _F
+```
+
+Pass `abort` or `error` instead of `success` if compound did not complete normally.
 
 ## Rules
 

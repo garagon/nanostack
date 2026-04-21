@@ -45,30 +45,19 @@ Before anything else, ensure the project is configured. Run this once (skips if 
 
 ### Telemetry preamble
 
-Telemetry is optional and defensive. The skill must run identically whether the telemetry helper is present, disabled, or removed. A sysadmin can disable telemetry in three ways:
-
-- Set `NANOSTACK_NO_TELEMETRY=1` in the environment.
-- Create `~/.nanostack/.telemetry-disabled` as an empty file.
-- Delete `bin/lib/telemetry.sh` and `bin/telemetry-config.sh` from the install.
-
-Any of the three makes the block below a no-op. The skill continues normally.
+Telemetry is optional and defensive. Three disable mechanisms: `NANOSTACK_NO_TELEMETRY=1` in the environment, `~/.nanostack/.telemetry-disabled` marker file, or removing the helpers from `bin/lib/`. Any one is sufficient; the block below becomes a no-op.
 
 Run this block:
 
 ```bash
-if [ -z "${NANOSTACK_NO_TELEMETRY:-}" ] \
-   && [ ! -f "$HOME/.nanostack/.telemetry-disabled" ] \
-   && [ -f "$HOME/.claude/skills/nanostack/bin/lib/telemetry.sh" ]; then
-  source "$HOME/.claude/skills/nanostack/bin/lib/telemetry.sh" 2>/dev/null
-  nano_telemetry_init 2>/dev/null
-  command -v nano_telemetry_pending_write >/dev/null 2>&1 && \
-    nano_telemetry_pending_write think 2>/dev/null
-fi
+_P="$HOME/.claude/skills/nanostack/bin/lib/skill-preamble.sh"
+[ -f "$_P" ] && . "$_P" think
+unset _P
 echo "TEL_TIER=${NANO_TEL_TIER:-off}"
 echo "TEL_SKIP_PROMPT=${NANO_TEL_SKIP_PROMPT:-1}"
 ```
 
-If telemetry was disabled or stripped, `TEL_TIER=off` and `TEL_SKIP_PROMPT=1` fall through from the defaults, and the skill simply does not prompt or record anything.
+If telemetry is disabled or stripped, `TEL_TIER=off` and `TEL_SKIP_PROMPT=1` fall through from the defaults, and the skill does not prompt or record anything.
 
 **If `TEL_TIER` is not `off` AND `TEL_SKIP_PROMPT=0`**, show the opt-in prompt using `AskUserQuestion`. The helper already checks whether the user was prompted before or is a pre-existing install. Use exactly this wording:
 
@@ -348,14 +337,15 @@ Wait for the user to invoke `/nano`.
 
 ### Telemetry finalize
 
-Before handing control back to the user (or to `/nano` in autopilot), close out telemetry if it is available:
+Before handing control back to the user (or to `/nano` in autopilot), close out telemetry:
 
 ```bash
-command -v nano_telemetry_finalize >/dev/null 2>&1 && \
-  nano_telemetry_finalize think success 2>/dev/null
+_F="$HOME/.claude/skills/nanostack/bin/lib/skill-finalize.sh"
+[ -f "$_F" ] && . "$_F" think success
+unset _F
 ```
 
-If the flow aborted (user interrupted, blocked on missing info, error in a phase), pass `abort` or `error` instead of `success`. The `command -v` guard keeps the line harmless when telemetry is disabled or stripped. The function itself is also a no-op if tier is `off`.
+If the flow aborted (user interrupted, blocked on missing info, error in a phase), pass `abort` or `error` instead of `success`. The finalize helper is a no-op when telemetry is disabled, stripped, or tier is `off`.
 
 For retro mode (`/think --retro`), same rule applies at the end of the retro brief output.
 
