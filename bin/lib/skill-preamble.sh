@@ -52,6 +52,27 @@ if [ -n "$_nano_tel_lib" ]; then
   nano_telemetry_init 2>/dev/null
   command -v nano_telemetry_pending_write >/dev/null 2>&1 && \
     nano_telemetry_pending_write "$_nano_skill_name" 2>/dev/null
+
+  # Persist init state to disk so skill-finalize.sh can restore it in a
+  # separate shell invocation. In agents like Claude Code each Bash tool
+  # call starts a fresh process with no inherited env; without this file
+  # the finalize step cannot link to the pending marker written here.
+  # One file per skill name; accumulates only if finalize never runs (which
+  # the pruner in telemetry.sh cleans up after 7 days).
+  if command -v nano_telemetry_init >/dev/null 2>&1 && \
+     [ -n "${NANO_TEL_SESSION_ID:-}" ]; then
+    _nano_state_dir="${NANO_TEL_HOME:-$HOME/.nanostack}"
+    _nano_state_file="$_nano_state_dir/.active-$_nano_skill_name.env"
+    mkdir -p "$_nano_state_dir" 2>/dev/null
+    {
+      printf 'NANO_TEL_SESSION_ID=%s\n' "$NANO_TEL_SESSION_ID"
+      printf 'NANO_TEL_START_EPOCH=%s\n' "$NANO_TEL_START_EPOCH"
+      printf 'NANO_TEL_TIER=%s\n' "$NANO_TEL_TIER"
+      printf 'NANO_TEL_INSTALLATION_ID=%s\n' "${NANO_TEL_INSTALLATION_ID:-}"
+    } > "$_nano_state_file" 2>/dev/null
+    chmod 600 "$_nano_state_file" 2>/dev/null
+    unset _nano_state_dir _nano_state_file
+  fi
 fi
 
 unset _nano_tel_lib _nano_skill_dir _nano_skill_name

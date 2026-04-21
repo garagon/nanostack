@@ -341,9 +341,14 @@ _nano_tel_rotate_if_large() {
 
 # Drop .pending-* markers older than 7 days. Runs in init regardless of
 # tier so markers do not accumulate across long `off` periods.
+# Also reaps .active-<skill>.env state files written by skill-preamble.sh
+# but never cleared because finalize did not run (crash, agent exit, etc.).
 _nano_tel_prune_old_markers() {
   [ -d "$NANO_TEL_ANALYTICS_DIR" ] || return 0
   find "$NANO_TEL_ANALYTICS_DIR" -maxdepth 1 -name '.pending-*' -type f \
+    -mtime +7 -delete 2>/dev/null || true
+  [ -d "$NANO_TEL_HOME" ] || return 0
+  find "$NANO_TEL_HOME" -maxdepth 1 -name '.active-*.env' -type f \
     -mtime +7 -delete 2>/dev/null || true
 }
 
