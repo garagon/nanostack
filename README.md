@@ -53,6 +53,53 @@ Every step is enforced. You cannot `/ship` without `/review`, `/security`, and `
 | **06** | `/qa`             | Tests the thing. Browser, API, CLI, or root-cause debug.                |
 | **07** | `/ship`           | PR creation, CI verification, post-deploy canary, sprint journal.       |
 
+## Features
+
+<table>
+<tr>
+<td align="center" width="33%">
+<h3>🧠 Scope Challenge</h3>
+<code>/think</code> pushes back before code exists. The smallest thing worth building is often smaller than you thought.
+</td>
+<td align="center" width="33%">
+<h3>📋 Named Plans</h3>
+<code>/nano</code> names every file and every risk. "Write tests" is not a step. <code>src/auth/webhook.ts: add HMAC verification</code> is.
+</td>
+<td align="center" width="33%">
+<h3>🔍 Scope Drift Detection</h3>
+<code>/review</code> reads the plan artifact. If the PR touches files the plan did not declare, you hear about it.
+</td>
+</tr>
+<tr>
+<td align="center">
+<h3>🛡️ Security on Every Ship</h3>
+OWASP A01-A10 plus STRIDE before every merge. Graded A-F. Not a quarterly calendar block.
+</td>
+<td align="center">
+<h3>🧪 Real QA</h3>
+Browser (Playwright), native app, CLI, or root-cause debug. Fixes are atomic commits, before and after screenshots when visual.
+</td>
+<td align="center">
+<h3>📦 Honest PRs</h3>
+<code>/ship</code> writes <em>why</em> the change exists, not just what files changed. CI verified, canary checked, sprint journal saved.
+</td>
+</tr>
+<tr>
+<td align="center">
+<h3>🎯 Phase Gate</h3>
+<code>git commit</code> is blocked until <code>/review</code>, <code>/security</code>, and <code>/qa</code> pass. The pipeline is enforced in shell, not wished for.
+</td>
+<td align="center">
+<h3>🔐 Opt-in Telemetry</h3>
+Default off. Three independent disable mechanisms. Code, prompts, repo names, and paths never leave your machine.
+</td>
+<td align="center">
+<h3>⚡ Zero Deps, Zero Build</h3>
+Markdown plus bash. Your agent reads files on disk. No daemon, no SaaS, no API key. Inspectable, auditable, portable.
+</td>
+</tr>
+</table>
+
 ## Nanostack is right for you if
 
 - ✅ You have an AI agent open all day and still feel like you ship slowly
