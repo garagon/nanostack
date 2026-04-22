@@ -1,10 +1,11 @@
 <h1 align="center">Nanostack</h1>
+
 <p align="center">
-  Turns your AI agent into an engineering team that challenges scope, plans, reviews, tests, audits and ships.<br>
-  One sprint. Minutes, not weeks.
+  Turns your AI agent into an engineering team that challenges scope,<br>
+  plans, reviews, tests, audits, and ships.
 </p>
 
-<br>
+<p align="center"><strong>One sprint. Minutes, not weeks.</strong></p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
@@ -13,24 +14,61 @@
 </p>
 
 <p align="center">
-  <a href="#install">Install</a> &middot;
+  <a href="#what-is-nanostack">What is it</a> &middot;
+  <a href="#nanostack-is-right-for-you-if">Right for you</a> &middot;
+  <a href="#quick-start">Install</a> &middot;
   <a href="#the-sprint">The Sprint</a> &middot;
-  <a href="#autopilot">Autopilot</a> &middot;
-  <a href="#guard">Guard</a> &middot;
   <a href="#know-how">Know-how</a> &middot;
   <a href="#build-on-nanostack">Extend</a> &middot;
-  <a href="#contributing">Contributing</a>
+  <a href="README.es.md">Español</a>
 </p>
 
-<p align="center">
-  <a href="README.es.md">Leer en español</a>
-</p>
+<br>
 
----
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                                                                     │
+│   think ─▶ plan ─▶ build ─▶ review ─▶ security ─▶ qa ─▶ ship        │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
 Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). 13 skills. Zero dependencies. Zero build step.
 
-Works with Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp and Cline.
+Works with Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp, and Cline.
+
+## What is Nanostack?
+
+Your agent is already capable of writing code. What it lacks is structure. Nanostack is seven specialists the agent invokes in order, each one reading what came before. Scope gets challenged before planning. The plan gets named files and risks before building. The build gets reviewed, audited, and tested before shipping. Ship creates the PR, verifies CI, and writes the sprint journal.
+
+Every step is enforced. You cannot `/ship` without `/review`, `/security`, and `/qa`. Nothing falls through the cracks because every step reads the artifact of the previous one.
+
+|        | Step              | What the specialist does                                                |
+| ------ | ----------------- | ----------------------------------------------------------------------- |
+| **01** | `/think`          | Challenges scope. Finds the smallest thing worth building.              |
+| **02** | `/nano`           | Plans the implementation. Names every file and every risk.              |
+| **03** | build             | You or the agent writes the code.                                       |
+| **04** | `/review`         | Two-pass code review. Scope drift detection. Auto-fixes the mechanical. |
+| **05** | `/security`       | OWASP A01-A10 audit + STRIDE threat modeling. Graded A-F.               |
+| **06** | `/qa`             | Tests the thing. Browser, API, CLI, or root-cause debug.                |
+| **07** | `/ship`           | PR creation, CI verification, post-deploy canary, sprint journal.       |
+
+## Nanostack is right for you if
+
+- ✅ You have an AI agent open all day and still feel like you ship slowly
+- ✅ You want reviews that catch scope drift, not just typos
+- ✅ You want a security audit before every ship, not once a quarter
+- ✅ You want PR descriptions that explain the WHY, not just list files
+- ✅ You want a process that works across Claude, Cursor, Codex, Gemini, and more
+- ✅ You want the skills on disk, inspectable, not locked in a SaaS
+
+## What Nanostack is not
+
+- ❌ **Not a chatbot wrapper.** The skills are markdown files your agent reads. No daemon, no server, no API key.
+- ❌ **Not a prompt library.** Each skill is a process with artifacts, dependencies, and verification gates.
+- ❌ **Not a workflow builder.** No drag-and-drop. The sprint is fixed on purpose.
+- ❌ **Not an agent framework.** Bring any agent. Nanostack coordinates the sprint; the agent executes it.
+- ❌ **Not a replacement for judgment.** The agent challenges your scope. You still decide what to build.
 
 ## Quick start
 
@@ -38,13 +76,13 @@ Works with Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity,
 npx create-nanostack
 ```
 
-One command. Detects your agents, installs everything, runs setup. Works with Claude Code, Cursor, Codex, Gemini CLI, Amp, Cline, OpenCode, and Antigravity.
+One command. Detects your agents, installs everything, runs setup.
 
 Then run `/nano-run` in your agent to configure your project through a conversation. On your first sprint, `/think` shows the full pipeline so you know what comes next.
 
 Want to try it on a sandbox first? `examples/starter-todo/` is a tiny TODO app with three suggested features to learn the sprint flow without touching a real project. See [`examples/starter-todo/README.md`](examples/starter-todo/README.md).
 
-Or jump straight in:
+## See it work
 
 ```
 You:    I need to add notifications to my app. Users keep missing
@@ -143,7 +181,7 @@ The product spec covers: problem, solution, user stories, acceptance criteria, u
 
 Specs are presented for approval before implementation. If the spec is wrong, everything downstream is wrong.
 
-## See it work: full sprint
+## Full sprint walkthrough
 
 ```
 You:    I want to build a security scanner for cloud misconfigurations.
