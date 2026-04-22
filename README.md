@@ -1,8 +1,13 @@
-<h1 align="center">Nanostack</h1>
 
 <p align="center">
-  Turns your AI agent into an engineering team that challenges scope,<br>
-  plans, reviews, tests, audits, and ships.
+<img width="404" height="139" alt="Image" src="https://github.com/user-attachments/assets/839805e9-979f-4c95-9e24-eba9d7ae6236" />
+</p>
+
+<br>
+
+<p align="center">
+  Turns your AI agent into an engineering team that challenges scope, plans, reviews, tests, audits, and ships.
+ 
 </p>
 
 <p align="center"><strong>One sprint. Minutes, not weeks.</strong></p>
@@ -25,13 +30,6 @@
 
 <br>
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                                                                     │
-│   think ─▶ plan ─▶ build ─▶ review ─▶ security ─▶ qa ─▶ ship        │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
 
 Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). 13 skills. Zero dependencies. Zero build step.
 
