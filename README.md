@@ -58,44 +58,44 @@ Every step is enforced. You cannot `/ship` without `/review`, `/security`, and `
 <table>
 <tr>
 <td align="center" width="33%">
-<h3>🧠 Scope Challenge</h3>
-<code>/think</code> pushes back before code exists. The smallest thing worth building is often smaller than you thought.
+<h3>🧠 Pushes back before you build</h3>
+<code>/think</code> challenges your idea before a single line of code. Most features ship smaller than you pitched them. That usually means you saved a week.
 </td>
 <td align="center" width="33%">
-<h3>📋 Named Plans</h3>
-<code>/nano</code> names every file and every risk. "Write tests" is not a step. <code>src/auth/webhook.ts: add HMAC verification</code> is.
+<h3>📋 A real plan, not "add a feature"</h3>
+<code>/nano</code> lists every file the agent will touch and every thing that could go wrong. A plan you can read, argue with, and check off.
 </td>
 <td align="center" width="33%">
-<h3>🔍 Scope Drift Detection</h3>
-<code>/review</code> reads the plan artifact. If the PR touches files the plan did not declare, you hear about it.
+<h3>🔍 Catches when the agent adds extras</h3>
+<code>/review</code> compares what got built with what you agreed to build. If the agent quietly added five extra things, you find out before you ship.
 </td>
 </tr>
 <tr>
 <td align="center">
-<h3>🛡️ Security on Every Ship</h3>
-OWASP A01-A10 plus STRIDE before every merge. Graded A-F. Not a quarterly calendar block.
+<h3>🛡️ Security before every release</h3>
+<code>/security</code> checks for the mistakes that leak passwords, open doors to attackers, or crash your app. Graded A through F. Not once a quarter. Every release.
 </td>
 <td align="center">
-<h3>🧪 Real QA</h3>
-Browser (Playwright), native app, CLI, or root-cause debug. Fixes are atomic commits, before and after screenshots when visual.
+<h3>🧪 Actually opens your app and clicks</h3>
+<code>/qa</code> opens your app like a real user. Clicks buttons. Takes screenshots. When it finds a bug, it fixes it, shows you before-and-after, and moves on.
 </td>
 <td align="center">
-<h3>📦 Honest PRs</h3>
-<code>/ship</code> writes <em>why</em> the change exists, not just what files changed. CI verified, canary checked, sprint journal saved.
+<h3>📦 PRs that explain <em>why</em></h3>
+<code>/ship</code> writes a PR description that explains why the change exists, not just what files changed. Your team (or future you) reads it and actually understands.
 </td>
 </tr>
 <tr>
 <td align="center">
-<h3>🎯 Phase Gate</h3>
-<code>git commit</code> is blocked until <code>/review</code>, <code>/security</code>, and <code>/qa</code> pass. The pipeline is enforced in shell, not wished for.
+<h3>🎯 Can't skip the hard steps</h3>
+The sprint runs in order: think, plan, build, review, security, qa, ship. Trying to ship before reviewing is blocked. No accidental Friday 5pm surprises.
 </td>
 <td align="center">
-<h3>🔐 Opt-in Telemetry</h3>
-Default off. Three independent disable mechanisms. Code, prompts, repo names, and paths never leave your machine.
+<h3>🔐 Your code stays on your computer</h3>
+Nothing leaves unless you opt in. Your code, your prompts, your project names, your file paths. All local. Three ways to turn any sharing off.
 </td>
 <td align="center">
-<h3>⚡ Zero Deps, Zero Build</h3>
-Markdown plus bash. Your agent reads files on disk. No daemon, no SaaS, no API key. Inspectable, auditable, portable.
+<h3>⚡ No accounts, no servers, no cloud</h3>
+The skills are plain text files on your computer. You can open any of them and read exactly what it does. No login, no SaaS, no vendor lock-in.
 </td>
 </tr>
 </table>
