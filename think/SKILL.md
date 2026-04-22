@@ -83,6 +83,42 @@ fi
 
 If `TEL_SKIP_PROMPT=1` (pre-existing install) or the marker already exists, skip the prompt entirely. Pre-existing users stay at default `off` unless they opt in manually.
 
+## Preset selection
+
+Check the user's invocation for a `--preset` flag. Three presets exist today:
+
+| Preset | Use when |
+|---|---|
+| `default` | Neutral professional voice. The baseline. No flag needed. |
+| `yc` | YC office hours energy. Six forcing questions delivered without softening. Specificity is the currency. |
+| `garry` | Garry Tan voice. Punchy, concrete, no AI vocabulary, no em dashes. Sound like a builder talking to a builder. |
+
+Parsing rules:
+
+- `/think --preset=yc "idea"` or `/think --preset yc "idea"` → preset is `yc`.
+- `/think "idea"` (no flag) → preset is `default`.
+- Unknown value → tell the user `Unknown preset '<name>'. Valid: default, yc, garry. Running with default.` and proceed with `default`.
+
+Load and display the preset so the user sees which voice you are about to use:
+
+```bash
+PRESET="${PRESET:-default}"
+PRESET_FILE="$HOME/.claude/skills/nanostack/think/presets/$PRESET.md"
+if [ -f "$PRESET_FILE" ]; then
+  echo "--- preset: $PRESET ---"
+  cat "$PRESET_FILE"
+else
+  echo "preset '$PRESET' not found, using default"
+  cat "$HOME/.claude/skills/nanostack/think/presets/default.md"
+fi
+```
+
+Apply the preset's **Voice** rules to every subsequent message in this skill run: diagnostic questions, ambition check, premise challenge, brief, closing. Apply the **Diagnostic framing** notes during Phase 2. Apply the **Closing** style at Phase 7.
+
+Presets change HOW you communicate. They do not change the flow, the forcing questions, the scope modes, or the JSON artifact format. A `/think --preset=yc` and a `/think --preset=garry` on the same idea produce the same structured brief; the prose around it is different.
+
+Presets compose with modes and with `--retro`. A `/think --preset=yc --retro` is retro output in YC voice.
+
 ## Retro Mode
 
 If the user said `/think --retro` or `/think retro` or "retrospective", run the retrospective process instead of the normal diagnostic. **Do not initialize a new session.** Retro looks backward at what was shipped, not forward at what to build.
