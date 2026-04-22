@@ -58,43 +58,61 @@ Every step is enforced. You cannot `/ship` without `/review`, `/security`, and `
 <table>
 <tr>
 <td align="center" width="33%">
-<h3>🧠 Thinks with you, pushes back when needed</h3>
-<code>/think</code> is the thinking partner most solo builders don't have. Asks the questions that take an idea from vague to concrete. Challenges without dismissing. You finish with clarity about what to build and why.
+<h3>🧠 Thinking partner</h3>
+<strong>Thinks with you, pushes back when needed.</strong>
+<br><br>
+The thinking partner most solo builders don't have. Asks the questions that take an idea from vague to concrete. Challenges without dismissing. You finish with clarity about what to build and why.
 </td>
 <td align="center" width="33%">
-<h3>📋 A real plan, not "add a feature"</h3>
+<h3>📋 Real plans</h3>
+<strong>Not "add a feature."</strong>
+<br><br>
 <code>/nano</code> lists every file the agent will touch and every thing that could go wrong. A plan you can read, argue with, and check off.
 </td>
 <td align="center" width="33%">
-<h3>🔍 Catches when the agent adds extras</h3>
+<h3>🔍 Scope guard</h3>
+<strong>Catches when the agent adds extras.</strong>
+<br><br>
 <code>/review</code> compares what got built with what you agreed to build. If the agent quietly added five extra things, you find out before you ship.
 </td>
 </tr>
 <tr>
 <td align="center">
-<h3>🛡️ Security before every release</h3>
-<code>/security</code> looks for password leaks, broken logins, and the kind of mistakes that make headlines. Every release, not once a quarter. Your users' data stays where it belongs.
+<h3>🛡️ Security audit</h3>
+<strong>Not once a quarter. Every release.</strong>
+<br><br>
+<code>/security</code> looks for password leaks, broken logins, and the kind of mistakes that make headlines. Your users' data stays where it belongs.
 </td>
 <td align="center">
-<h3>🧪 Actually opens your app and clicks</h3>
+<h3>🧪 Real QA</h3>
+<strong>Actually opens your app and clicks.</strong>
+<br><br>
 <code>/qa</code> opens your app like a real user. Clicks buttons. Takes screenshots. When it finds a bug, it fixes it, shows you before-and-after, and moves on.
 </td>
 <td align="center">
-<h3>📦 PRs that explain <em>why</em></h3>
+<h3>📦 Honest PRs</h3>
+<strong>Explains <em>why</em>, not just what.</strong>
+<br><br>
 <code>/ship</code> writes a PR description that explains why the change exists, not just what files changed. Your team (or future you) reads it and actually understands.
 </td>
 </tr>
 <tr>
 <td align="center">
-<h3>🎯 Can't skip the hard steps</h3>
+<h3>🎯 Phase gate</h3>
+<strong>Can't skip the hard steps.</strong>
+<br><br>
 The sprint runs in order: think, plan, build, review, security, qa, ship. Trying to ship before reviewing is blocked. No accidental Friday 5pm surprises.
 </td>
 <td align="center">
-<h3>🔐 Your code stays on your computer</h3>
-Nothing leaves unless you opt in. Your code, your prompts, your project names, your file paths. All local. Three ways to turn any sharing off.
+<h3>🔐 Local first</h3>
+<strong>Your code stays on your computer.</strong>
+<br><br>
+Nothing leaves unless you opt in. Your code, your prompts, your project names, your file paths. Three ways to turn any sharing off.
 </td>
 <td align="center">
-<h3>⚡ No accounts, no servers, no cloud</h3>
+<h3>⚡ No lock-in</h3>
+<strong>No accounts, no servers, no cloud.</strong>
+<br><br>
 The skills are plain text files on your computer. You can open any of them and read exactly what it does. No login, no SaaS, no vendor lock-in.
 </td>
 </tr>
