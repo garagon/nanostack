@@ -85,19 +85,22 @@ If `TEL_SKIP_PROMPT=1` (pre-existing install) or the marker already exists, skip
 
 ## Preset selection
 
-Check the user's invocation for a `--preset` flag. Three presets exist today:
+Check the user's invocation for a `--preset` flag. Six presets exist today:
 
 | Preset | Use when |
 |---|---|
 | `default` | Neutral professional voice. The baseline. No flag needed. |
 | `yc` | YC office hours energy. Six forcing questions delivered without softening. Specificity is the currency. |
-| `garry` | Garry Tan voice. Punchy, concrete, no AI vocabulary, no em dashes. Sound like a builder talking to a builder. |
+| `garry` | Garry Tan voice. Punchy, concrete, no AI vocabulary, no em dashes. Voice rules adapted from `garrytan/gstack` (Apache 2.0). |
+| `eng` | Staff engineer review. Pressure-tests architecture: data flow, failure modes, scaling bottleneck, rollback, observability, tests. |
+| `design` | Designer audit. Rates hierarchy, spacing, typography, color, motion, copy, mobile, dark mode on a 0-10 scale. |
+| `devex` | Developer experience walk for libraries, CLIs, APIs, SDKs. Times the user's first five minutes minute by minute. |
 
 Parsing rules:
 
-- `/think --preset=yc "idea"` or `/think --preset yc "idea"` → preset is `yc`.
+- `/think --preset=eng "idea"` or `/think --preset eng "idea"` → preset is `eng`.
 - `/think "idea"` (no flag) → preset is `default`.
-- Unknown value → tell the user `Unknown preset '<name>'. Valid: default, yc, garry. Running with default.` and proceed with `default`.
+- Unknown value → tell the user `Unknown preset '<name>'. Valid: default, yc, garry, eng, design, devex. Running with default.` and proceed with `default`.
 
 Load and display the preset so the user sees which voice you are about to use:
 
