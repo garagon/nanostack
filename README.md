@@ -120,16 +120,6 @@ The skills are plain text files on your computer. Open any of them and read exac
 | ❌ "I'll write the tests later." You don't. Neither does the agent. | ✅ `/qa` is a step in the sprint, not a TODO at the bottom. It opens your app, clicks around, and proves the thing works. |
 | ❌ You rush-commit on a Friday at 5pm. Monday you find out it broke something unrelated. | ✅ The sprint blocks `git commit` until `/review`, `/security`, and `/qa` pass. No accidental Friday 5pm surprises. |
 
-## What Nanostack is not
-
-|  |  |
-| --- | --- |
-| **Not a chatbot wrapper.** | The skills are markdown files your agent reads. No server, no account, no API key. |
-| **Not a prompt library.** | Each skill is a process with a plan, a review, and a verification step. |
-| **Not a workflow builder.** | No drag-and-drop. The sprint is fixed on purpose. |
-| **Not an agent framework.** | Bring any agent. Nanostack coordinates the sprint; the agent executes it. |
-| **Not a replacement for judgment.** | The agent challenges your scope. You still decide what to build. |
-
 ## Quick start
 
 ```bash
