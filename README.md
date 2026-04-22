@@ -109,6 +109,17 @@ The skills are plain text files on your computer. You can open any of them and r
 - ✅ You want a process that works across Claude, Cursor, Codex, Gemini, and more
 - ✅ You want the skills on disk, inspectable, not locked in a SaaS
 
+## Problems Nanostack solves
+
+| Without Nanostack | With Nanostack |
+| --- | --- |
+| ❌ You ask for a small feature and the agent quietly refactors three other things you didn't ask for. | ✅ `/review` compares the code against the plan. If the agent added five extra things, you see them before you merge. |
+| ❌ You ship, then find out a week later you exposed a password, broke a login, or left a SQL injection open. | ✅ `/security` runs on every ship. Catches the mistakes that make headlines before your users do. |
+| ❌ Your PR description says "add notifications" and nobody (including future-you) knows what actually changed or why. | ✅ `/ship` writes a PR that explains <em>why</em> the change exists, not just which files moved. |
+| ❌ Every new project you re-paste the same context into the agent: what we use, how we name things, what's fragile. | ✅ Every skill reads the artifact the previous skill wrote. `/review` already knows what `/nano` planned. |
+| ❌ "I'll write the tests later." You don't. Neither does the agent. | ✅ `/qa` is a step in the sprint, not a TODO at the bottom. It opens your app, clicks around, and proves the thing works. |
+| ❌ You rush-commit on a Friday at 5pm. Monday you find out it broke something unrelated. | ✅ The sprint blocks `git commit` until `/review`, `/security`, and `/qa` pass. No accidental Friday 5pm surprises. |
+
 ## What Nanostack is not
 
 - ❌ **Not a chatbot wrapper.** The skills are markdown files your agent reads. No daemon, no server, no API key.
