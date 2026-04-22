@@ -78,6 +78,51 @@ jobs:
           done
           exit $fail
 
+  think-preset-self-consistency:
+    name: /think presets respect their own voice rules
+    runs-on: ubuntu-latest
+    # A preset whose voice rules are stated in its own file must follow
+    # those rules. The garry preset explicitly bans em-dashes and an
+    # AI-vocabulary list; this job fails the PR if the file contradicts
+    # its own declaration. Other presets (default, yc) do not claim the
+    # same constraints and are not checked here.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: garry preset has zero em-dashes
+        run: |
+          set -e
+          f=think/presets/garry.md
+          [ -f "$f" ] || { echo "SKIP: $f missing"; exit 0; }
+          count=$(grep -c '—' "$f" 2>/dev/null || true)
+          count=${count:-0}
+          if [ "$count" -gt 0 ]; then
+            echo "FAIL: $f contains $count em-dash(es); the preset itself forbids them"
+            grep -n '—' "$f" || true
+            exit 1
+          fi
+          echo "OK: 0 em-dashes"
+      - name: garry preset does not use banned AI vocabulary
+        run: |
+          # The preset file lists the banned words on its "No AI
+          # vocabulary:" line and on its "No banned phrases:" line.
+          # Outside those two listing lines, none of the words may appear
+          # as prose.
+          set -e
+          f=think/presets/garry.md
+          [ -f "$f" ] || { echo "SKIP: $f missing"; exit 0; }
+          # Strip the two listing lines and any markdown bullet starting
+          # with "- No ..." since they document the ban rather than
+          # violate it.
+          stripped=$(grep -vE '^- No (AI vocabulary|banned phrases):' "$f")
+          banned='\b(delve|crucial|robust|comprehensive|nuanced|multifaceted|furthermore|moreover|additionally|pivotal|landscape|tapestry|underscore|foster|showcase|intricate|vibrant|fundamental|significant|interplay)\b'
+          if printf '%s\n' "$stripped" | grep -iE "$banned"; then
+            echo "FAIL: garry preset prose contains AI-vocabulary words it forbids"
+            exit 1
+          fi
+          echo "OK: no banned vocabulary in prose"
+
   telemetry-privacy:
     name: Telemetry privacy contract
     runs-on: ubuntu-latest
