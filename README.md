@@ -59,61 +59,43 @@ Every step is enforced. You cannot `/ship` without `/review`, `/security`, and `
 <tr>
 <td align="center" width="33%">
 <h3>🧠 Thinking partner</h3>
-<strong>Thinks with you, pushes back when needed.</strong>
-<br><br>
-The thinking partner most solo builders don't have. Asks the questions that take an idea from vague to concrete. Challenges without dismissing. You finish with clarity about what to build and why.
+Thinks with you, pushes back when needed. Asks the questions that take an idea from vague to concrete. You finish with clarity about what to build and why.
 </td>
 <td align="center" width="33%">
 <h3>📋 Real plans</h3>
-<strong>Not "add a feature."</strong>
-<br><br>
-<code>/nano</code> lists every file the agent will touch and every thing that could go wrong. A plan you can read, argue with, and check off.
+<code>/nano</code> lists every file the agent will touch and every risk before it writes a line. A plan you can read, argue with, and check off.
 </td>
 <td align="center" width="33%">
 <h3>🔍 Scope guard</h3>
-<strong>Catches when the agent adds extras.</strong>
-<br><br>
-<code>/review</code> compares what got built with what you agreed to build. If the agent quietly added five extra things, you find out before you ship.
+<code>/review</code> compares what got built with what you agreed to build. If the agent added extras, you see them before you merge.
 </td>
 </tr>
 <tr>
 <td align="center">
 <h3>🛡️ Security audit</h3>
-<strong>Not once a quarter. Every release.</strong>
-<br><br>
-<code>/security</code> looks for password leaks, broken logins, and the kind of mistakes that make headlines. Your users' data stays where it belongs.
+<code>/security</code> looks for password leaks, broken logins, and the kind of mistakes that make headlines. Every release, not once a quarter.
 </td>
 <td align="center">
 <h3>🧪 Real QA</h3>
-<strong>Actually opens your app and clicks.</strong>
-<br><br>
-<code>/qa</code> opens your app like a real user. Clicks buttons. Takes screenshots. When it finds a bug, it fixes it, shows you before-and-after, and moves on.
+<code>/qa</code> opens your app like a real user. Clicks buttons, takes screenshots, and fixes the bugs it finds.
 </td>
 <td align="center">
 <h3>📦 Honest PRs</h3>
-<strong>Explains <em>why</em>, not just what.</strong>
-<br><br>
-<code>/ship</code> writes a PR description that explains why the change exists, not just what files changed. Your team (or future you) reads it and actually understands.
+<code>/ship</code> writes a PR description that explains <em>why</em> the change exists, not just which files moved.
 </td>
 </tr>
 <tr>
 <td align="center">
 <h3>🎯 Phase gate</h3>
-<strong>Can't skip the hard steps.</strong>
-<br><br>
-The sprint runs in order: think, plan, build, review, security, qa, ship. Trying to ship before reviewing is blocked. No accidental Friday 5pm surprises.
+The sprint runs in order: think, plan, build, review, security, qa, ship. Trying to ship before reviewing is blocked.
 </td>
 <td align="center">
 <h3>🔐 Local first</h3>
-<strong>Your code stays on your computer.</strong>
-<br><br>
-Nothing leaves unless you opt in. Your code, your prompts, your project names, your file paths. Three ways to turn any sharing off.
+Nothing leaves unless you opt in. Your code, prompts, project names, and file paths stay on your computer.
 </td>
 <td align="center">
 <h3>⚡ No lock-in</h3>
-<strong>No accounts, no servers, no cloud.</strong>
-<br><br>
-The skills are plain text files on your computer. You can open any of them and read exactly what it does. No login, no SaaS, no vendor lock-in.
+The skills are plain text files on your computer. Open any of them and read exactly what it does. No login, no SaaS, no cloud.
 </td>
 </tr>
 </table>
@@ -140,11 +122,13 @@ The skills are plain text files on your computer. You can open any of them and r
 
 ## What Nanostack is not
 
-- ❌ **Not a chatbot wrapper.** The skills are markdown files your agent reads. No daemon, no server, no API key.
-- ❌ **Not a prompt library.** Each skill is a process with artifacts, dependencies, and verification gates.
-- ❌ **Not a workflow builder.** No drag-and-drop. The sprint is fixed on purpose.
-- ❌ **Not an agent framework.** Bring any agent. Nanostack coordinates the sprint; the agent executes it.
-- ❌ **Not a replacement for judgment.** The agent challenges your scope. You still decide what to build.
+|  |  |
+| --- | --- |
+| **Not a chatbot wrapper.** | The skills are markdown files your agent reads. No server, no account, no API key. |
+| **Not a prompt library.** | Each skill is a process with a plan, a review, and a verification step. |
+| **Not a workflow builder.** | No drag-and-drop. The sprint is fixed on purpose. |
+| **Not an agent framework.** | Bring any agent. Nanostack coordinates the sprint; the agent executes it. |
+| **Not a replacement for judgment.** | The agent challenges your scope. You still decide what to build. |
 
 ## Quick start
 
