@@ -58,8 +58,8 @@ Every step is enforced. You cannot `/ship` without `/review`, `/security`, and `
 <table>
 <tr>
 <td align="center" width="33%">
-<h3>🧠 Pushes back before you build</h3>
-<code>/think</code> challenges your idea before a single line of code. Most features ship smaller than you pitched them. That usually means you saved a week.
+<h3>🧠 Thinks with you, pushes back when needed</h3>
+<code>/think</code> is the thinking partner most solo builders don't have. Asks the questions that take an idea from vague to concrete. Challenges without dismissing. You finish with clarity about what to build and why.
 </td>
 <td align="center" width="33%">
 <h3>📋 A real plan, not "add a feature"</h3>
@@ -73,7 +73,7 @@ Every step is enforced. You cannot `/ship` without `/review`, `/security`, and `
 <tr>
 <td align="center">
 <h3>🛡️ Security before every release</h3>
-<code>/security</code> checks for the mistakes that leak passwords, open doors to attackers, or crash your app. Graded A through F. Not once a quarter. Every release.
+<code>/security</code> looks for password leaks, broken logins, and the kind of mistakes that make headlines. Every release, not once a quarter. Your users' data stays where it belongs.
 </td>
 <td align="center">
 <h3>🧪 Actually opens your app and clicks</h3>
