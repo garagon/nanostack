@@ -318,3 +318,94 @@ jobs:
             echo "FAIL: clientIp appears near D1 write path"
             exit 1
           fi
+
+  telemetry-worker-supply-chain:
+    name: Telemetry Worker supply chain
+    runs-on: ubuntu-latest
+    # Principle of least privilege: read-only, no npm publish, no secrets.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - name: Frozen install (lockfile matches package.json)
+        working-directory: telemetry-worker
+        run: |
+          # bun install --frozen-lockfile refuses to proceed if package.json
+          # and bun.lock diverged. Catches the class of bug where a dep was
+          # bumped in one place but not the other, which leaves CI and
+          # fresh-machine installs in different dependency states.
+          bun install --frozen-lockfile
+      - name: Dependency audit
+        working-directory: telemetry-worker
+        run: |
+          # Any moderate-or-higher advisory fails the build. The Worker is
+          # public-facing infra; the minute a known advisory lands we want
+          # the next PR to surface it.
+          bun audit
+      - name: Typecheck (tsc --noEmit)
+        working-directory: telemetry-worker
+        run: |
+          # Catches schema drift between the Worker and bin/lib/telemetry.sh
+          # at the TypeScript interface layer, on top of the string-level
+          # field-list check in the "Telemetry Worker privacy invariants"
+          # job above.
+          bun x tsc --noEmit
+
+  guard-regression:
+    name: Guard regression cases
+    runs-on: ubuntu-latest
+    # Execute a fixed matrix of commands against guard/bin/check-dangerous.sh
+    # and verify the exit code. The matrix covers the 2026-04-24 audit
+    # bypass (rm -rf ./ and quoted variants) plus a set of common safe
+    # operations that must keep passing, so future changes to the guard
+    # cannot silently regress either direction.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run regression matrix
+        run: |
+          # GitHub Actions defaults to `bash -e`, which would abort the
+          # matrix on the first blocked case (subshell exits 1). The
+          # matrix itself is the fail signal; disable errexit here so the
+          # loop can record each case's exit code without aborting early.
+          set +e
+          set -u
+          script=guard/bin/check-dangerous.sh
+          # Point the guard at an empty store directory so the session
+          # phase gate (Tier 2.5) cannot interfere. The regression focus
+          # is block rules and the in-project fast-path, not concurrency.
+          export NANOSTACK_STORE="$RUNNER_TEMP/store"
+          mkdir -p "$NANOSTACK_STORE"
+          fail=0
+          run_case() {
+            local expected="$1" cmd="$2"
+            # Run the guard from a temp dir so git-based Tier 2 checks do
+            # not interact with this repo's own git status.
+            (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/$script" "$cmd" >/dev/null 2>&1)
+            local got=$?
+            if [ "$got" != "$expected" ]; then
+              echo "FAIL: '$cmd' expected exit $expected, got $got"
+              fail=1
+            else
+              printf '  ok   exit=%s  %s\n' "$got" "$cmd"
+            fi
+          }
+          # Blocked: recursive deletion variants + reset/force-push + root.
+          run_case 1 'rm -rf ./'
+          run_case 1 'rm -rf "./"'
+          run_case 1 'rm -rf .'
+          run_case 1 'rm -rf *'
+          run_case 1 'rm -rf ~'
+          run_case 1 'git reset --hard'
+          run_case 1 'git push --force'
+          run_case 1 'git push -f origin main'
+          # Allowed: specific in-project subpaths + allowlist commands.
+          run_case 0 'rm -rf ./docs'
+          run_case 0 'rm -rf ./docs/foo'
+          run_case 0 'ls -la'
+          run_case 0 'git status'
+          exit $fail
