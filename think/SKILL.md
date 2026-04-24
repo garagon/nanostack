@@ -296,6 +296,8 @@ Challenge the fundamental premise:
 
 Apply CEO cognitive patterns from `think/references/cognitive-patterns.md` (Inversion, Customer Obsession, 10x vs 10%, Starting Point).
 
+Then apply the **latent vs deterministic lens** from `think/references/latent-vs-deterministic.md`. Ask: which parts of this plan rely on the model doing the right thing (latent) versus which parts are backed by a test, a hook, or a check (deterministic)? If every mitigation against Key Risk reads "remember to X" or "document Y," the plan is latent and will decay. Flag at least one risk that needs deterministic infrastructure.
+
 Then **argue the opposite**: construct the strongest case this should NOT be built. If the opposite argument is stronger, say so. If the original holds, it's battle-tested.
 
 ### Phase 5: Scope Mode Selection
