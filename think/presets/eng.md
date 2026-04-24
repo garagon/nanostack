@@ -33,6 +33,10 @@ In addition to the six forcing questions, run the engineering pressure test duri
 5. **Observability.** What metric tells you this feature is broken before the user does? If you only find out via support tickets, you will find out too late.
 6. **Tests.** For each step in the plan, what test would fail if this regressed? Tests at the end of the plan are not a plan; they are a wish.
 
+## Observational feedback
+
+Skip it. The engineering pressure test above is the feedback; adding a "What I noticed" block on top would soften the closing and duplicate signal. Go straight from the Think Summary to the pressure-test closer below.
+
 ## Closing
 
 At Phase 7, write the Think Summary as usual. Then:

@@ -313,6 +313,8 @@ Based on the diagnostic, recommend one of four scope modes:
 
 ### Phase 6: Handoff to /nano
 
+Before writing the summary, check whether an observational feedback block belongs in this brief. Read `think/references/observational-patterns.md`. If any of the four patterns (jump-to-solution, scope drift, strong pain observation, surprising synthesis) fired with specific evidence AND the active preset does not opt out, add a `## What I noticed` section after the Think Summary with one to three observations. If no pattern fired cleanly or the preset skips observational feedback (e.g. `eng`), omit the section entirely. A missed observation is cheap; a forced one trains the user to tune the block out.
+
 Produce a clear brief for the next phase:
 
 ```
@@ -324,6 +326,11 @@ Produce a clear brief for the next phase:
 **Starting point:** {{the smallest thing that delivers value}}
 **Key risk:** {{the one thing most likely to make this fail}}
 **Premise validated:** {{yes/no — and why}}
+
+## What I noticed   (only if a pattern fired; otherwise omit)
+
+- {{observation anchored to a specific moment, ending in a concrete next move}}
+- {{optional second, cap at three}}
 ```
 
 Immediately after writing the Think Summary — before anything else, before presenting next steps — save the artifact:
