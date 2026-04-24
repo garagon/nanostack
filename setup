@@ -30,6 +30,61 @@ skill_dir() {
   esac
 }
 
+# Accept only skill public names that are valid command identifiers:
+# lowercase letter first, then lowercase letters, digits, or hyphens,
+# up to 40 chars total. Rejects path components (/, ..), quotes, shell
+# metacharacters, whitespace, and empty strings. Rename values are
+# persisted and later interpolated into paths and sed expressions, so
+# this check must be strict even when the source is a trusted-looking
+# setup.json (an attacker who can write that file could otherwise flow
+# user input into a path delete or a sed command).
+is_valid_skill_name() {
+  local name="$1"
+  [ -n "$name" ] || return 1
+  printf '%s' "$name" | LC_ALL=C grep -qE '^[a-z][a-z0-9-]{0,39}$'
+}
+
+# Walk the current RENAMES string (comma-separated old=new pairs) and
+# make sure every pair is safe. Rejects the whole input on the first
+# violation so partial application cannot happen. Writes a single line
+# to stderr naming the offending pair.
+validate_renames() {
+  local source="${1:-cli}"
+  [ -z "$RENAMES" ] && return 0
+  local pair old new
+  # Split on commas without touching existing whitespace semantics.
+  local OIFS="$IFS"
+  IFS=','
+  # shellcheck disable=SC2086
+  set -f
+  for pair in $RENAMES; do
+    set +f
+    IFS="$OIFS"
+    # Trim surrounding whitespace only.
+    pair="${pair# }"; pair="${pair% }"
+    [ -z "$pair" ] && continue
+    case "$pair" in
+      *=*) ;;
+      *)
+        echo "ERROR: invalid rename entry '$pair' (expected old=new) from $source" >&2
+        exit 1 ;;
+    esac
+    old="${pair%%=*}"
+    new="${pair#*=}"
+    if ! is_valid_skill_name "$old"; then
+      echo "ERROR: invalid source skill name '$old' from $source (allowed: [a-z][a-z0-9-]{0,39})" >&2
+      exit 1
+    fi
+    if ! is_valid_skill_name "$new"; then
+      echo "ERROR: invalid rename target '$new' from $source (allowed: [a-z][a-z0-9-]{0,39})" >&2
+      exit 1
+    fi
+    IFS=','
+  done
+  set +f
+  IFS="$OIFS"
+}
+
 # sed -i portability (BSD vs GNU)
 if sed --version >/dev/null 2>&1; then
   sed_inplace() { sed -i "$@"; }
@@ -156,7 +211,11 @@ if [ -z "$RENAMES" ]; then
   if [ -f "$HOME/.nanostack/setup.json" ]; then
     saved_renames=$(jq -r '.renames // {} | to_entries[] | "\(.key)=\(.value)"' "$HOME/.nanostack/setup.json" 2>/dev/null | tr '\n' ',')
     RENAMES="${saved_renames%,}"
+    validate_renames "$HOME/.nanostack/setup.json"
   fi
+else
+  # Passed via --rename on the command line.
+  validate_renames "--rename flag"
 fi
 
 if [ -n "$RENAMES" ]; then
@@ -185,10 +244,19 @@ install_renamed_skill() {
   local dir
   dir=$(skill_dir "$skill")
 
+  # Defense in depth: callers already validate but this function is exposed
+  # as an API for future callers, so re-check.
+  if ! is_valid_skill_name "$skill" || ! is_valid_skill_name "$public_name"; then
+    echo "ERROR: install_renamed_skill refused '$skill' -> '$public_name'" >&2
+    return 1
+  fi
+
   mkdir -p "$target_dir/$public_name"
 
-  # Copy SKILL.md with updated name field
-  sed "s/^name: .*/name: $public_name/" "$SOURCE_DIR/$dir/SKILL.md" > "$target_dir/$public_name/SKILL.md"
+  # Use sed with a controlled delimiter. public_name has already been
+  # constrained to [a-z0-9-] so it cannot inject sed metacharacters, but
+  # the explicit delimiter keeps this robust if the regex is ever loosened.
+  sed "s|^name: .*|name: $public_name|" "$SOURCE_DIR/$dir/SKILL.md" > "$target_dir/$public_name/SKILL.md"
 
   # Symlink everything else (references, templates, bin, etc.)
   for item in "$SOURCE_DIR/$dir"/*; do
@@ -197,6 +265,27 @@ install_renamed_skill() {
     [ "$basename" = "SKILL.md" ] && continue
     ln -snf "$item" "$target_dir/$public_name/$basename" 2>/dev/null || true
   done
+}
+
+# Return 0 if $1 resolves to a path under $2 (after following symlinks
+# and normalising .. / .), 1 otherwise. Used as a guard before rm -rf
+# on any path derived from user input. realpath is GNU/BSD-portable
+# enough for the platforms nanostack targets; when it is missing the
+# guard refuses rather than fall back to the unresolved path.
+path_is_under() {
+  local target="$1" root="$2"
+  [ -n "$target" ] && [ -n "$root" ] || return 1
+  local real_target real_root
+  if ! real_target=$(cd "$(dirname "$target")" 2>/dev/null && pwd -P)/$(basename "$target"); then
+    return 1
+  fi
+  if ! real_root=$(cd "$root" 2>/dev/null && pwd -P); then
+    return 1
+  fi
+  case "$real_target" in
+    "$real_root"|"$real_root"/*) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 # ─── Auto-detect agents ──────────────────────────────────────
@@ -256,6 +345,14 @@ install_claude() {
     fi
 
     local target="$skills_dir/$public_name"
+
+    # Refuse to touch any path that does not resolve inside skills_dir.
+    # The rename map is already validated on entry, but this is the last
+    # chance before a rm -rf; treat it as an invariant and abort cleanly.
+    if ! path_is_under "$target" "$skills_dir"; then
+      echo "ERROR: target '$target' escapes skills directory '$skills_dir'; refusing to modify" >&2
+      continue
+    fi
 
     # Always remove stale symlink/dir at target to recreate cleanly
     [ -L "$target" ] && rm -f "$target"
