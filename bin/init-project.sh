@@ -3,6 +3,16 @@
 # Creates .claude/settings.json with permissions for uninterrupted autopilot
 # and .gitignore entry for .nanostack/
 # Usage: Run once in any project directory
+#
+# Permission model:
+#   New installs receive narrow rm permissions (.nanostack/** and /tmp/**).
+#   Anything outside those paths prompts the user. The defense-in-depth
+#   story is documented in SECURITY.md under "Permission model".
+#
+#   When merging into an existing .claude/settings.json, we only ADD
+#   entries; we never remove what the user already has. Existing installs
+#   with Bash(rm:*) keep it until the user opts into narrowing manually.
+#   /nano-doctor surfaces a warning when broad rm is present in settings.
 set -e
 
 PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -32,7 +42,8 @@ if [ -f "$SETTINGS" ]; then
       "Bash(ls:*)",
       "Bash(cp:*)",
       "Bash(mv:*)",
-      "Bash(rm:*)",
+      "Bash(rm:.nanostack/**)",
+      "Bash(rm:/tmp/**)",
       "Bash(git:*)",
       "Bash(go:*)",
       "Bash(npm:*)",
@@ -71,7 +82,8 @@ else
       "Bash(ls:*)",
       "Bash(cp:*)",
       "Bash(mv:*)",
-      "Bash(rm:*)",
+      "Bash(rm:.nanostack/**)",
+      "Bash(rm:/tmp/**)",
       "Bash(git:*)",
       "Bash(go:*)",
       "Bash(npm:*)",
