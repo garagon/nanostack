@@ -385,15 +385,17 @@ Wait for the user to invoke `/nano`.
 
 ### Telemetry finalize
 
-Before handing control back to the user (or to `/nano` in autopilot), close out telemetry:
+Before handing control back to the user (or to `/nano` in autopilot), close out telemetry. Pass `1` as the third arg if the Think Summary you just wrote included a `## What I noticed` observational feedback block (any pattern fired with specific evidence). Pass `0` if it did not, or if the active preset opts out (`eng`). The flag lets us measure how often the observational block fires in the wild without sending any of its content.
 
 ```bash
 _F="$HOME/.claude/skills/nanostack/bin/lib/skill-finalize.sh"
-[ -f "$_F" ] && . "$_F" think success
+[ -f "$_F" ] && . "$_F" think success 0   # 0 = no observational block this brief
+# or, when an observational block was included:
+# [ -f "$_F" ] && . "$_F" think success 1
 unset _F
 ```
 
-If the flow aborted (user interrupted, blocked on missing info, error in a phase), pass `abort` or `error` instead of `success`. The finalize helper is a no-op when telemetry is disabled, stripped, or tier is `off`.
+If the flow aborted (user interrupted, blocked on missing info, error in a phase), pass `abort` or `error` instead of `success`. The third arg is still optional; omit it if the run never got to the Think Summary. The finalize helper is a no-op when telemetry is disabled, stripped, or tier is `off`.
 
 For retro mode (`/think --retro`), same rule applies at the end of the retro brief output.
 
