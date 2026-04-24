@@ -4,6 +4,8 @@ Common problems and how to resolve them, organized by what you actually see.
 
 If your symptom is not here, open an issue: https://github.com/garagon/nanostack/issues
 
+**First move for any install issue:** run `/nano-doctor` (or `~/.claude/skills/nanostack/bin/nano-doctor.sh`). It runs ten checks in under a second and names what is wrong.
+
 ## Contents
 
 - [Slash commands do not appear in my agent](#slash-commands-do-not-appear-in-my-agent)
