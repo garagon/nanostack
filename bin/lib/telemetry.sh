@@ -42,10 +42,13 @@ NANO_TEL_JSONL="$NANO_TEL_ANALYTICS_DIR/skill-usage.jsonl"
 NANO_TEL_JSONL_MAX_BYTES=10485760  # 10 MB rotation threshold
 NANO_TEL_PROMPTED_MARKER="$NANO_TEL_HOME/.telemetry-prompted"
 
-# Resolve nanostack version from VERSION file next to this script's skill dir.
+# Resolve nanostack version from VERSION file at the nanostack root. This
+# file lives at bin/lib/telemetry.sh, so the root is two levels up, not
+# one. The fallback covers the common installed path when BASH_SOURCE
+# cannot be resolved (e.g. piped execution).
 _nano_tel_version() {
   local here
-  here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)"
   if [ -n "$here" ] && [ -f "$here/VERSION" ]; then
     tr -d '[:space:]' < "$here/VERSION" 2>/dev/null
   elif [ -f "$HOME/.claude/skills/nanostack/VERSION" ]; then

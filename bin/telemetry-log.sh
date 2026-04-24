@@ -46,7 +46,17 @@ RATE_FILE="$NANO_TEL_ANALYTICS_DIR/.last-sync-time"
 # Endpoint is hardcoded. Not configurable by env or flag; an attacker who
 # flips an env var cannot redirect telemetry to a collector they control.
 NANO_TEL_ENDPOINT="https://nanostack-telemetry.remoto.workers.dev/v1/event"
-NANO_TEL_UA="nanostack-telemetry/0.5.0"
+
+# Version flows from the root VERSION file so bumping releases touches a
+# single source of truth. Fallback to "unknown" matches _nano_tel_version.
+_here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+if [ -n "$_here" ] && [ -f "$_here/VERSION" ]; then
+  NANO_TEL_VER=$(tr -d '[:space:]' < "$_here/VERSION" 2>/dev/null)
+elif [ -f "$HOME/.claude/skills/nanostack/VERSION" ]; then
+  NANO_TEL_VER=$(tr -d '[:space:]' < "$HOME/.claude/skills/nanostack/VERSION" 2>/dev/null)
+fi
+NANO_TEL_VER="${NANO_TEL_VER:-unknown}"
+NANO_TEL_UA="nanostack-telemetry/$NANO_TEL_VER"
 NANO_TEL_MAX_BATCH=100
 NANO_TEL_MAX_PAYLOAD_BYTES=50000
 
