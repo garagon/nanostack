@@ -24,9 +24,16 @@ audit_log() {
   local log="$store/audit.log"
   [ -d "$store" ] || return 0
 
-  printf '{"at":"%s","event":"%s","resource":"%s","detail":"%s"}\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    "$event" \
-    "$resource" \
-    "$detail" >> "$log" 2>/dev/null || true
+  # Build the line with jq so quotes, backslashes, and newlines in any
+  # field are escaped and cannot corrupt the log or inject extra keys.
+  # Falls back silently (|| true) if jq is unavailable; the audit log
+  # is advisory, not a compliance artifact, so logging failures never
+  # block the caller.
+  jq -cn \
+    --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg event "$event" \
+    --arg resource "$resource" \
+    --arg detail "$detail" \
+    '{at:$at, event:$event, resource:$resource, detail:$detail}' \
+    >> "$log" 2>/dev/null || true
 }
