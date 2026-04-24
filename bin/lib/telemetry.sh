@@ -233,21 +233,38 @@ _nano_tel_error_class() {
 # content (sessions, config, etc.). They get default silent `off` — no
 # prompt. New installs have an empty or missing ~/.nanostack/ on first
 # skill run, which triggers the opt-in prompt (handled by the skill).
+#
+# V5 merge epoch: 2026-04-21 13:35:43 UTC, commit 59209a5. Any entry in
+# ~/.nanostack/ older than this predates V5 and is real pre-V5 evidence.
+# Anything newer belongs to a fresh install and must NOT be classified
+# as pre-V5 — a fresh install legitimately creates session.json, audit
+# logs, skill artifact dirs, etc. during its very first skill run.
+NANO_TEL_V5_EPOCH=1776778543
+
 nano_tel_is_pre_v5_user() {
-  # A user is pre-V5 if ~/.nanostack/ exists AND has content OTHER than
-  # what this helper would create on a new install (the helper creates
-  # user-config.json and analytics/). Anything else that pre-exists is
-  # evidence of prior installation.
   [ -d "$NANO_TEL_HOME" ] || return 1
   local found_prior=0
-  # Look for any file or dir that wasn't created by telemetry itself.
   while IFS= read -r entry; do
-    local base
+    local base mt
     base=$(basename "$entry")
     case "$base" in
-      user-config.json|analytics|installation-id|.telemetry-prompted) : ;;
-      *) found_prior=1; break ;;
+      # Created by this telemetry helper itself.
+      user-config.json|analytics|installation-id|.telemetry-prompted|.telemetry-disabled|.config-lock)
+        continue ;;
+      # Created by the installer (create-nanostack / setup.sh) on every
+      # fresh V5 install. Whitelisting these lets the temporal check
+      # below do its job without being shadowed by known-safe entries.
+      setup.json|.cache)
+        continue ;;
     esac
+    # Non-whitelisted entry. Only treat as pre-V5 evidence if its mtime
+    # predates the V5 merge. Post-V5 entries (session.json, audit.log,
+    # skill artifact dirs) are normal runtime state on a fresh install.
+    mt=$(_nano_tel_mtime "$entry")
+    if [ "$mt" -gt 0 ] 2>/dev/null && [ "$mt" -lt "$NANO_TEL_V5_EPOCH" ] 2>/dev/null; then
+      found_prior=1
+      break
+    fi
   done < <(find "$NANO_TEL_HOME" -mindepth 1 -maxdepth 1 2>/dev/null)
   [ $found_prior -eq 1 ] && return 0 || return 1
 }
