@@ -368,6 +368,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run regression matrix
         run: |
+          # GitHub Actions defaults to `bash -e`, which would abort the
+          # matrix on the first blocked case (subshell exits 1). The
+          # matrix itself is the fail signal; disable errexit here so the
+          # loop can record each case's exit code without aborting early.
+          set +e
           set -u
           script=guard/bin/check-dangerous.sh
           # Point the guard at an empty store directory so the session

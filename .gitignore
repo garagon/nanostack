@@ -28,4 +28,3 @@ Nanostack/
 # Cloudflare Worker build artifacts (never commit)
 telemetry-worker/.wrangler/
 telemetry-worker/node_modules/
-telemetry-worker/bun.lock
