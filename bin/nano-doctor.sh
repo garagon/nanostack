@@ -230,7 +230,35 @@ else
   add_check fail detection pre_v5 "telemetry.sh missing at $_tel_lib"
 fi
 
-# ─── 6. Worker reachability ────────────────────────────────────────────
+# ─── 6. Permission scope ───────────────────────────────────────────────
+# Surface settings.json entries that grant broad filesystem deletion.
+# Current nanostack installs default to narrow rm permissions
+# (.nanostack/** and /tmp/**). Installs done before that change may
+# still have Bash(rm:*) in their settings. Flag it as a warning with
+# a concrete remediation so users can opt into narrowing.
+
+_settings_paths=""
+[ -f .claude/settings.json ]              && _settings_paths="$_settings_paths .claude/settings.json"
+[ -f "$HOME/.claude/settings.json" ]      && _settings_paths="$_settings_paths $HOME/.claude/settings.json"
+[ -f "$HOME/.claude/settings.local.json" ] && _settings_paths="$_settings_paths $HOME/.claude/settings.local.json"
+
+if [ -n "$_settings_paths" ] && command -v jq >/dev/null 2>&1; then
+  _broad=""
+  for _s in $_settings_paths; do
+    if jq -e '.permissions.allow // [] | any(. == "Bash(rm:*)")' "$_s" >/dev/null 2>&1; then
+      _broad="${_broad:+$_broad, }$_s"
+    fi
+  done
+  if [ -n "$_broad" ]; then
+    add_check warn permissions rm_scope "Bash(rm:*) present in $_broad; consider narrowing to Bash(rm:.nanostack/**) and Bash(rm:/tmp/**). See SECURITY.md."
+  else
+    add_check pass permissions rm_scope "no broad Bash(rm:*) entries found"
+  fi
+else
+  add_check pass permissions rm_scope "no settings.json to check"
+fi
+
+# ─── 7. Worker reachability ────────────────────────────────────────────
 
 if $OFFLINE_MODE; then
   add_check pass network worker_reachable "skipped (--offline)"

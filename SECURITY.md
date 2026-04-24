@@ -46,3 +46,41 @@ We follow coordinated disclosure. We will:
 2. Develop a fix
 3. Release a patch
 4. Credit the reporter (unless anonymity is requested)
+
+## Permission model
+
+`bin/init-project.sh` writes entries to `.claude/settings.json` so autopilot can run without constant permission prompts. Nanostack treats the permission list as the first line of defense and the guard hooks as the authoritative one.
+
+### Default rm scope
+
+New installs receive:
+
+- `Bash(rm:.nanostack/**)` for sprint artifact cleanup
+- `Bash(rm:/tmp/**)` for temporary file cleanup
+
+Any `rm` outside these paths prompts the user. Destructive deletion of arbitrary paths should be a conscious choice, not a silent default.
+
+### Broad curl is kept
+
+`Bash(curl:*)` remains in the default list because curl is a common dev-path primitive (testing endpoints, fetching release artifacts, hitting localhost). The dangerous case, piping curl output into a shell, is caught by the guard as a block rule:
+
+- `G-023` blocks `curl ... | sh`
+- `G-024` blocks `curl ... | bash`
+
+The guard runs on every Bash tool use, ahead of the in-project fast-path, and logs every block to `.nanostack/audit.log`.
+
+### Existing installs
+
+Installs that existed before the narrowing got `Bash(rm:*)` written to their `.claude/settings.json`. Running `init-project.sh` a second time does NOT remove it. The install keeps what it had.
+
+`/nano-doctor` surfaces a warning when a broad `Bash(rm:*)` entry is present. To migrate, edit `.claude/settings.json`, remove the `Bash(rm:*)` line, and re-run `init-project.sh` to pick up the narrow defaults.
+
+### Defense layers
+
+| Layer | Purpose | Failure mode |
+|---|---|---|
+| Permissions (`.claude/settings.json`) | Cheap gate, no network call. | User can grant broad perms manually. |
+| Guard hooks (`guard/bin/check-dangerous.sh`) | Pattern match against block rules before any command runs. | If hooks are disabled, permissions become the only gate. |
+| Audit trail (`.nanostack/audit.log`) | Record every blocked and allowed command for post-hoc review. | If the store path is missing, logging silently no-ops; guard still blocks. |
+
+Each layer is independent. The audit trail works even when the store path is unresolved; the guard works even when permissions are broad; the permissions work even if the guard is missing. That independence is the point.
