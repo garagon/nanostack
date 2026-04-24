@@ -119,6 +119,7 @@ Before presenting, validate the plan against these engineering concerns:
 - **Failure modes:** What happens when each external call fails? (DB down, API timeout, disk full). If the plan doesn't address this, it's incomplete.
 - **Scaling bottleneck:** Is there a single point that won't handle 10x load? (synchronous loop, unbatched DB queries, in-memory state). Name it.
 - **Test matrix:** For each step, what's the minimum test that proves it works? If you can't name it, the step is too vague.
+- **Latent vs deterministic steps:** Classify each step. A deterministic step has a verification command that returns 0. A latent step relies on the model doing the right thing without a check. Latent is fine for taste work; for anything that gates correctness it needs a deterministic partner (a test, a lint rule, a hook). See `think/references/latent-vs-deterministic.md` for the full framing.
 - **Rollback:** Can you undo each step independently? If not, mark which steps are one-way doors.
 
 Skip this for Small scope — it's overkill for a 3-file change.
