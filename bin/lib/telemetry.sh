@@ -295,14 +295,25 @@ nano_telemetry_init() {
   # Decide if the caller should show the opt-in prompt.
   # Precedence: marker present → never prompt again. Pre-V5 install → silent
   # off + mark prompted. Otherwise (fresh V5 install) → caller should prompt.
+  #
+  # When NANOSTACK_DEBUG=1, emit one line to stderr explaining which branch
+  # fired. Silent by default so production installs see no noise, but an
+  # explicit env var flips a diagnostic path that would have caught the
+  # PR #124 pre-V5 false positive on first run.
   if [ -f "$NANO_TEL_PROMPTED_MARKER" ]; then
     NANO_TEL_SKIP_PROMPT=1
+    [ "${NANOSTACK_DEBUG:-0}" = "1" ] && \
+      printf '[telemetry:prompt] skip=1 reason=marker-present path=%s\n' "$NANO_TEL_PROMPTED_MARKER" >&2
   elif nano_tel_is_pre_v5_user; then
     [ ! -f "$NANO_TEL_CONFIG" ] && nano_tel_set_tier off
     touch "$NANO_TEL_PROMPTED_MARKER" 2>/dev/null
     NANO_TEL_SKIP_PROMPT=1
+    [ "${NANOSTACK_DEBUG:-0}" = "1" ] && \
+      printf '[telemetry:prompt] skip=1 reason=pre-v5 home=%s\n' "$NANO_TEL_HOME" >&2
   else
     NANO_TEL_SKIP_PROMPT=0
+    [ "${NANOSTACK_DEBUG:-0}" = "1" ] && \
+      printf '[telemetry:prompt] skip=0 reason=fresh-install caller-should-prompt=yes\n' >&2
   fi
 
   NANO_TEL_TIER=$(nano_tel_get_tier)
