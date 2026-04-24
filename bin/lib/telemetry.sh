@@ -10,7 +10,7 @@
 #
 # The frozen v1 schema is declared here on a single machine-parseable
 # line so CI can verify the jq filters below only use these fields.
-# TELEMETRY_FIELDS_V1: v ts skill session_id nanostack_version os arch duration_s outcome error_class installation_id
+# TELEMETRY_FIELDS_V1: v ts skill session_id nanostack_version os arch duration_s outcome error_class installation_id observational_fired
 #
 # Enum whitelists:
 #   os           {darwin, linux, unknown}
@@ -393,6 +393,7 @@ _nano_tel_finalize_stale_markers() {
 # ─── Write a single event to the JSONL ─────────────────────────────────
 _nano_tel_write_event() {
   local skill="$1" duration="$2" outcome="$3" error_class="$4" ts_override="$5"
+  local observational="$6"
   local ts os arch version
   ts="${ts_override:-$(_nano_tel_ts)}"
   os=$(_nano_tel_os)
@@ -439,6 +440,15 @@ _nano_tel_write_event() {
   else
     filter="$filter + {installation_id:null}"
   fi
+
+  # observational_fired is optional. Only /think sets it; every other
+  # skill leaves it null. Accept strictly "0" or "1"; anything else
+  # collapses to null rather than rejecting the event.
+  case "$observational" in
+    0|1) jq_args+=(--argjson obs "$observational")
+         filter="$filter + {observational_fired:\$obs}" ;;
+    *)   filter="$filter + {observational_fired:null}" ;;
+  esac
 
   local line
   line=$(jq -c "${jq_args[@]}" "$filter" 2>/dev/null)
@@ -488,8 +498,12 @@ _nano_tel_send_async() {
 }
 
 # ─── Finalize (called at skill end) ────────────────────────────────────
+# Optional 4th arg: observational_fired. "1" if the /think brief included
+# the observational feedback block, "0" if not. Any other value (including
+# the default empty string) collapses to null. Only /think sets this; all
+# other skills leave it empty and the field lands as null in the event.
 nano_telemetry_finalize() {
-  local skill="$1" outcome="${2:-success}" error_class="${3:-}"
+  local skill="$1" outcome="${2:-success}" error_class="${3:-}" observational="${4:-}"
   _nano_tel_refresh_tier
   [ "$NANO_TEL_TIER" = "off" ] && {
     rm -f "$NANO_TEL_ANALYTICS_DIR/.pending-$NANO_TEL_SESSION_ID" 2>/dev/null
@@ -505,7 +519,7 @@ nano_telemetry_finalize() {
   else
     duration=""
   fi
-  _nano_tel_write_event "$skill" "$duration" "$outcome" "$error_class" ""
+  _nano_tel_write_event "$skill" "$duration" "$outcome" "$error_class" "" "$observational"
   rm -f "$NANO_TEL_ANALYTICS_DIR/.pending-$NANO_TEL_SESSION_ID" 2>/dev/null
   _nano_tel_finalize_stale_markers
 

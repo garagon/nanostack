@@ -3,10 +3,14 @@
 #
 # Usage from a SKILL.md:
 #   _F="$HOME/.claude/skills/nanostack/bin/lib/skill-finalize.sh"
-#   [ -f "$_F" ] && . "$_F" <skill-name> <outcome>
+#   [ -f "$_F" ] && . "$_F" <skill-name> <outcome> [observational_fired]
 #   unset _F
 #
 # Outcome is one of: success, error, abort, unknown. Defaults to success.
+#
+# Optional 3rd arg: observational_fired. "1" if /think included the
+# observational feedback block, "0" if not. Only /think uses this; every
+# other skill leaves it empty and the field lands null in the event.
 #
 # Unlike a naive wrapper, this file CANNOT rely on nano_telemetry_finalize
 # already being defined. In agents like Claude Code, each Bash tool call
@@ -27,16 +31,17 @@
 
 _nano_skill_name="${1:-unknown}"
 _nano_skill_outcome="${2:-success}"
+_nano_skill_observational="${3:-}"
 
 # Kill switches. Same order and semantics as skill-preamble.sh so there is
 # no scenario where the preamble runs but finalize is blocked (or vice versa).
 if [ -n "${NANOSTACK_NO_TELEMETRY:-}" ]; then
-  unset _nano_skill_name _nano_skill_outcome
+  unset _nano_skill_name _nano_skill_outcome _nano_skill_observational
   return 0 2>/dev/null || true
 fi
 
 if [ -f "${NANO_TEL_HOME:-$HOME/.nanostack}/.telemetry-disabled" ]; then
-  unset _nano_skill_name _nano_skill_outcome
+  unset _nano_skill_name _nano_skill_outcome _nano_skill_observational
   return 0 2>/dev/null || true
 fi
 
@@ -66,9 +71,9 @@ if [ -n "$_nano_tel_lib" ]; then
   fi
 
   command -v nano_telemetry_finalize >/dev/null 2>&1 && \
-    nano_telemetry_finalize "$_nano_skill_name" "$_nano_skill_outcome" 2>/dev/null
+    nano_telemetry_finalize "$_nano_skill_name" "$_nano_skill_outcome" "" "$_nano_skill_observational" 2>/dev/null
 
   unset _nano_state_file
 fi
 
-unset _nano_tel_lib _nano_skill_dir _nano_skill_name _nano_skill_outcome
+unset _nano_tel_lib _nano_skill_dir _nano_skill_name _nano_skill_outcome _nano_skill_observational

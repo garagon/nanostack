@@ -73,7 +73,8 @@ Every recorded event is one JSON object on one line in `~/.nanostack/analytics/s
   "duration_s": 180,
   "outcome": "success",
   "error_class": null,
-  "installation_id": "a3f7c2e1-4b9d-4e8a-b21c-d8f92c4a7e1b"
+  "installation_id": "a3f7c2e1-4b9d-4e8a-b21c-d8f92c4a7e1b",
+  "observational_fired": 0
 }
 ```
 
@@ -92,6 +93,7 @@ Field by field:
 | `outcome` | enum `success`, `error`, `abort`, `unknown` | Success rate metric. | always |
 | `error_class` | enum from a whitelist or `other`, or null | Triage signal. Whitelist prevents leaking error strings. | when outcome is `error` |
 | `installation_id` | UUID v4 or null | Stable identity for the installation, random, not derived. | community tier only |
+| `observational_fired` | int `0` or `1`, or null | `/think` feature firing rate. `1` = the brief included a "What I noticed" observational block, `0` = it did not. Null when the skill does not implement the feature (every skill other than `/think`). Content of observations is never sent. | `/think` only |
 
 The enum whitelists are enforced in `bin/lib/telemetry.sh` and checked by CI. Any value outside the enum collapses to the fallback (`unknown`, `other`). This guards against accidental leakage of a string that contains user-specific information.
 

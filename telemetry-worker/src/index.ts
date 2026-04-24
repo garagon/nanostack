@@ -20,7 +20,7 @@ export interface Env {
   MASTER_SALT: string;
 }
 
-// TELEMETRY_FIELDS_V1: v ts skill session_id nanostack_version os arch duration_s outcome error_class installation_id
+// TELEMETRY_FIELDS_V1: v ts skill session_id nanostack_version os arch duration_s outcome error_class installation_id observational_fired
 // (kept in a comment so CI can verify client and server share the same list.)
 
 const MAX_PAYLOAD_BYTES = 50_000;
@@ -52,6 +52,11 @@ interface TelemetryEvent {
   outcome: string;
   error_class?: string | null;
   installation_id?: string | null;
+  // Optional /think-only signal. 1 = observational feedback block was
+  // included in the brief, 0 = not included, null = skill does not
+  // implement the feature. Stored as INTEGER in D1 for CHECK-constraint
+  // ergonomics.
+  observational_fired?: number | null;
 }
 
 export default {
@@ -150,8 +155,9 @@ export default {
     const stmt = env.DB.prepare(
       `INSERT INTO events
          (event_ts, skill, outcome, duration_s, nanostack_version,
-          os, arch, installation_id, session_id, error_class)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          os, arch, installation_id, session_id, error_class,
+          observational_fired)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const batch = rows.map((r) =>
       stmt.bind(
@@ -165,6 +171,7 @@ export default {
         r.installation_id ?? null,
         r.session_id ?? null,
         r.error_class ?? null,
+        r.observational_fired ?? null,
       ),
     );
 
@@ -223,6 +230,16 @@ function validateEvent(raw: unknown): TelemetryEvent | null {
   const sessionId = typeof e.session_id === "string" ? e.session_id.slice(0, 64) : null;
   if (sessionId !== null && !/^[0-9]+-[0-9]+$/.test(sessionId)) return null;
 
+  // observational_fired is optional, nullable, and strictly 0 or 1. Any
+  // other shape (booleans, strings, numbers outside {0,1}) rejects the
+  // whole event rather than silently coercing. Defense in depth: the
+  // client already only ever writes 0 or 1.
+  let observationalFired: number | null = null;
+  if (e.observational_fired !== undefined && e.observational_fired !== null) {
+    if (e.observational_fired !== 0 && e.observational_fired !== 1) return null;
+    observationalFired = e.observational_fired as number;
+  }
+
   return {
     v: 1,
     ts: e.ts,
@@ -235,6 +252,7 @@ function validateEvent(raw: unknown): TelemetryEvent | null {
     nanostack_version: version,
     installation_id: installId,
     session_id: sessionId,
+    observational_fired: observationalFired,
   };
 }
 
