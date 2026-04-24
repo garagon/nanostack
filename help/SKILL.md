@@ -73,6 +73,7 @@ Modes (for /review, /security, /qa):
 
 Update:
   /nano-update           Pull latest version.
+  /nano-doctor           Diagnose install health (deps, perms, telemetry).
 
 github.com/garagon/nanostack
 ```
