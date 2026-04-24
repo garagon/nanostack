@@ -53,7 +53,7 @@
         },
         {
           "id": "G-003",
-          "pattern": "rm -rf \\.",
+          "pattern": "rm -rf +\"?\\.(/)?\"?([[:space:]]|$)",
           "category": "mass-deletion",
           "description": "Current directory recursive deletion",
           "alternative": "Remove specific files or subdirectories"
