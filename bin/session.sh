@@ -101,17 +101,41 @@ cmd_phase_start() {
   fi
 
   local lockdir="${SESSION_FILE}.lockdir"
+  local owner_pid=""
   local waited=0
   while ! mkdir "$lockdir" 2>/dev/null; do
     waited=$((waited + 1))
-    if [ "$waited" -gt 50 ]; then
-      # Stale lock or true contention: clear and proceed (best effort).
-      rmdir "$lockdir" 2>/dev/null || true
-      echo "WARN: session lock held >5s, proceeding without it" >&2
-      break
+
+    # Once per second, check whether the current lockholder is still alive.
+    # If the owner file names a PID that no longer exists, the lock is
+    # stale (the holder crashed or exited mid-write) and we reclaim it.
+    # If the PID is still alive, we are in live contention and keep
+    # waiting. Missing owner file is treated as live (conservative).
+    if [ $((waited % 10)) -eq 0 ] && [ -f "$lockdir/owner" ]; then
+      owner_pid=$(cat "$lockdir/owner" 2>/dev/null)
+      if [ -n "$owner_pid" ] && ! kill -0 "$owner_pid" 2>/dev/null; then
+        rm -rf "$lockdir" 2>/dev/null || true
+        echo "INFO: previous session lockholder (pid $owner_pid) is gone, reclaiming" >&2
+        continue
+      fi
+    fi
+
+    if [ "$waited" -gt 300 ]; then
+      # 30 seconds of live contention. Fail closed rather than race the
+      # writer: conductor mode specifically needs consistent session.json
+      # state. The user can retry or remove the lockdir manually after
+      # confirming no other agent is running.
+      echo "ERROR: session lock held >30s (owner pid ${owner_pid:-unknown}). Retry after the other agent finishes, or remove $lockdir if nothing is running." >&2
+      exit 1
     fi
     sleep 0.1
   done
+
+  # Record ownership so other agents can detect a stale lock if we crash.
+  # Best-effort: if the write fails, the lock still works for liveness
+  # (other agents fall back to conservative "live" treatment). Removed
+  # together with the lockdir on release.
+  echo "$$" > "$lockdir/owner" 2>/dev/null || true
 
   # Re-check inside the lock (idempotent under concurrency)
   local existing
@@ -119,7 +143,7 @@ cmd_phase_start() {
     '[.phase_log[] | select(.phase == $p and (.status == "completed" or .status == "in_progress"))] | length' \
     "$SESSION_FILE" 2>/dev/null || echo "0")
   if [ "$existing" -gt 0 ]; then
-    rmdir "$lockdir" 2>/dev/null || true
+    rm -rf "$lockdir" 2>/dev/null || true
     echo "OK: $phase already in log"
     return 0
   fi
@@ -143,7 +167,7 @@ cmd_phase_start() {
      .last_updated = $date' "$SESSION_FILE" > "${SESSION_FILE}.tmp"
   mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
 
-  rmdir "$lockdir" 2>/dev/null || true
+  rm -rf "$lockdir" 2>/dev/null || true
 
   audit_log "phase_start" "$phase"
   echo "OK: $phase started"
