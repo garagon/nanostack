@@ -15,6 +15,7 @@ If your symptom is not here, open an issue: https://github.com/garagon/nanostack
 - [Skill name conflicts with another set (gstack, superpowers)](#skill-name-conflicts-with-another-set-gstack-superpowers)
 - [Cannot install or upgrade behind a corporate proxy](#cannot-install-or-upgrade-behind-a-corporate-proxy)
 - [The agent runs the same skill twice in autopilot](#the-agent-runs-the-same-skill-twice-in-autopilot)
+- [The telemetry opt-in prompt never appears on a fresh install](#the-telemetry-opt-in-prompt-never-appears-on-a-fresh-install)
 
 ---
 
@@ -291,6 +292,31 @@ Look for `phase_complete` events. If the second-to-last review has no `phase_com
 Then continue the sprint.
 
 If this keeps happening across sprints, file an issue with the audit log excerpt. It is a bug in the skill, not in your project.
+
+---
+
+## The telemetry opt-in prompt never appears on a fresh install
+
+You installed nanostack and ran `/think` on a fresh machine, but the opt-in prompt (community / anonymous / off) never showed up. You want to know which branch of the detection logic fired.
+
+Set `NANOSTACK_DEBUG=1` and run any skill. One line is printed to stderr explaining which decision was taken and why.
+
+```sh
+NANOSTACK_DEBUG=1 /think "test"
+# [telemetry:prompt] skip=0 reason=fresh-install caller-should-prompt=yes
+# or
+# [telemetry:prompt] skip=1 reason=marker-present path=~/.nanostack/.telemetry-prompted
+# or
+# [telemetry:prompt] skip=1 reason=pre-v5 home=~/.nanostack
+```
+
+Three possible outcomes:
+
+- `skip=0 reason=fresh-install`: detection worked, the prompt should appear on the next skill run. If it still does not, check that the skill you ran actually calls the prompt (today only `/think` does).
+- `skip=1 reason=marker-present`: the marker file `~/.nanostack/.telemetry-prompted` already exists, so you were prompted in a prior run. Delete the marker and re-run if you want to see the prompt again.
+- `skip=1 reason=pre-v5`: detection thinks you had a nanostack install from before April 2026. Contents of `~/.nanostack/` include at least one entry whose mtime predates the V5 merge. Confirm by running `ls -la ~/.nanostack/` and checking dates. If the classification is wrong (files were touched by a backup or restore that reset mtimes), delete the marker and re-run.
+
+The debug flag never sends anything over the network, and it is silent by default. Your production installs stay quiet.
 
 ---
 
