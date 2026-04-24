@@ -16,11 +16,40 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 RULES_FILE="$SCRIPT_DIR/rules.json"
 CMD="${1:-$(cat)}"
 
+# Resolve the nanostack root and store-path helper up front so every
+# downstream tier (block, warn, audit trail) sees a consistent view.
+# Previously STORE_PATH_SH was set inside Tier 2.5, which meant Tier
+# 1.5 blocks never appended to audit.log when NANOSTACK_STORE was
+# unset. Doing it here keeps blocking and trace visibility together.
+GUARD_DIR="$SCRIPT_DIR"
+NANOSTACK_ROOT="$(cd "$GUARD_DIR/.." && pwd)"
+STORE_PATH_SH="$NANOSTACK_ROOT/bin/lib/store-path.sh"
+if [ -z "${NANOSTACK_STORE:-}" ] && [ -f "$STORE_PATH_SH" ]; then
+  # shellcheck disable=SC1090
+  source "$STORE_PATH_SH" 2>/dev/null || true
+fi
+AUDIT_LOG="${NANOSTACK_STORE:-}/audit.log"
+
 # Fallback if rules.json missing
 if [ ! -f "$RULES_FILE" ]; then
   echo "⚠️  GUARD: rules.json not found, allowing command"
   exit 0
 fi
+
+# Helper: append a JSON record to the audit log if the store resolved.
+# No-op when the store is unavailable so guard still blocks even on
+# machines without a configured .nanostack/ directory.
+audit_trail_append() {
+  local result="$1" rule="$2"
+  [ -n "${AUDIT_LOG:-}" ] && [ -d "$(dirname "$AUDIT_LOG")" ] || return 0
+  jq -cn \
+    --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg cmd "$CMD" \
+    --arg result "$result" \
+    --arg rule "$rule" \
+    '{at:$at, cmd:$cmd, result:$result, rule:$rule}' \
+    >> "$AUDIT_LOG" 2>/dev/null || true
+}
 
 # ─── Tier 1: Allowlist ──────────────────────────────────────
 # Extract first token of the command (the binary/builtin)
@@ -69,12 +98,7 @@ if [ -n "$BLOCK_COMBINED" ] && echo "$CMD" | grep -qiE -- "$BLOCK_COMBINED" 2>/d
       echo "Command: $CMD"
       echo ""
       echo "Safer alternative: $ALT"
-      if [ -n "${NANOSTACK_STORE:-}" ] || [ -f "${STORE_PATH_SH:-}" ]; then
-        [ -z "${NANOSTACK_STORE:-}" ] && source "$STORE_PATH_SH" 2>/dev/null || true
-        AUDIT_LOG="${NANOSTACK_STORE:-}/audit.log"
-        [ -n "$AUDIT_LOG" ] && [ -d "$(dirname "$AUDIT_LOG")" ] && \
-          echo "{\"at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"cmd\":$(echo "$CMD" | jq -Rs .),\"result\":\"blocked\",\"rule\":\"$ID\"}" >> "$AUDIT_LOG" 2>/dev/null || true
-      fi
+      audit_trail_append blocked "$ID"
       exit 1
     fi
     BLOCK_IDX=$((BLOCK_IDX + 1))
@@ -121,12 +145,8 @@ fi
 # ─── Tier 2.5: Phase-aware concurrency enforcement ─────────
 # If a session is active and the current phase is read-only,
 # block write operations to prevent race conditions in parallel execution.
-GUARD_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-NANOSTACK_ROOT="$(cd "$GUARD_DIR/.." && pwd)"
-STORE_PATH_SH="$NANOSTACK_ROOT/bin/lib/store-path.sh"
-
-if [ -f "$STORE_PATH_SH" ]; then
-  source "$STORE_PATH_SH"
+# Store path already resolved at the top of the script.
+if [ -n "${NANOSTACK_STORE:-}" ]; then
   SESSION_CHECK="$NANOSTACK_STORE/session.json"
 
   if [ -f "$SESSION_CHECK" ]; then
@@ -217,14 +237,10 @@ if [ -n "$WARN_COMBINED" ] && echo "$CMD" | grep -qiE -- "$WARN_COMBINED" 2>/dev
 fi
 
 # ─── Audit trail ────────────────────────────────────────────
-# Append every evaluated command to .nanostack/audit.log (non-blocking)
-if [ -n "${NANOSTACK_STORE:-}" ] || [ -f "$STORE_PATH_SH" ]; then
-  [ -z "${NANOSTACK_STORE:-}" ] && source "$STORE_PATH_SH" 2>/dev/null || true
-  AUDIT_LOG="${NANOSTACK_STORE:-}/audit.log"
-  if [ -n "$AUDIT_LOG" ] && [ -d "$(dirname "$AUDIT_LOG")" ]; then
-    echo "{\"at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"cmd\":$(echo "$CMD" | jq -Rs .),\"result\":\"allowed\"}" >> "$AUDIT_LOG" 2>/dev/null || true
-  fi
-fi
+# Append every evaluated command to .nanostack/audit.log (non-blocking).
+# Store path and helper already resolved at the top of this script so
+# the log line is consistent with the blocked-path helper above.
+audit_trail_append allowed ""
 
 # No rules matched. Allow.
 exit 0
