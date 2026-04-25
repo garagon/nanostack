@@ -53,6 +53,25 @@ If the file is missing entirely, treat as `manual`.
 
 **Local mode:** Run `source bin/lib/git-context.sh && detect_git_mode`. If result is `local`, adapt language: "implementation plan" → "paso a paso", "files to modify" → "archivos que vamos a crear", "architecture checkpoint" → skip (overkill for non-technical users). Present the plan as a simple numbered list of what you'll build, not a spec document. Same rigor, accessible words. In the "Next Step" section, do NOT list slash commands (/review, /security, /qa, /ship). Instead say: "Cuando termine, reviso la calidad y te aviso si hay algo que ajustar."
 
+**Plain-language contract.** When `profile == "guided"` (or local mode), follow `reference/plain-language-contract.md`. The plan summary uses the four-block skeleton:
+
+<!-- guided-output:start -->
+```
+Resultado: Voy a armar la herramienta en 3 archivos chicos.
+
+Como verlo:
+1. Cuando termine cada paso, te muestro lo que cambio.
+
+Que revise:
+- La forma mas simple de cumplir lo que pediste.
+- Que cada cambio se pueda probar por separado.
+- Que no rompa nada que ya estaba funcionando.
+
+Pendiente:
+- No probe en una computadora distinta a la tuya.
+```
+<!-- guided-output:end -->
+
 ## Process
 
 ### 1. Understand the Request

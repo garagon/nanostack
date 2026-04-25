@@ -73,11 +73,26 @@ That reinstalls and preserves the existing `~/.nanostack/` (telemetry config, in
 
 Read `session_profile` from the JSON envelope (or default to `professional` if no session exists). Branch the user-facing summary by profile:
 
-**Guided profile (also: local mode, no git, non-technical user).** Do not dump the raw report and do not lead with "hooks/settings JSON". Translate the outcome into one sentence:
+**Guided profile (also: local mode, no git, non-technical user).** Do not dump the raw report and do not lead with "hooks/settings JSON". Follow `reference/plain-language-contract.md`. Translate the outcome into the four-block skeleton:
 
-- All ok: "Nanostack está sano, todo en orden."
-- Warnings: "Hay algunos avisos menores. ¿Querés que los repare?" then offer to run with `--fix` if `fix_available` is true.
-- Failures: "Hay un problema con la instalación. Lo más probable es que necesites reinstalar con `npx create-nanostack`. ¿Querés que te guíe?"
+<!-- guided-output:start -->
+```
+Resultado: Nanostack esta sano y listo para acompañarte.
+
+Como verlo:
+1. No hace falta hacer nada. Cuando empieces tu proximo trabajo, te aviso si algo necesita atencion.
+
+Que revise:
+- Las herramientas que necesita estan instaladas.
+- Los permisos del directorio personal son correctos.
+- Las protecciones automaticas estan activas.
+
+Pendiente:
+- No revise si hay actualizaciones nuevas (corre /nano-update si queres).
+```
+<!-- guided-output:end -->
+
+When the report has warnings, replace the result line with: "Encontre algunos avisos menores. ¿Queres que los repare?" and offer `--fix` only if `fix_available` is true. When it has failures: "Hay un problema con la instalacion. Lo mas probable es que necesites reinstalar con `npx create-nanostack`. ¿Queres que te guie?"
 
 Never read the internal category names ("install", "detection") to a Guided user. Those are for the report, not for the conversation.
 

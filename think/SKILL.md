@@ -259,6 +259,26 @@ Determine the mode from the user's description:
 
 **Local mode language:** Run `source bin/lib/git-context.sh && detect_git_mode`. If the result is `local` (no git repo), the user is likely non-technical. Adapt your language throughout the entire sprint: replace jargon with plain language. "Starting point" → "¿Cuál es lo mínimo que necesitás que funcione?" / "Status quo" → "¿Cómo lo estás resolviendo ahora?" / "Premise validated" → "Tiene sentido, avancemos." Same rigor, simpler words. Never mention git, branches, PRs, or diffs. Do NOT expose internal labels like "Phase 1", "Phase 1.5", "Startup mode", or "Builder mode" — these are your internal process, not something the user needs to see. Just do the work naturally.
 
+**Plain-language contract.** When `profile == "guided"` (or local mode, which implies guided), the user-facing summary at the end of `/think` follows `reference/plain-language-contract.md`. Use the four-block skeleton (Result / How to try / What was checked / What remains) and avoid the banned terms in the contract's table. Example:
+
+<!-- guided-output:start -->
+```
+Resultado: La idea tiene sentido y vale la pena intentar la version mas chica primero.
+
+Como verlo:
+1. Cuando me digas "dale", arranco con el plan.
+
+Que revise:
+- Tenes un caso real propio que resuelve esto.
+- La version mas chica se puede probar en una tarde.
+- No hay otra solucion existente que ya cubra el caso.
+
+Pendiente:
+- No medi cuanta gente mas tiene este problema.
+- No estime cuanto va a salir mantenerlo a futuro.
+```
+<!-- guided-output:end -->
+
 ### Phase 1.5: Search Before Building
 
 Read `think/references/search-before-building.md` and follow the instructions before running the diagnostic.

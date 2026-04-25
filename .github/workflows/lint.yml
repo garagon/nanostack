@@ -820,3 +820,71 @@ jobs:
           echo "$out" | jq -e 'has("session_profile")' >/dev/null || { echo "FAIL: doctor JSON missing session_profile"; fail=1; }
           echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
           exit $fail
+
+  plain-language-contract:
+    name: Plain-language contract (Guided output)
+    runs-on: ubuntu-latest
+    # Sprint 4 contract. The wording rule applies to user-facing Guided
+    # output, not to skill instructions. To avoid false positives on
+    # prose like "scope drift is informational", only the fenced blocks
+    # marked with <!-- guided-output:start --> ... <!-- guided-output:end -->
+    # are scanned. Outside the fence, banned terms are allowed.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Contract document exists and is referenced
+        run: |
+          set -e
+          fail=0
+          if [ ! -f reference/plain-language-contract.md ]; then
+            echo "FAIL: reference/plain-language-contract.md is missing"
+            exit 1
+          fi
+          # Each user-facing skill must point at the contract so wording
+          # changes don't drift away from the canonical list.
+          for skill in think/SKILL.md plan/SKILL.md qa/SKILL.md ship/SKILL.md doctor/SKILL.md; do
+            if ! grep -q "reference/plain-language-contract.md" "$skill"; then
+              echo "FAIL: $skill must reference reference/plain-language-contract.md"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Guided fenced blocks pass the banned-term grep
+        run: |
+          set -e
+          fail=0
+          # Banned terms (case-insensitive whole-word). Order matches
+          # the contract's term table. Patterns use word boundaries so
+          # "diff" doesn't match "different".
+          patterns='\bartifact\b|\bartifacts\b|\bPR\b|\bPRs\b|\bCI\b|\bbranch\b|\bbranches\b|\bdiff\b|\bdiffs\b|\bhook\b|\bhooks\b|\bphase\b|\bphases\b|\bsecurity audit\b|\bQA\b|\bscope drift\b'
+          for skill in think/SKILL.md plan/SKILL.md qa/SKILL.md ship/SKILL.md doctor/SKILL.md reference/plain-language-contract.md; do
+            # Extract fenced blocks. awk emits one line per block,
+            # joined with " || " so grep -E -i sees the full block.
+            blocks=$(awk '
+              /<!-- guided-output:start -->/ { capture=1; buf=""; next }
+              /<!-- guided-output:end -->/   { if (capture) { print buf; buf="" } capture=0; next }
+              capture { buf = buf " " $0 }
+            ' "$skill")
+            if [ -z "$blocks" ]; then
+              # Skills that print user-facing Guided output must include
+              # at least one example block. The contract reference itself
+              # has multiple examples and is allowed here too.
+              if [ "$skill" != "reference/plain-language-contract.md" ]; then
+                echo "FAIL: $skill has no <!-- guided-output --> example block"
+                fail=1
+              fi
+              continue
+            fi
+            while IFS= read -r block; do
+              [ -z "$block" ] && continue
+              hit=$(echo "$block" | grep -i -oE "$patterns" || true)
+              if [ -n "$hit" ]; then
+                echo "FAIL: $skill guided block contains banned term(s): $(echo "$hit" | sort -u | tr '\n' ' ')"
+                echo "      block: $block"
+                fail=1
+              fi
+            done <<EOF
+$blocks
+EOF
+          done
+          exit $fail

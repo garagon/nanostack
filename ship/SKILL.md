@@ -222,7 +222,25 @@ If a phase says `no`, list it under "Not verified" so the user sees what was ski
 
 Read `profile` from session per `reference/session-state-contract.md`. The branch differs by profile:
 
-**If `profile == "guided"` (or no git remote, even when professional):** Skip the deployment menu and focus on how to try the result locally. Tell the user where the entry point is and the exact command to run, then list anything that is not yet verified (e.g. "I did not deploy this to the internet"). One next action only.
+**If `profile == "guided"` (or no git remote, even when professional):** Skip the deployment menu and focus on how to try the result locally. Tell the user where the entry point is and the exact command to run, then list anything that is not yet verified (e.g. "I did not deploy this to the internet"). One next action only. Follow `reference/plain-language-contract.md` for wording. Example:
+
+<!-- guided-output:start -->
+```
+Resultado: Listo para probar.
+
+Como verlo:
+1. Abri index.html en el navegador.
+
+Que revise:
+- La pantalla carga.
+- El boton principal responde.
+- No encontre secretos en archivos visibles.
+
+Pendiente:
+- No esta publicado en internet todavia.
+- No revise la seguridad de las dependencias.
+```
+<!-- guided-output:end -->
 
 **If `profile == "professional"` and `autopilot == true`:** Skip this question. Go directly to Next Step (compound + sprint summary). The user will decide how to run it after the sprint closes.
 
