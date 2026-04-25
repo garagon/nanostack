@@ -81,7 +81,7 @@
         },
         {
           "id": "G-007",
-          "pattern": "git push --force",
+          "pattern": "git push.*--force([[:space:]]|$)",
           "category": "history-destruction",
           "description": "Force push overwrites remote history",
           "alternative": "git push --force-with-lease (safer, fails if remote changed)"

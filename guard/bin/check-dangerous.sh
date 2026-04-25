@@ -51,35 +51,14 @@ audit_trail_append() {
     >> "$AUDIT_LOG" 2>/dev/null || true
 }
 
-# ─── Tier 1: Allowlist ──────────────────────────────────────
-# Extract first token of the command (the binary/builtin)
 CMD_BASE=$(echo "$CMD" | awk '{print $1}' | sed 's|.*/||')
 
-# Single jq call: check if command matches any allowlist entry
-# Returns "pass" if allowed, empty if not
-TIER1=$(jq -r --arg cmd "$CMD" --arg base "$CMD_BASE" '
-  .tiers.allowlist.commands[] |
-  split(" ")[0] | gsub(".*/"; "") |
-  select(. == $base)' "$RULES_FILE" 2>/dev/null | head -1)
-
-if [ -n "$TIER1" ]; then
-  # Base matches. For multi-word entries, verify full match
-  MULTI=$(jq -r --arg base "$CMD_BASE" '
-    .tiers.allowlist.commands[] |
-    select((split(" ")[0] | gsub(".*/"; "")) == $base and (split(" ") | length) > 1)' "$RULES_FILE" 2>/dev/null | head -1)
-  if [ -z "$MULTI" ]; then
-    # Single-word entry: base match is enough
-    exit 0
-  elif echo "$CMD" | grep -qF "$MULTI" 2>/dev/null; then
-    exit 0
-  fi
-fi
-
-# ─── Tier 1.5: Block rules (run before in-project fast-path) ──
-# Block patterns must take precedence over the in-project shortcut.
-# Otherwise destructive commands like `rm -rf ./` slip through because
-# their target resolves inside the repo, even though they wipe .git
-# along with everything else. Audit finding from April 2026.
+# ─── Tier 1: Block rules (authoritative, no exceptions) ─────
+# Block patterns run before the allowlist so commands whose binary
+# happens to be on the allowlist (cat, find, head, tail) still get
+# evaluated against known-bad patterns such as reading .env or
+# find . -delete. Previous ordering let allowlisted binaries short
+# circuit past block rules; audit finding from April 2026.
 BLOCK_PATTERNS=$(jq -r '.tiers.block.rules[] | .pattern' "$RULES_FILE" 2>/dev/null)
 BLOCK_COMBINED=$(echo "$BLOCK_PATTERNS" | paste -sd'|' -)
 if [ -n "$BLOCK_COMBINED" ] && echo "$CMD" | grep -qiE -- "$BLOCK_COMBINED" 2>/dev/null; then
@@ -103,6 +82,28 @@ if [ -n "$BLOCK_COMBINED" ] && echo "$CMD" | grep -qiE -- "$BLOCK_COMBINED" 2>/d
     fi
     BLOCK_IDX=$((BLOCK_IDX + 1))
   done <<< "$BLOCK_PATTERNS"
+fi
+
+# ─── Tier 2: Allowlist ──────────────────────────────────────
+# Runs only after block rules had a chance to fire. For commands
+# that matched no block, a matching allowlist entry short-circuits
+# the remaining tiers.
+TIER1=$(jq -r --arg cmd "$CMD" --arg base "$CMD_BASE" '
+  .tiers.allowlist.commands[] |
+  split(" ")[0] | gsub(".*/"; "") |
+  select(. == $base)' "$RULES_FILE" 2>/dev/null | head -1)
+
+if [ -n "$TIER1" ]; then
+  # Base matches. For multi-word entries, verify full match
+  MULTI=$(jq -r --arg base "$CMD_BASE" '
+    .tiers.allowlist.commands[] |
+    select((split(" ")[0] | gsub(".*/"; "")) == $base and (split(" ") | length) > 1)' "$RULES_FILE" 2>/dev/null | head -1)
+  if [ -z "$MULTI" ]; then
+    # Single-word entry: base match is enough
+    exit 0
+  elif echo "$CMD" | grep -qF "$MULTI" 2>/dev/null; then
+    exit 0
+  fi
 fi
 
 # ─── Tier 2: In-project operations ──────────────────────────
