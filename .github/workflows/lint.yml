@@ -747,3 +747,76 @@ jobs:
             fail=1
           fi
           exit $fail
+
+  skills-consume-session-state:
+    name: Skills consume session state
+    runs-on: ubuntu-latest
+    # Sprint 3 contract: review/security/qa/ship/doctor must read profile,
+    # run_mode, autopilot, and plan_approval from session.json (via the
+    # shared contract reference) and must not encode their own next-step
+    # prose. This job greps for the wiring so a future edit cannot
+    # silently regress one skill.
+    steps:
+      - uses: actions/checkout@v4
+      - name: SKILL.md files reference the shared session-state contract
+        run: |
+          set -e
+          fail=0
+
+          # The shared contract document must exist; skills point at it.
+          if [ ! -f reference/session-state-contract.md ]; then
+            echo "FAIL: reference/session-state-contract.md is missing"
+            exit 1
+          fi
+
+          # review/security/qa each read session state and use --json for
+          # next-step prose. Ship reads profile to branch close; doctor
+          # branches by session_profile from JSON.
+          for skill in review/SKILL.md security/SKILL.md qa/SKILL.md; do
+            if ! grep -q "reference/session-state-contract.md" "$skill"; then
+              echo "FAIL: $skill must reference reference/session-state-contract.md"
+              fail=1
+            fi
+            if ! grep -qE "next-step\.sh --json" "$skill"; then
+              echo "FAIL: $skill must call bin/next-step.sh --json"
+              fail=1
+            fi
+            if ! grep -qE "run_mode" "$skill"; then
+              echo "FAIL: $skill must read run_mode (report_only must not edit files)"
+              fail=1
+            fi
+          done
+
+          if ! grep -qE "session-state-contract\.md|session_profile|profile == \"guided\"" ship/SKILL.md; then
+            echo "FAIL: ship/SKILL.md must branch by session profile"
+            fail=1
+          fi
+
+          if ! grep -q "fix_available" doctor/SKILL.md; then
+            echo "FAIL: doctor/SKILL.md must document the fix_available JSON field"
+            fail=1
+          fi
+          if ! grep -q "session_profile" doctor/SKILL.md; then
+            echo "FAIL: doctor/SKILL.md must document the session_profile JSON field"
+            fail=1
+          fi
+
+          exit $fail
+
+      - name: nano-doctor.sh --json exposes fix_available + fix_command + session_profile
+        run: |
+          set -e
+          fail=0
+          tmp=$(mktemp -d)
+          cd "$tmp"
+          mkdir -p .nanostack
+          # Synthetic session so session_profile resolves on JSON output.
+          cat > .nanostack/session.json <<EOF
+          {"schema_version":"2","session_id":"ci","workspace":"$tmp","profile":"guided","autopilot":false}
+          EOF
+          out=$($GITHUB_WORKSPACE/bin/nano-doctor.sh --json --offline 2>/dev/null) || true
+          echo "$out" | jq -e 'has("fix_available")'   >/dev/null || { echo "FAIL: doctor JSON missing fix_available"; fail=1; }
+          echo "$out" | jq -e 'has("fix_command")'     >/dev/null || { echo "FAIL: doctor JSON missing fix_command"; fail=1; }
+          echo "$out" | jq -e 'has("session_profile")' >/dev/null || { echo "FAIL: doctor JSON missing session_profile"; fail=1; }
+          echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
+          exit $fail

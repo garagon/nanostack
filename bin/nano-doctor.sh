@@ -542,16 +542,59 @@ if $JSON_OUTPUT; then
   if [ "$FAIL" -gt 0 ]; then _overall="fail"
   elif [ "$WARN" -gt 0 ]; then _overall="warn"
   fi
+
+  # fix_available is true when at least one warn/fail row sits in a
+  # category --fix can repair (home permissions, sender_executable,
+  # bash_guard, write_guard). The user-facing skill needs a single
+  # bit to decide whether to even mention --fix.
+  _fix_available="false"
+  _fix_targets="permissions:bash_guard permissions:write_guard install:sender_executable home:permissions"
+  while IFS=$'\t' read -r _s _c _n _d; do
+    [ -z "$_s" ] && continue
+    [ "$_s" = "pass" ] && continue
+    for _t in $_fix_targets; do
+      if [ "${_c}:${_n}" = "$_t" ]; then
+        _fix_available="true"
+        break
+      fi
+    done
+    [ "$_fix_available" = "true" ] && break
+  done <<EOF
+$CHECK_LINES
+EOF
+
+  # Pick up the project session profile if one exists in CWD. The
+  # session snippet lives in NANOSTACK_STORE; tolerate its absence.
+  _session_profile="null"
+  for _sf in ".nanostack/session.json" "$HOME/.nanostack/session.json"; do
+    if [ -f "$_sf" ]; then
+      _sp=$(jq -r '.profile // empty' "$_sf" 2>/dev/null)
+      if [ -n "$_sp" ]; then
+        _session_profile="\"$_sp\""
+        break
+      fi
+    fi
+  done
+
   printf '%s' "$CHECK_LINES" | jq -R -s \
     --arg overall "$_overall" \
     --argjson pass "$PASS" \
     --argjson warn "$WARN" \
-    --argjson fail "$FAIL" '
+    --argjson fail "$FAIL" \
+    --argjson fix_available "$_fix_available" \
+    --argjson session_profile "$_session_profile" '
       split("\n")
       | map(select(length > 0))
       | map(split("\t"))
       | map({status:.[0], category:.[1], name:.[2], detail:.[3]}) as $checks
-      | {overall:$overall, pass:$pass, warn:$warn, fail:$fail, checks:$checks}
+      | {
+          overall: $overall,
+          pass: $pass, warn: $warn, fail: $fail,
+          checks: $checks,
+          fix_available: $fix_available,
+          fix_command: (if $fix_available then "nano-doctor.sh --fix" else null end),
+          session_profile: $session_profile
+        }
     '
 else
   # Human-readable report.

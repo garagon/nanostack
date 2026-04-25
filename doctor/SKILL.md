@@ -33,7 +33,7 @@ Run the health check script, then summarize what the user actually needs to do:
 
 Optional flags:
 
-- `--json` — machine-readable output. Use when invoked by another tool or when piping to `jq`.
+- `--json` — machine-readable output. Use when invoked by another tool or when piping to `jq`. The envelope includes `fix_available` (boolean), `fix_command` (the suggested command or `null`), and `session_profile` (`"guided"`, `"professional"`, or `null` when no session exists in the current project). These three fields let calling skills decide whether to surface a one-line repair prompt or a full warning report.
 - `--offline` — skip Worker reachability. Use in air-gapped environments or during CI.
 - `--fix` — repair mechanical issues. Currently covers: `chmod 700` on `~/.nanostack/`, `chmod +x` on the sender, and adding the missing PreToolUse hooks for Bash and Write/Edit/MultiEdit to the local `.claude/settings.json`. Always backs up the file first as `.claude/settings.json.YYYYMMDD-HHMMSS.bak`. Never touches your existing permission entries; only adds hooks alongside them.
 
@@ -69,15 +69,19 @@ npx create-nanostack
 
 That reinstalls and preserves the existing `~/.nanostack/` (telemetry config, installation-id, past opt-in choice).
 
-## Local mode
+## Profile-aware output
 
-If the user is non-technical (detected via `bin/lib/git-context.sh` `local` mode), do not dump the raw report. Translate the outcome into one sentence:
+Read `session_profile` from the JSON envelope (or default to `professional` if no session exists). Branch the user-facing summary by profile:
+
+**Guided profile (also: local mode, no git, non-technical user).** Do not dump the raw report and do not lead with "hooks/settings JSON". Translate the outcome into one sentence:
 
 - All ok: "Nanostack está sano, todo en orden."
-- Warnings: "Hay algunos avisos menores. ¿Querés que los repare?" then offer to run with `--fix`.
+- Warnings: "Hay algunos avisos menores. ¿Querés que los repare?" then offer to run with `--fix` if `fix_available` is true.
 - Failures: "Hay un problema con la instalación. Lo más probable es que necesites reinstalar con `npx create-nanostack`. ¿Querés que te guíe?"
 
-Never read the internal category names ("install", "detection") to a non-technical user. Those are for the report, not for the conversation.
+Never read the internal category names ("install", "detection") to a Guided user. Those are for the report, not for the conversation.
+
+**Professional profile.** Print the full report. Lead with the failed/warned rows, name the missing hook or permission directly, and surface `fix_command` verbatim when `fix_available` is true. Example: `write_guard: warn — check-write.sh missing from .claude/settings.json. Fix: nano-doctor.sh --fix`.
 
 ## Telemetry finalize
 

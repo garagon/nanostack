@@ -201,11 +201,32 @@ Or pass full JSON for richer detail:
 ~/.claude/skills/nanostack/bin/sprint-journal.sh
 ```
 
-**Step 2: How to see the result.**
+**Step 2: Proof block.** Before "How to see the result", emit a proof block summarizing what was verified during the sprint. Read it from session phase_log:
 
-**If AUTOPILOT is active:** Skip this question. Go directly to Next Step (compound + sprint summary). The user will decide how to run it after the sprint closes.
+```bash
+SESSION=$NANOSTACK_STORE/session.json
+[ -f "$SESSION" ] || SESSION="$HOME/.nanostack/session.json"
+jq -r '
+  ([.phase_log[]? | select(.phase == "review"   and .status == "completed")] | length) as $rev   |
+  ([.phase_log[]? | select(.phase == "security" and .status == "completed")] | length) as $sec   |
+  ([.phase_log[]? | select(.phase == "qa"       and .status == "completed")] | length) as $qa    |
+  "Reviewed: \(if $rev   > 0 then "yes" else "no" end)\n" +
+  "Security checked: \(if $sec > 0 then "yes" else "no" end)\n" +
+  "QA checked: \(if $qa  > 0 then "yes" else "no" end)"
+' "$SESSION" 2>/dev/null
+```
 
-**Otherwise**, ask:
+If a phase says `no`, list it under "Not verified" so the user sees what was skipped instead of inferring it from absence.
+
+**Step 3: How to see the result.**
+
+Read `profile` from session per `reference/session-state-contract.md`. The branch differs by profile:
+
+**If `profile == "guided"` (or no git remote, even when professional):** Skip the deployment menu and focus on how to try the result locally. Tell the user where the entry point is and the exact command to run, then list anything that is not yet verified (e.g. "I did not deploy this to the internet"). One next action only.
+
+**If `profile == "professional"` and `autopilot == true`:** Skip this question. Go directly to Next Step (compound + sprint summary). The user will decide how to run it after the sprint closes.
+
+**Otherwise (professional, manual)**, ask:
 > How do you want to see it?
 > 1. Local — I'll start the server and show you how to open it
 > 2. Production — I'll guide you through deploying to the internet
