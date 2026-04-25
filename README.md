@@ -411,19 +411,25 @@ AI agents make mistakes. They run `rm -rf` when they mean `rm -r`, force push to
 
 ### Six tiers
 
-Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude-code-auto-mode), guard evaluates every command through six tiers:
+Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude-code-auto-mode), guard evaluates every Bash command through six tiers in this order:
 
-**Tier 1: Allowlist.** Commands like `git status`, `ls`, `cat`, `jq` skip all checks. They can't cause damage.
+**Tier 1: Block rules.** Patterns for mass deletion, history destruction, database drops, production deploys, remote code execution, secret reads, security degradation and safety bypasses run first. A match exits 1 immediately, even if the command's binary is on the allowlist below. This ordering closes the bypass class where `find . -delete` or `cat .env` slipped past Tier 2 because `find` and `cat` were on the allowlist. 35 block rules total.
 
-**Tier 2: In-project.** Operations that only touch files inside the current git repo pass through. If the agent writes a bad file, you revert it. Version control is the safety net.
+**Tier 2: Allowlist.** After block rules clear, commands like `git status`, `ls`, `cat`, `jq` skip the remaining checks. They are read-only or otherwise side-effect-free for safe arguments.
 
-**Tier 2.5: Phase-aware concurrency.** During read-only phases (review, qa, security), write operations are blocked. This prevents race conditions when multiple agents run in parallel. The agent reports findings instead of auto-fixing.
+**Tier 3: In-project.** Operations that only touch files inside the current git repo pass through. If the agent writes a bad file, you revert it. Version control is the safety net.
 
-**Tier 2.75: Phase gate.** When a sprint is active, `git commit` and `git push` are blocked until review, security and qa artifacts exist and are fresher than the latest code change. This is the enforcement that prevents the agent from skipping pipeline phases on simple tasks. Bypass with `NANOSTACK_SKIP_GATE=1` for non-sprint commits.
+**Tier 4: Phase-aware concurrency.** During read-only phases (review, qa, security), write operations are blocked. This prevents race conditions when multiple agents run in parallel. The agent reports findings instead of auto-fixing.
 
-**Tier 2.8: Budget gate.** When a sprint budget is set and 95%+ spent, all non-allowlisted commands are blocked. The agent can still run safe commands (`ls`, `git status`, `cat`) to save work, but can't execute builds, tests, or deploys. Bypass with `NANOSTACK_SKIP_BUDGET=1`.
+**Tier 5: Phase gate.** When a sprint is active, `git commit` and `git push` are blocked until review, security, and qa artifacts exist and are fresher than the latest code change. This prevents the agent from skipping pipeline phases on simple tasks. Bypass with `NANOSTACK_SKIP_GATE=1` for non-sprint commits.
 
-**Tier 3: Pattern matching.** Everything else is checked against block and warn rules. 33 block rules cover mass deletion, history destruction, database drops, production deploys, remote code execution, security degradation and safety bypasses. 9 warn rules cover operations that need attention but not blocking.
+**Tier 6: Budget gate.** When a sprint budget is set and 95%+ spent, all non-allowlisted commands are blocked. The agent can still run safe commands (`ls`, `git status`, `cat`) to save work, but cannot execute builds, tests, or deploys. Bypass with `NANOSTACK_SKIP_BUDGET=1`.
+
+Plus a Tier 7 of warn rules for operations that need attention but not blocking. 9 warn rules total.
+
+### Write and Edit are hooked too
+
+`Write`, `Edit`, and `MultiEdit` go through their own PreToolUse hook (`guard/bin/check-write.sh`) that denies a narrow list of paths: secret files (`.env` and variants, `*.pem`, `*.key`, SSH keys, shell history) and system or user-secret directories (`/etc`, `/var`, `/usr/bin`, `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.gcp`, `~/.kube`). Symlinks are resolved before matching so `mylink/config -> ~/.ssh/config` is treated as the resolved target. See [`SECURITY.md`](SECURITY.md) for the full denylist and the manual wire-up for installs that predate the hook.
 
 ### Deny-and-continue
 
@@ -452,6 +458,22 @@ All rules live in [`guard/rules.json`](guard/rules.json). Each rule has an ID, r
   "alternative": "terraform plan -destroy first to review what would be removed"
 }
 ```
+
+### What enforces on which agent
+
+Honest scope. Nanostack ships skill files that work the same in every supported agent, but the **enforcement layer** (hooks that block commands before they run) depends on what each agent supports today.
+
+| Agent | Skills | Hook enforcement | What this means |
+|---|---|---|---|
+| Claude Code | yes | yes (Bash, Write, Edit, MultiEdit) | Block rules and the Write/Edit denylist run before every tool call. The user does not have to read the rules; the hook does. |
+| Cursor | yes | no | Skills are exposed as rules text. The agent reads the rules and is expected to follow them. There is no pre-tool-use hook on Cursor today. |
+| OpenAI Codex | yes | no | Same as Cursor: instructions only. |
+| OpenCode | yes | no | Same. |
+| Gemini CLI / Antigravity / Amp / Cline | yes | no | Same. |
+
+When hooks are not available, the protection downgrades from "blocked at the system call" to "agent should know better." Run `/nano-doctor` after install on any agent to see the actual state. If you want hard enforcement, use Claude Code; if you accept agent-level discipline, the rest still ship the same workflow.
+
+This gap is the single biggest known caveat in the framework. The roadmap is to add the same enforcement layer per agent as their tooling exposes the right hooks.
 
 ## Install
 

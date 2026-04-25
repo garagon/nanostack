@@ -37,6 +37,17 @@ If the output shows `"active":false`, create a session:
 
 Then run `session.sh phase-start plan`.
 
+**AUTOPILOT detection.** This skill checks "if AUTOPILOT is active" in several places below. Treat it as active when ANY of the following is true:
+
+1. The caller (e.g. `/think --autopilot`, `/feature`) said so in context.
+2. `session.json` reports it. Verify with:
+   ```bash
+   jq -r '.autopilot // false' .nanostack/session.json 2>/dev/null
+   ```
+   `true` means autopilot. Anything else means manual.
+
+If neither is true, behave as manual: present the plan and wait for explicit approval.
+
 **Local mode:** Run `source bin/lib/git-context.sh && detect_git_mode`. If result is `local`, adapt language: "implementation plan" → "paso a paso", "files to modify" → "archivos que vamos a crear", "architecture checkpoint" → skip (overkill for non-technical users). Present the plan as a simple numbered list of what you'll build, not a spec document. Same rigor, accessible words. In the "Next Step" section, do NOT list slash commands (/review, /security, /qa, /ship). Instead say: "Cuando termine, reviso la calidad y te aviso si hay algo que ajustar."
 
 ## Process
