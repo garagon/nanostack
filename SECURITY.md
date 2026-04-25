@@ -75,12 +75,48 @@ Installs that existed before the narrowing got `Bash(rm:*)` written to their `.c
 
 `/nano-doctor` surfaces a warning when a broad `Bash(rm:*)` entry is present. To migrate, edit `.claude/settings.json`, remove the `Bash(rm:*)` line, and re-run `init-project.sh` to pick up the narrow defaults.
 
+### Write and Edit are hooked too
+
+Coding agents need to write code, so `Write(*)` and `Edit(*)` stay broad in the permission list. The safety boundary for those tools lives in a dedicated PreToolUse hook: `guard/bin/check-write.sh`. It runs before every Write, Edit, and MultiEdit call and rejects a narrow denylist:
+
+- Environment files with real secrets (`.env`, `.env.local`, `.env.production`, `.env.staging`, `.env.development`, `.env.dev`, `.env.prod`). Template files like `.env.example`, `.env.sample`, `.env.template` are allowed.
+- Private cryptographic material (`*.pem`, `*.key`, `*.p12`, `*.pfx`).
+- SSH keys and config (`id_rsa`, `id_ed25519`, `id_ecdsa`, `id_dsa`, their `.pub` pairs, `authorized_keys`, `known_hosts`).
+- Shell history (`.bash_history`, `.zsh_history`, `.python_history`).
+- System directories (`/etc`, `/var`, `/usr/bin`, `/usr/sbin`, `/usr/lib`, `/System`, `/private/etc`).
+- User secret directories (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.gcp`, `~/.config/gcloud`, `~/.kube`).
+
+Fresh installs receive this hook wired automatically. Existing installs are not modified and need to wire it manually to gain the Write/Edit layer.
+
+### Manual wire-up for existing installs
+
+Add the following to your project's `.claude/settings.json`. The paths assume a standard install at `~/.claude/skills/nanostack`.
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{"type": "command", "command": "$HOME/.claude/skills/nanostack/guard/bin/check-dangerous.sh"}]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [{"type": "command", "command": "$HOME/.claude/skills/nanostack/guard/bin/check-write.sh"}]
+      }
+    ]
+  }
+}
+```
+
+Run `/nano-doctor` to verify; it warns when the hooks are missing.
+
 ### Defense layers
 
 | Layer | Purpose | Failure mode |
 |---|---|---|
 | Permissions (`.claude/settings.json`) | Cheap gate, no network call. | User can grant broad perms manually. |
-| Guard hooks (`guard/bin/check-dangerous.sh`) | Pattern match against block rules before any command runs. | If hooks are disabled, permissions become the only gate. |
+| Guard hooks (`check-dangerous.sh`, `check-write.sh`) | Pattern match against block rules before a Bash, Write, or Edit call runs. | If hooks are disabled, permissions become the only gate. |
 | Audit trail (`.nanostack/audit.log`) | Record every blocked and allowed command for post-hoc review. | If the store path is missing, logging silently no-ops; guard still blocks. |
 
 Each layer is independent. The audit trail works even when the store path is unresolved; the guard works even when permissions are broad; the permissions work even if the guard is missing. That independence is the point.
