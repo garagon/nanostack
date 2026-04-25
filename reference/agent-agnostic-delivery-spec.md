@@ -414,7 +414,10 @@ Required fields:
 {
   "session_id": "project-yyyymmdd-hhmmss",
   "host": "claude",
-  "mode": "guided|professional|autopilot|report_only",
+  "profile": "guided|professional",
+  "run_mode": "normal|report_only",
+  "autopilot": false,
+  "plan_approval": "manual|auto|not_required",
   "capabilities": {
     "bash_guard": "enforced",
     "write_guard": "enforced",
@@ -760,21 +763,30 @@ Ship as four small PRs:
 - Spanish docs complete.
 - Public positioning updated to: "AI coding agent team skills for the full engineering workflow, with enforced guardrails where your agent supports hooks and guided delivery everywhere else."
 
-## Open Questions
+Implementation contract: see `reference/v1-delivery-experience-technical-spec.md`.
 
-1. Which non-Claude hosts can support true pre-action hooks today?
-2. Should Nanostack ship a lightweight wrapper command for hosts without hooks?
-3. Which real Guided Mode flows break if outside-project writes are blocked by default?
-4. Should `env` and `printenv` be blocked by default or downgraded to warning?
+## Closed v1.0 Decisions
+
+| Topic | Decision |
+|---|---|
+| Write/Edit outside project | Professional mode warns and is configurable. Guided/local blocks or requires explicit confirmation. |
+| `env` and `printenv` | Guided blocks. Professional warns and is configurable. Silent allow is forbidden. |
+| Local mode vs Guided Mode | Local mode implies Guided Mode. Guided Mode can also exist inside a git repo. |
+| `/feature` | Always autopilot. Manual feature work uses `/think` + `/nano`. |
+| Session state | `session.json` owns profile, capabilities, plan approval, and next-step guidance. |
 
 ## Recommended Next Sprint
 
-Build v0.8 Sprint 1 first: adapter schema and five capability files only.
+Build v1.0 Sprint 1 first: docs-only decision landing.
+
+Scope:
+
+- Land `reference/v1-delivery-experience-technical-spec.md`.
+- Keep runtime code unchanged.
+- Confirm v1.0 decisions are explicit before implementing `session.sh` schema v2.
 
 Why:
 
-- It reduces Claude-specific bias.
-- It forces explicit values instead of assumptions.
-- It is low-risk: new docs/JSON only.
-- It unblocks doctor, setup, README, and CI work.
-- If the larger v0.8 stalls, the repo still gains honest capability artifacts.
+- It avoids mixing product policy with script changes.
+- It gives implementation agents exact fields, files, commands, and tests.
+- It prevents Sprint 4/5 language work from starting before Sprint 2 creates the session-state backbone.
