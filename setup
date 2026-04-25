@@ -96,6 +96,7 @@ fi
 HOST="claude"
 LOCAL_INSTALL=0
 RENAMES=""
+VERBOSE=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --host)  [ -z "${2:-}" ] && echo "Missing value for --host" >&2 && exit 1; HOST="$2"; shift 2 ;;
@@ -104,6 +105,7 @@ while [ $# -gt 0 ]; do
     --rename) [ -z "${2:-}" ] && echo "Missing value for --rename" >&2 && exit 1; RENAMES="$2"; shift 2 ;;
     --rename=*) RENAMES="${1#--rename=}"; shift ;;
     --list) LIST_SKILLS=1; shift ;;
+    --verbose|-v) VERBOSE=1; shift ;;
     --help)
       cat <<'HELP'
 Usage: ./setup [OPTIONS]
@@ -114,6 +116,7 @@ Options:
   --rename <map>    Rename skills to avoid collisions (comma-separated old=new pairs)
   --rename reset    Restore all skills to their original names
   --list            Show installed skills and their current names
+  --verbose, -v     Show the full skill list and workflow line after install
   --help            Show this help
 
 Install methods:
@@ -557,47 +560,95 @@ write_setup_config
 echo ""
 echo "  config: ~/.nanostack/setup.json"
 
-echo ""
-echo "Available skills:"
-for skill in "${SKILLS[@]}"; do
-  pname=$(skill_public_name "$skill")
-  if [ "$pname" != "$skill" ]; then
-    echo "  /$pname (renamed from /$skill)"
-  else
-    echo "  /$skill"
+# ─── Per-host protection level summary ──────────────────────
+# Read each installed host's adapter file and report the declared
+# capability in user-facing wording. The adapter is the source of
+# truth for what nanostack actually enforces on that host. Honest
+# summary instead of a uniform "ready" line that would mask the
+# Claude vs everyone-else gap.
+
+_proto_label() {
+  case "$1" in
+    enforced)          echo "full guard support (commands and writes blocked when unsafe)" ;;
+    hooked)            echo "hooked, blocking depends on host" ;;
+    detectable)        echo "detectable issues only" ;;
+    instructions_only) echo "guided workflow only (no automatic blocking)" ;;
+    unsupported)       echo "no nanostack support" ;;
+    *)                 echo "$1" ;;
+  esac
+}
+
+_print_protection_for() {
+  local host="$1" pretty="$2"
+  local adapter="$SOURCE_DIR/adapters/$host.json"
+  if [ ! -f "$adapter" ]; then
+    echo "  $pretty: adapter file missing (reinstall recommended)"
+    return
   fi
-done
+  local bash_cap write_cap
+  bash_cap=$(jq -r '.bash_guard'  "$adapter" 2>/dev/null)
+  write_cap=$(jq -r '.write_guard' "$adapter" 2>/dev/null)
+  if [ "$bash_cap" = "$write_cap" ]; then
+    echo "  $pretty: $(_proto_label "$bash_cap")"
+  else
+    echo "  $pretty: bash $(_proto_label "$bash_cap"); write $(_proto_label "$write_cap")"
+  fi
+}
+
 echo ""
-# Build workflow line with renames applied
-w_think=$(skill_public_name "think")
-w_nano=$(skill_public_name "nano")
-w_review=$(skill_public_name "review")
-w_qa=$(skill_public_name "qa")
-w_security=$(skill_public_name "security")
-w_ship=$(skill_public_name "ship")
-w_guard=$(skill_public_name "guard")
-echo "Workflow: /$w_think → /$w_nano → build → /$w_review → /$w_qa → /$w_security → /$w_ship"
-echo "Safety:   /$w_guard (activate on-demand)"
-echo "Start:    /nano-run (first-time setup)"
-echo ""
-echo "Per-project setup (run once in each project):"
-echo "  ~/.claude/skills/nanostack/bin/init-project.sh"
-echo ""
-echo "Update:    ~/.claude/skills/nanostack/bin/upgrade.sh"
+echo "Protection level:"
+[ "$INSTALL_CLAUDE" -eq 1 ]   && _print_protection_for "claude"   "Claude Code"
+[ "$INSTALL_CODEX" -eq 1 ]    && _print_protection_for "codex"    "Codex"
+[ "$INSTALL_CURSOR" -eq 1 ]   && _print_protection_for "cursor"   "Cursor"
+[ "$INSTALL_OPENCODE" -eq 1 ] && _print_protection_for "opencode" "OpenCode"
+[ "$INSTALL_GEMINI" -eq 1 ]   && _print_protection_for "gemini"   "Gemini CLI"
 
 # ─── Per-agent activation guidance ───────────────────────────
 # Tell the user how to actually see the skills in the agents they installed
 # for. Cursor and Codex need a restart that the install step does not perform.
 echo ""
-echo "Next step — activate the skills in your agent:"
+echo "Next step:"
 [ "$INSTALL_CLAUDE" -eq 1 ]   && echo "  Claude Code:  ready now. Type /nano-help to see all commands."
 [ "$INSTALL_CURSOR" -eq 1 ]   && echo "  Cursor:       restart Cursor (close and reopen), then type /nano-help."
 [ "$INSTALL_CODEX" -eq 1 ]    && echo "  Codex:        run \`codex\` in a new terminal, then type /nano-help."
 [ "$INSTALL_OPENCODE" -eq 1 ] && echo "  OpenCode:     restart your OpenCode session, then type /nano-help."
 [ "$INSTALL_GEMINI" -eq 1 ]   && echo "  Gemini CLI:   run \`gemini\` in a new terminal, then type /nano-help."
 
-# The `[ test ] && echo` lines above each return 1 for any agent the user
-# did NOT install. Without an explicit success at the end, the script's
-# exit code would be the last test's result — making a clean setup look
-# failed to upgrade.sh (which runs under `set -e`) and to any CI path.
+echo ""
+echo "Per-project setup (run once in each project):"
+echo "  ~/.claude/skills/nanostack/bin/init-project.sh"
+echo ""
+echo "Update: ~/.claude/skills/nanostack/bin/upgrade.sh"
+
+# ─── Verbose: full skill list and workflow line ──────────────
+# Default output stays tight so non-technical users are not greeted
+# with a wall of slash commands. Pass --verbose (or -v) to see the
+# legacy listing.
+if [ "$VERBOSE" -eq 1 ]; then
+  echo ""
+  echo "Available skills:"
+  for skill in "${SKILLS[@]}"; do
+    pname=$(skill_public_name "$skill")
+    if [ "$pname" != "$skill" ]; then
+      echo "  /$pname (renamed from /$skill)"
+    else
+      echo "  /$skill"
+    fi
+  done
+  echo ""
+  w_think=$(skill_public_name "think")
+  w_nano=$(skill_public_name "nano")
+  w_review=$(skill_public_name "review")
+  w_qa=$(skill_public_name "qa")
+  w_security=$(skill_public_name "security")
+  w_ship=$(skill_public_name "ship")
+  w_guard=$(skill_public_name "guard")
+  echo "Workflow: /$w_think → /$w_nano → build → /$w_review → /$w_qa → /$w_security → /$w_ship"
+  echo "Safety:   /$w_guard (activate on-demand)"
+  echo "Start:    /nano-run (first-time setup)"
+fi
+
+# Explicit success: previous `[ test ] && echo` lines return 1 for any
+# agent the user did NOT install, which would leak into upgrade.sh and
+# CI runs under `set -e`. End with exit 0.
 exit 0
