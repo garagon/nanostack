@@ -821,6 +821,87 @@ jobs:
           echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
           exit $fail
 
+  spanish-surface-parity:
+    name: Spanish surface parity
+    runs-on: ubuntu-latest
+    # Sprint 5 contract. README.es and TROUBLESHOOTING.es must exist
+    # and cover the load-bearing entries; README.md must link to the
+    # Spanish surface so a first-10-minute user finds it without
+    # scrolling. Advanced material can point to canonical English.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Spanish files exist and are linked from English surface
+        run: |
+          set -e
+          fail=0
+
+          for f in README.es.md TROUBLESHOOTING.es.md; do
+            if [ ! -f "$f" ]; then
+              echo "FAIL: $f is missing"
+              fail=1
+            fi
+          done
+
+          if ! grep -q "README.es.md" README.md; then
+            echo "FAIL: README.md must link to README.es.md"
+            fail=1
+          fi
+          if ! grep -q "TROUBLESHOOTING.es.md" TROUBLESHOOTING.md; then
+            echo "FAIL: TROUBLESHOOTING.md must link to TROUBLESHOOTING.es.md"
+            fail=1
+          fi
+          if ! grep -q "TROUBLESHOOTING.es.md" README.es.md; then
+            echo "FAIL: README.es.md must link to TROUBLESHOOTING.es.md"
+            fail=1
+          fi
+          exit $fail
+
+      - name: README.es covers load-bearing sections
+        run: |
+          set -e
+          fail=0
+          # Heading patterns the Spanish README must include. Each line
+          # is one full H2 heading; iterate with newline IFS so spaces
+          # inside the heading do not get split by the shell.
+          while IFS= read -r h; do
+            [ -z "$h" ] && continue
+            if ! grep -qE "^$h" README.es.md; then
+              echo "FAIL: README.es.md missing required section: $h"
+              fail=1
+            fi
+          done <<'EOF'
+## Instalación
+## Ejemplo
+## El sprint
+## Autopilot
+## Guard
+## Problemas comunes
+EOF
+          exit $fail
+
+      - name: TROUBLESHOOTING.es covers most-encountered entries
+        run: |
+          set -e
+          fail=0
+          # Spanish entries that map to the high-traffic English ones.
+          # Advanced topics (corporate proxy, telemetry, autopilot
+          # double-run) are allowed to live only in canonical English.
+          while IFS= read -r h; do
+            [ -z "$h" ] && continue
+            if ! grep -qiE "$h" TROUBLESHOOTING.es.md; then
+              echo "FAIL: TROUBLESHOOTING.es.md missing high-traffic entry: $h"
+              fail=1
+            fi
+          done <<'EOF'
+Los comandos slash no aparecen
+Command not found: jq
+phase gate
+Estoy en Windows
+sprint
+Conflicto de nombres
+EOF
+          exit $fail
+
   plain-language-contract:
     name: Plain-language contract (Guided output)
     runs-on: ubuntu-latest

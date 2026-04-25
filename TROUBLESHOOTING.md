@@ -4,6 +4,8 @@ Common problems and how to resolve them, organized by what you actually see.
 
 If your symptom is not here, open an issue: https://github.com/garagon/nanostack/issues
 
+> **Spanish version:** [TROUBLESHOOTING.es.md](TROUBLESHOOTING.es.md) covers the most-encountered entries for Spanish-speaking users. Advanced entries (corporate proxy, autopilot double-run, telemetry) live here as canonical.
+
 **First move for any install issue:** run `/nano-doctor` (or `~/.claude/skills/nanostack/bin/nano-doctor.sh`). It runs ten checks in under a second and names what is wrong.
 
 ## Contents
