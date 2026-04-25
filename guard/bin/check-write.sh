@@ -58,6 +58,33 @@ case "$FILE_PATH" in
   "~"*) FILE_PATH="$HOME${FILE_PATH#~}" ;;
 esac
 
+# Resolve symlinks. A repo-controlled symlink like myfile -> /etc/passwd
+# or sshlink -> ~/.ssh otherwise lets a Write/Edit reach a protected
+# target whose textual path does not match any denylist entry. The fix
+# is to evaluate the denylist against BOTH the original path and its
+# resolved form; if either matches, block. Falls back to a pure-bash
+# parent-realpath when the realpath binary is missing or refuses
+# missing leaves (Write to a not-yet-existing file).
+RESOLVED_PATH=""
+if command -v realpath >/dev/null 2>&1; then
+  RESOLVED_PATH=$(realpath -m "$FILE_PATH" 2>/dev/null) \
+    || RESOLVED_PATH=$(realpath --canonicalize-missing "$FILE_PATH" 2>/dev/null) \
+    || RESOLVED_PATH=""
+fi
+if [ -z "$RESOLVED_PATH" ]; then
+  # Pure-bash fallback. cd into the parent (which IS a real dir even
+  # when the leaf is being created) and re-attach the basename. pwd -P
+  # follows symlinks at the parent level, which catches sshlink/...
+  _parent=$(dirname "$FILE_PATH")
+  _base=$(basename "$FILE_PATH")
+  if RESOLVED_PARENT=$(cd "$_parent" 2>/dev/null && pwd -P); then
+    RESOLVED_PATH="$RESOLVED_PARENT/$_base"
+  else
+    RESOLVED_PATH="$FILE_PATH"
+  fi
+  unset _parent _base RESOLVED_PARENT
+fi
+
 # ─── Deny patterns ─────────────────────────────────────────────────────
 # Each entry is a POSIX extended regex evaluated against the absolute or
 # relative file path. Intentionally narrow: false positives train users
@@ -111,27 +138,36 @@ PATH_PREFIX_DENY=(
 )
 
 # ─── Evaluate ──────────────────────────────────────────────────────────
+# Run the denylist against both the original FILE_PATH and the symlink
+# RESOLVED_PATH. Either match blocks. This closes the symlink-bypass
+# class where a path like /tmp/sshlink/config (sshlink -> ~/.ssh) does
+# not textually match ^$HOME/.ssh/ but resolves to a protected target.
 
 MATCHED_RULE=""
+MATCHED_PATH=""
 
-# Basename check: match against both absolute form and basename to catch
-# relative paths (./.env) and absolute paths (/project/.env) uniformly.
-for pat in "${BASENAME_DENY[@]}"; do
-  if printf '%s' "$FILE_PATH" | grep -qE -- "$pat"; then
-    MATCHED_RULE="secret_basename:$pat"
-    break
-  fi
-done
-
-# Path-prefix check only if basename did not match. Prefix patterns are
-# tighter so they rarely overlap; short-circuit keeps the message simple.
-if [ -z "$MATCHED_RULE" ]; then
-  for pat in "${PATH_PREFIX_DENY[@]}"; do
-    if printf '%s' "$FILE_PATH" | grep -qE -- "$pat"; then
-      MATCHED_RULE="system_path:$pat"
-      break
+check_path() {
+  local p="$1" pat
+  for pat in "${BASENAME_DENY[@]}"; do
+    if printf '%s' "$p" | grep -qE -- "$pat"; then
+      MATCHED_RULE="secret_basename:$pat"
+      MATCHED_PATH="$p"
+      return 0
     fi
   done
+  for pat in "${PATH_PREFIX_DENY[@]}"; do
+    if printf '%s' "$p" | grep -qE -- "$pat"; then
+      MATCHED_RULE="system_path:$pat"
+      MATCHED_PATH="$p"
+      return 0
+    fi
+  done
+  return 1
+}
+
+check_path "$FILE_PATH"
+if [ -z "$MATCHED_RULE" ] && [ -n "$RESOLVED_PATH" ] && [ "$RESOLVED_PATH" != "$FILE_PATH" ]; then
+  check_path "$RESOLVED_PATH"
 fi
 
 if [ -n "$MATCHED_RULE" ]; then
@@ -139,6 +175,8 @@ if [ -n "$MATCHED_RULE" ]; then
 BLOCKED [W-001] Write or Edit to a protected path
 Category: ${MATCHED_RULE%%:*}
 Path:     $FILE_PATH
+Resolved: $RESOLVED_PATH
+Matched:  $MATCHED_PATH
 Rule:     ${MATCHED_RULE#*:}
 
 This file holds secrets or system state. Coding agents should not
