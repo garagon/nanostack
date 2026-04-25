@@ -422,6 +422,23 @@ jobs:
           # --force-with-lease is the guard's own recommended alternative;
           # it must not trip G-007/G-008.
           run_case 0 'git push --force-with-lease'
+          # G-030 now covers more readers (grep, rg, jq, awk, sed, strings,
+          # od, xxd, hexdump). G-031 covers env / printenv standalone.
+          run_case 1 'grep SECRET .env'
+          run_case 1 'rg SECRET .env'
+          run_case 1 'jq . .env'
+          run_case 1 'awk /=/ .env'
+          run_case 1 'sed s/x/y/ .env.production'
+          run_case 1 'strings secrets.pem'
+          run_case 1 'env'
+          run_case 1 'printenv'
+          run_case 1 'env | grep PATH'
+          # env VAR=value cmd is a legitimate way to set a variable for
+          # one command; G-031 must not trip on it.
+          run_case 0 'env VAR=val cmd'
+          run_case 0 'envsubst < template'
+          run_case 0 'jq . package.json'
+          run_case 0 'awk NR==1 file.csv'
           exit $fail
 
   write-guard-regression:
@@ -483,4 +500,27 @@ jobs:
             echo "FAIL: JSON stdin did not allow README.md"
             fail=1
           fi
+
+          # Symlink resolution: a symlink whose target is a protected
+          # path must be blocked even when the textual path does not
+          # match the denylist.
+          tmp_link_dir="$RUNNER_TEMP/symlink-test"
+          mkdir -p "$tmp_link_dir"
+          ln -sfn /etc "$tmp_link_dir/etclink"
+          if ! bash "$script" "$tmp_link_dir/etclink/passwd" >/dev/null 2>&1; then
+            printf '  ok   symlink etclink/passwd blocks (resolves to /etc)\n'
+          else
+            echo "FAIL: symlink to /etc bypassed denylist"
+            fail=1
+          fi
+          # And a symlink that does NOT point at a protected target stays
+          # allowed (regression: do not over-block legitimate symlinks).
+          ln -sfn "$RUNNER_TEMP" "$tmp_link_dir/safelink"
+          if bash "$script" "$tmp_link_dir/safelink/notes.txt" >/dev/null 2>&1; then
+            printf '  ok   symlink to safe target allows\n'
+          else
+            echo "FAIL: symlink to safe target was blocked"
+            fail=1
+          fi
+          rm -rf "$tmp_link_dir"
           exit $fail

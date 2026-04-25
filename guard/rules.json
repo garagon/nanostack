@@ -242,10 +242,17 @@
         },
         {
           "id": "G-030",
-          "pattern": "(cat|less|head|tail|vi|vim|nano|code)\\s+.*\\.(env|pem|key|credentials|keystore)",
+          "pattern": "(cat|less|more|view|head|tail|vi|vim|nano|code|grep|egrep|fgrep|rg|ag|jq|yq|awk|sed|od|xxd|hexdump|strings|sort|uniq|wc|file|stat|tr)\\s+([^|;]*\\s)?[^|;]*\\.(env|env\\.[a-z]+|pem|key|p12|pfx|credentials|keystore|secrets)([[:space:]]|$)",
           "category": "secrets-access",
           "description": "Reading or editing secrets files directly",
-          "alternative": "Use the project's secrets management or read specific non-secret fields with jq/grep"
+          "alternative": "Use the project's secrets management. Do not read .env or key files into the agent transcript at all."
+        },
+        {
+          "id": "G-031",
+          "pattern": "(^|[[:space:]]|;|&&|\\|\\|)(env|printenv)([[:space:]]*$|[[:space:]]*\\|)",
+          "category": "secrets-access",
+          "description": "Dumping environment variables (may contain credentials)",
+          "alternative": "Read the specific variable you need with echo \"$VAR_NAME\". Do not pipe full env into the model."
         },
         {
           "id": "G-031",
