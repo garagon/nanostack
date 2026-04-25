@@ -1,0 +1,15 @@
+{
+  "host": "gemini",
+  "schema_version": "1",
+  "last_verified": "2026-04-25",
+  "verification": {
+    "method": "manual",
+    "evidence": "setup install_gemini installs nanostack as a Gemini extension. The extension exposes skills but does not register PreToolUse hooks for shell or write actions. Verified by reading setup lines 466-477 on 2026-04-25."
+  },
+  "skill_discovery": "extension",
+  "bash_guard": "instructions_only",
+  "write_guard": "instructions_only",
+  "phase_gate": "instructions_only",
+  "install_target": "gemini extension",
+  "doctor_checks": ["commands"]
+}
