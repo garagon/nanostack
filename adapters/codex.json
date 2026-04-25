@@ -1,0 +1,15 @@
+{
+  "host": "codex",
+  "schema_version": "1",
+  "last_verified": "2026-04-25",
+  "verification": {
+    "method": "manual",
+    "evidence": "setup install_codex symlinks skill directories under ~/.codex/skills/nanostack-<skill> but does not register any pre-action hook. Verified by reading setup lines 401-427 on 2026-04-25."
+  },
+  "skill_discovery": "native",
+  "bash_guard": "instructions_only",
+  "write_guard": "instructions_only",
+  "phase_gate": "instructions_only",
+  "install_target": "~/.codex/skills/nanostack",
+  "doctor_checks": ["commands"]
+}

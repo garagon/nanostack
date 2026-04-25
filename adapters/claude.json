@@ -1,0 +1,15 @@
+{
+  "host": "claude",
+  "schema_version": "1",
+  "last_verified": "2026-04-25",
+  "verification": {
+    "method": "ci",
+    "evidence": ".github/workflows/lint.yml: guard-regression and write-guard-regression jobs exercise check-dangerous.sh and check-write.sh on every PR"
+  },
+  "skill_discovery": "native",
+  "bash_guard": "enforced",
+  "write_guard": "enforced",
+  "phase_gate": "enforced",
+  "install_target": ".claude/settings.json",
+  "doctor_checks": ["hooks", "permissions", "commands"]
+}

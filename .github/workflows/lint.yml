@@ -524,3 +524,79 @@ jobs:
           fi
           rm -rf "$tmp_link_dir"
           exit $fail
+
+  host-adapter-schema:
+    name: Host adapter schema
+    runs-on: ubuntu-latest
+    # Each adapters/*.json declares the real capability level for one
+    # host. Setup, doctor, and the README all read from these files;
+    # if the schema drifts, every downstream claim drifts with it.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate adapter files
+        run: |
+          set -e
+          fail=0
+          required='host schema_version last_verified verification skill_discovery bash_guard write_guard phase_gate install_target doctor_checks'
+          allowed_caps='unsupported instructions_only detectable hooked enforced host_dependent native rules_file skill_folder extension'
+          for f in adapters/*.json; do
+            [ -f "$f" ] || continue
+            if ! jq -e '.' "$f" >/dev/null 2>&1; then
+              echo "FAIL: $f is not valid JSON"
+              fail=1
+              continue
+            fi
+            for field in $required; do
+              if ! jq -e --arg k "$field" 'has($k)' "$f" >/dev/null 2>&1; then
+                echo "FAIL: $f missing required field '$field'"
+                fail=1
+              fi
+            done
+            expected=$(basename "$f" .json)
+            actual=$(jq -r '.host' "$f")
+            if [ "$expected" != "$actual" ]; then
+              echo "FAIL: $f declares host '$actual' but filename suggests '$expected'"
+              fail=1
+            fi
+            schema_version=$(jq -r '.schema_version' "$f")
+            if [ "$schema_version" != "1" ]; then
+              echo "FAIL: $f has schema_version '$schema_version' (expected '1')"
+              fail=1
+            fi
+            for cap_field in skill_discovery bash_guard write_guard phase_gate; do
+              val=$(jq -r --arg k "$cap_field" '.[$k]' "$f")
+              ok=0
+              for allowed in $allowed_caps; do
+                [ "$val" = "$allowed" ] && ok=1
+              done
+              if [ "$ok" -eq 0 ]; then
+                echo "FAIL: $f.$cap_field has unknown value '$val'"
+                fail=1
+              fi
+            done
+            method=$(jq -r '.verification.method' "$f")
+            case "$method" in
+              ci|manual|unknown) ;;
+              *)
+                echo "FAIL: $f.verification.method is '$method' (expected ci|manual|unknown)"
+                fail=1 ;;
+            esac
+            evidence=$(jq -r '.verification.evidence // ""' "$f")
+            if [ -z "$evidence" ]; then
+              echo "FAIL: $f.verification.evidence is empty"
+              fail=1
+            fi
+          done
+          # Filename uniqueness: every JSON in adapters/ must be a real
+          # adapter file (no leftovers).
+          for f in adapters/*.json; do
+            [ -f "$f" ] || continue
+            base=$(basename "$f" .json)
+            case "$base" in
+              claude|codex|cursor|opencode|gemini) ;;
+              *) echo "WARN: $f is for an unknown host '$base'" ;;
+            esac
+          done
+          exit $fail
