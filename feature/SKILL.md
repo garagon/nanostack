@@ -39,10 +39,10 @@ Before anything else, ensure the project is configured. Run this once (skips if 
 
 ## Session
 
-Initialize the sprint session:
+Initialize the sprint session with autopilot. The `--autopilot` flag writes `autopilot: true` into the session, which downstream skills (`/nano`, `/review`, `/security`, `/qa`, `/ship`) read to skip approval pauses. Without this flag, `/nano` would present the plan and wait for explicit approval, which contradicts the orchestrator contract below.
 
 ```bash
-~/.claude/skills/nanostack/bin/session.sh init feature
+~/.claude/skills/nanostack/bin/session.sh init feature --autopilot
 ```
 
 Then run `session.sh phase-start plan`. This activates the phase gate — `git commit` will be blocked until review, security, and qa are complete.
@@ -50,6 +50,8 @@ Then run `session.sh phase-start plan`. This activates the phase gate — `git c
 ## Process
 
 You are an autonomous orchestrator. You run the entire sprint without stopping between phases. Do NOT wait for user input between steps. Do NOT ask "should I continue?" or "ready for review?". Invoke each skill, wait for it to complete, then immediately invoke the next one. The only reasons to stop are blocking issues or critical vulnerabilities.
+
+**AUTOPILOT contract for sub-skills.** The session was initialized with `--autopilot`, so `/nano`, `/review`, `/security`, `/qa`, and `/ship` all read `session.json.autopilot == true` and behave accordingly: present briefly, do not pause for approval. If you ever see one of them ask "ready to proceed?", treat it as a regression in that skill, not a signal to stop. Carry "AUTOPILOT is active" in your own context across every Skill invocation in this sprint.
 
 ### Step 1: Context
 
