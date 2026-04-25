@@ -231,31 +231,120 @@ else
 fi
 
 # ─── 6. Permission scope ───────────────────────────────────────────────
-# Surface settings.json entries that grant broad filesystem deletion.
-# Current nanostack installs default to narrow rm permissions
-# (.nanostack/** and /tmp/**). Installs done before that change may
-# still have Bash(rm:*) in their settings. Flag it as a warning with
-# a concrete remediation so users can opt into narrowing.
+# Enumerate settings.json files and report each broad entry. The earlier
+# version of this check only looked at Bash(rm:*). Round 3 audit pointed
+# out that Write(*), Edit(*), and allowlisted binaries like find and
+# curl are equally part of the permission surface. The doctor now
+# surfaces each one so a user who thinks "I migrated rm" sees the full
+# picture.
+#
+# A broad entry is not automatically a problem: Write(*)/Edit(*) are
+# expected on coding-agent setups, and the check-write.sh hook covers
+# them. The report cross-references the hook presence so the status
+# reads honestly.
 
 _settings_paths=""
-[ -f .claude/settings.json ]              && _settings_paths="$_settings_paths .claude/settings.json"
-[ -f "$HOME/.claude/settings.json" ]      && _settings_paths="$_settings_paths $HOME/.claude/settings.json"
+[ -f .claude/settings.json ]               && _settings_paths="$_settings_paths .claude/settings.json"
+[ -f "$HOME/.claude/settings.json" ]       && _settings_paths="$_settings_paths $HOME/.claude/settings.json"
 [ -f "$HOME/.claude/settings.local.json" ] && _settings_paths="$_settings_paths $HOME/.claude/settings.local.json"
 
-if [ -n "$_settings_paths" ] && command -v jq >/dev/null 2>&1; then
-  _broad=""
+_any_has() {
+  # _any_has <perm> → print comma-separated settings files that list it
+  local perm="$1" hits=""
   for _s in $_settings_paths; do
-    if jq -e '.permissions.allow // [] | any(. == "Bash(rm:*)")' "$_s" >/dev/null 2>&1; then
-      _broad="${_broad:+$_broad, }$_s"
+    if jq -e --arg p "$perm" '.permissions.allow // [] | any(. == $p)' "$_s" >/dev/null 2>&1; then
+      hits="${hits:+$hits, }$_s"
     fi
   done
-  if [ -n "$_broad" ]; then
-    add_check warn permissions rm_scope "Bash(rm:*) present in $_broad; consider narrowing to Bash(rm:.nanostack/**) and Bash(rm:/tmp/**). See SECURITY.md."
-  else
-    add_check pass permissions rm_scope "no broad Bash(rm:*) entries found"
-  fi
+  printf '%s' "$hits"
+}
+
+_has_hook() {
+  # _has_hook <matcher-regex> <command-substring> → 0 if any settings
+  # file declares a PreToolUse hook whose matcher matches and whose
+  # command contains the substring; 1 otherwise.
+  local matcher="$1" needle="$2"
+  for _s in $_settings_paths; do
+    if jq -e --arg m "$matcher" --arg n "$needle" '
+      (.hooks.PreToolUse // [])
+      | any(
+          (.matcher // "" | test($m))
+          and ((.hooks // []) | any((.command // "") | contains($n)))
+        )
+    ' "$_s" >/dev/null 2>&1; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+if [ -z "$_settings_paths" ] || ! command -v jq >/dev/null 2>&1; then
+  add_check pass permissions broad_perms "no settings.json to check"
+  add_check pass permissions bash_guard  "no settings.json to check"
+  add_check pass permissions write_guard "no settings.json to check"
 else
-  add_check pass permissions rm_scope "no settings.json to check"
+  _bash_hook_ok=1; _has_hook 'Bash' 'check-dangerous.sh' && _bash_hook_ok=0
+  _write_hook_ok=1; _has_hook 'Write|Edit' 'check-write.sh' && _write_hook_ok=0
+
+  # Broad perm report: each entry is informational if it is backed by
+  # the right hook, warn if not. Bash(rm:*) keeps its own row because
+  # it is the one we actively encourage users to narrow (per SECURITY.md).
+  _rm_hits=$(_any_has 'Bash(rm:*)')
+  if [ -n "$_rm_hits" ]; then
+    if [ "$_bash_hook_ok" -eq 0 ]; then
+      add_check warn permissions rm_scope "Bash(rm:*) present in $_rm_hits. Guard hook is wired so rm -rf ./ is still blocked, but new installs default to Bash(rm:.nanostack/**) + Bash(rm:/tmp/**). See SECURITY.md."
+    else
+      add_check warn permissions rm_scope "Bash(rm:*) present in $_rm_hits AND no Bash guard hook wired. That is the unprotected surface the guard is supposed to cover. See SECURITY.md 'Manual wire-up for existing installs'."
+    fi
+  else
+    add_check pass permissions rm_scope "no broad Bash(rm:*) entries"
+  fi
+
+  _write_hits=$(_any_has 'Write(*)')
+  _edit_hits=$(_any_has 'Edit(*)')
+  _write_surface=""
+  [ -n "$_write_hits" ] && _write_surface="Write(*) in $_write_hits"
+  [ -n "$_edit_hits" ] && _write_surface="${_write_surface:+$_write_surface; }Edit(*) in $_edit_hits"
+  if [ -n "$_write_surface" ]; then
+    if [ "$_write_hook_ok" -eq 0 ]; then
+      add_check pass permissions write_scope "$_write_surface (check-write.sh hook wired, secrets and system paths are blocked)"
+    else
+      add_check warn permissions write_scope "$_write_surface AND no Write/Edit guard hook wired. Agents can touch .env, ~/.ssh, /etc. See SECURITY.md 'Manual wire-up for existing installs'."
+    fi
+  else
+    add_check pass permissions write_scope "no broad Write(*)/Edit(*) entries"
+  fi
+
+  # Informational: allowlisted-by-binary entries rely on the block rules
+  # (after PR #139 block runs before allowlist). No action unless the
+  # Bash hook is not wired.
+  _find_hits=$(_any_has 'Bash(find:*)')
+  _curl_hits=$(_any_has 'Bash(curl:*)')
+  _allow_surface=""
+  [ -n "$_find_hits" ] && _allow_surface="Bash(find:*)"
+  [ -n "$_curl_hits" ] && _allow_surface="${_allow_surface:+$_allow_surface, }Bash(curl:*)"
+  if [ -n "$_allow_surface" ]; then
+    if [ "$_bash_hook_ok" -eq 0 ]; then
+      add_check pass permissions allowlist_scope "$_allow_surface present (guard block rules run before allowlist)"
+    else
+      add_check warn permissions allowlist_scope "$_allow_surface present AND no Bash guard hook wired. find . -delete and curl | sh will not be blocked. See SECURITY.md."
+    fi
+  else
+    add_check pass permissions allowlist_scope "no broad find/curl entries"
+  fi
+
+  # Hook presence: separate rows so the report reads clearly even when
+  # all perm rows are pass.
+  if [ "$_bash_hook_ok" -eq 0 ]; then
+    add_check pass permissions bash_guard "check-dangerous.sh wired as PreToolUse for Bash"
+  else
+    add_check warn permissions bash_guard "check-dangerous.sh NOT wired. Add the Bash matcher from SECURITY.md 'Manual wire-up'."
+  fi
+  if [ "$_write_hook_ok" -eq 0 ]; then
+    add_check pass permissions write_guard "check-write.sh wired as PreToolUse for Write|Edit|MultiEdit"
+  else
+    add_check warn permissions write_guard "check-write.sh NOT wired. Add the Write|Edit|MultiEdit matcher from SECURITY.md 'Manual wire-up'."
+  fi
 fi
 
 # ─── 7. Worker reachability ────────────────────────────────────────────
