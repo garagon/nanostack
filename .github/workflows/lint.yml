@@ -403,9 +403,23 @@ jobs:
           run_case 1 'git reset --hard'
           run_case 1 'git push --force'
           run_case 1 'git push -f origin main'
+          # Blocked via allowlist-precedence fix: binaries on the allowlist
+          # (find, cat, head, tail) still hit block patterns for known-bad
+          # arguments. Covers find-delete, find-exec-rm, .env / .pem reads.
+          run_case 1 'find . -delete'
+          run_case 1 'find . -exec rm -rf {} +'
+          run_case 1 'cat .env'
+          run_case 1 'head .env'
+          run_case 1 'tail secrets.pem'
           # Allowed: specific in-project subpaths + allowlist commands.
           run_case 0 'rm -rf ./docs'
           run_case 0 'rm -rf ./docs/foo'
           run_case 0 'ls -la'
           run_case 0 'git status'
+          run_case 0 'find . -name "*.sh"'
+          run_case 0 'cat README.md'
+          run_case 0 'head -5 script.sh'
+          # --force-with-lease is the guard's own recommended alternative;
+          # it must not trip G-007/G-008.
+          run_case 0 'git push --force-with-lease'
           exit $fail
