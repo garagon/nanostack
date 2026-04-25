@@ -123,7 +123,12 @@ for entry in $UPSTREAM; do
       age="$o_age"
     fi
   done
-  RESULT=$("$SCRIPT_DIR/find-artifact.sh" "$phase" "$age" 2>/dev/null) || RESULT=""
+  # --verify rejects artifacts whose stored content hash does not match
+  # on read, so a tampered file in .nanostack/ cannot become the source
+  # of truth for downstream phases (gates, review context, conflict
+  # precedence). find-artifact.sh returns empty on a verify failure;
+  # that is fine and equivalent to "no artifact for this phase".
+  RESULT=$("$SCRIPT_DIR/find-artifact.sh" "$phase" "$age" --verify 2>/dev/null) || RESULT=""
   if [ -n "$RESULT" ]; then
     $FIRST || ARTIFACTS_JSON="$ARTIFACTS_JSON,"
     ARTIFACTS_JSON="$ARTIFACTS_JSON\"$phase\":\"$RESULT\""

@@ -19,9 +19,16 @@ MISSING=""
 
 # Find the most recent code change timestamp
 LAST_CODE_CHANGE=$(git log -1 --format=%ct 2>/dev/null || echo 0)
-# If no commits yet, use the newest source file modification time
+# If no commits yet, use the newest source file modification time.
+# Try BSD stat (-f %m) first, then fall back to GNU stat (-c %Y) so the
+# gate works on Linux agents, not just macOS. Mirrors the portable
+# pattern already in guard/bin/phase-gate.sh.
 if [ "$LAST_CODE_CHANGE" -eq 0 ]; then
-  LAST_CODE_CHANGE=$(find . -name '*.js' -o -name '*.ts' -o -name '*.html' -o -name '*.css' -o -name '*.py' -o -name '*.go' 2>/dev/null | head -20 | xargs stat -f %m 2>/dev/null | sort -rn | head -1 || echo 0)
+  _srcs=$(find . -name '*.js' -o -name '*.ts' -o -name '*.html' -o -name '*.css' -o -name '*.py' -o -name '*.go' 2>/dev/null | head -20)
+  LAST_CODE_CHANGE=$(echo "$_srcs" | xargs stat -f %m 2>/dev/null | sort -rn | head -1)
+  [ -z "$LAST_CODE_CHANGE" ] && LAST_CODE_CHANGE=$(echo "$_srcs" | xargs stat -c %Y 2>/dev/null | sort -rn | head -1)
+  [ -z "$LAST_CODE_CHANGE" ] && LAST_CODE_CHANGE=0
+  unset _srcs
 fi
 
 # Check for artifacts that are newer than the last code change
