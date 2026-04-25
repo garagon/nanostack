@@ -45,7 +45,7 @@ Initialize the sprint session with autopilot and explicit plan auto-approval. `-
 ~/.claude/skills/nanostack/bin/session.sh init feature --autopilot --plan-approval auto
 ```
 
-Manual feature work should use `/think` + `/nano` instead. There is no `/feature --manual` flag.
+Manual feature work should use `/think` + `/nano` instead. `/feature` itself does not accept a manual mode flag.
 
 Then run `session.sh phase-start plan`. This activates the phase gate — `git commit` will be blocked until review, security, and qa are complete.
 
