@@ -229,25 +229,27 @@ Or pass full JSON for richer detail:
 | Tentative findings | Skip | Skip | Report as TENTATIVE |
 | Confidence gate | 9/10 | 7/10 | 3/10 |
 
+## Session state
+
+Read `profile`, `run_mode`, `autopilot`, and `plan_approval` per `reference/session-state-contract.md`. When `run_mode == report_only`, do not apply fixes; only report findings.
+
 ## Next Step
 
 After the security audit is complete and the artifact is saved:
 
-**If AUTOPILOT is active and no critical/high findings:** Proceed to next pending skill (`/qa` or `/ship`). Show: `Autopilot: security grade X (0 critical, 0 high). Running /qa...`
+**If `autopilot == true` and no critical/high findings:** Proceed to next pending skill. Show: `Autopilot: security grade X (0 critical, 0 high). Running /qa...`
 
-**If AUTOPILOT is active but critical or high findings found:** Stop and ask the user to review. Show the findings and wait. After resolution, continue autopilot.
+**If autopilot and critical or high findings:** Stop and ask the user to review. Show the findings and wait. After resolution, continue autopilot.
 
-**Otherwise:** Determine which phases still need to run (do not suggest skills the user already ran). Run:
+**Otherwise:** Read the next action from session state:
 
 ```bash
-~/.claude/skills/nanostack/bin/next-step.sh security
+~/.claude/skills/nanostack/bin/next-step.sh --json
 ```
 
-The script outputs a space-separated list of pending phases. Tell the user only what is pending. Examples:
-- Output `review qa ship` → "Security audit complete. Next: `/review`, then `/qa`, then `/ship`."
-- Output `qa ship`        → "Security audit complete. Next: `/qa`, then `/ship`."
-- Output `ship`           → "Security audit complete. Ready for `/ship`."
-- Empty output            → "Security audit complete. Sprint is fully verified."
+Use `.user_message` for the prose and `.next_phase` for the phase name. The legacy positional form (`next-step.sh security`) is still supported.
+
+When `profile == "guided"`, also include the four blocks from `reference/session-state-contract.md` (what was checked, safe to try, one next action, what remains unverified) at the top of the user-facing output.
 
 ## Final Headline
 

@@ -167,25 +167,29 @@ Or pass full JSON for richer detail:
 | Conflict detection | Auto-resolve | Document inline | BLOCKING until resolved |
 | Output | Blocking issues only | All categories | All + rationale per finding |
 
+## Session state
+
+Read `profile`, `run_mode`, `autopilot`, and `plan_approval` per `reference/session-state-contract.md`. When `run_mode == report_only`, do not apply any fix or write any file as part of review; only report what would change.
+
 ## Next Step
 
 After the review is complete and the artifact is saved, proceed:
 
-**If AUTOPILOT is active and no blocking issues found:** Proceed directly to the next pending skill (`/security` or `/qa`). Show: `Autopilot: review complete (X findings, 0 blocking). Running /security...`
+**If `autopilot == true` (or `plan_approval == "auto"`) and no blocking issues found:** Proceed directly to the next pending skill. Show: `Autopilot: review complete (X findings, 0 blocking). Running /security...`
 
-**If AUTOPILOT is active but blocking issues found:** Stop and ask the user to resolve. Show the blocking issues and wait. After resolution, continue autopilot.
+**If autopilot and blocking issues found:** Stop and ask the user to resolve. Show the blocking issues and wait. After resolution, continue autopilot.
 
-**Otherwise:** Determine which phases still need to run (do not suggest skills the user already ran). Run:
+**Otherwise:** Read the next action from session state. Do not encode the wording here:
 
 ```bash
-~/.claude/skills/nanostack/bin/next-step.sh review
+~/.claude/skills/nanostack/bin/next-step.sh --json
 ```
 
-The script outputs a space-separated list of pending phases (e.g. `security qa ship`). Tell the user only what is pending. Examples:
-- Output `security qa ship` → "Review complete. Next: `/security`, then `/qa`, then `/ship`."
-- Output `qa ship`          → "Review complete. Next: `/qa`, then `/ship`."
-- Output `ship`             → "Review complete. Ready for `/ship`."
-- Empty output              → "Review complete. Sprint is fully verified."
+Use `.user_message` for the prose to show the user (it is profile-aware). Use `.next_phase` to know which phase comes next.
+
+The legacy positional form (`next-step.sh review`) still works and emits a space-separated list of pending phases for the autopilot logging line below; prefer `--json` for everything else.
+
+When `profile == "guided"`, also include the four blocks from `reference/session-state-contract.md` (what was checked, safe to try, one next action, what remains unverified) at the top of the user-facing output.
 
 ## Final Headline
 

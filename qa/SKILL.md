@@ -204,25 +204,27 @@ Or pass full JSON for richer detail:
 | Regression tests | Skip | If fixing a bug | Full regression suite |
 | WTF threshold | 20% | 20% | 20% |
 
+## Session state
+
+Read `profile`, `run_mode`, `autopilot`, and `plan_approval` per `reference/session-state-contract.md`. When `run_mode == report_only`, do not auto-fix bugs; only report what fails.
+
 ## Next Step
 
 After QA is complete and the artifact is saved:
 
-**If AUTOPILOT is active and tests pass:** Proceed to `/ship`. Show: `Autopilot: qa passed (X tests, 0 failed). Running /ship...`
+**If `autopilot == true` and tests pass:** Proceed to `/ship`. Show: `Autopilot: qa passed (X tests, 0 failed). Running /ship...`
 
-**If AUTOPILOT is active but tests fail:** Stop and ask the user. Show failures and wait.
+**If autopilot and tests fail:** Stop and ask the user. Show failures and wait.
 
-**Otherwise:** Determine which phases still need to run (do not suggest skills the user already ran). Run:
+**Otherwise:** Read the next action from session state:
 
 ```bash
-~/.claude/skills/nanostack/bin/next-step.sh qa
+~/.claude/skills/nanostack/bin/next-step.sh --json
 ```
 
-The script outputs a space-separated list of pending phases. Tell the user only what is pending. Examples:
-- Output `review security ship` → "QA complete. Next: `/review`, then `/security`, then `/ship`."
-- Output `security ship`        → "QA complete. Next: `/security`, then `/ship`."
-- Output `ship`                 → "QA complete. Ready for `/ship`."
-- Empty output                  → "QA complete. Sprint is fully verified."
+Use `.user_message` for the prose and `.next_phase` for the phase name. The legacy positional form (`next-step.sh qa`) is still supported.
+
+When `profile == "guided"`, also include the four blocks from `reference/session-state-contract.md` (what was checked, safe to try, one next action, what remains unverified) at the top of the user-facing output.
 
 ## Final Headline
 
