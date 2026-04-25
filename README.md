@@ -39,7 +39,7 @@ Works with Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity,
 
 Your agent is already capable of writing code. What it lacks is structure. Nanostack is seven specialists the agent invokes in order, each one reading what came before. Scope gets challenged before planning. The plan gets named files and risks before building. The build gets reviewed, audited, and tested before shipping. Ship creates the PR, verifies CI, and writes the sprint journal.
 
-Every step is enforced. You cannot `/ship` without `/review`, `/security`, and `/qa`. Nothing falls through the cracks because every step reads the artifact of the previous one.
+Every step reads the artifact the previous step wrote, so nothing falls through the cracks. On Claude Code the pipeline is enforced via PreToolUse hooks: `git commit` is blocked until `/review`, `/security`, and `/qa` produce fresh artifacts. On other agents the same workflow runs as guided instructions; see [What enforces on which agent](#what-enforces-on-which-agent) for the per-host capability table.
 
 |        | Step              | What the specialist does                                                |
 | ------ | ----------------- | ----------------------------------------------------------------------- |
@@ -183,7 +183,7 @@ Nanostack is a process, not a collection of tools. The skills run in the order a
 /think → /nano → build → /review → /qa → /security → /ship
 ```
 
-Each skill feeds into the next. `/nano` writes an artifact that `/review` reads for scope drift detection. `/review` catches conflicts with `/security` findings. `/ship` verifies everything is clean before creating the PR. The phase gate enforces the pipeline: `git commit` is blocked until review, security and qa are done. Nothing falls through the cracks because every step knows what came before it, and skipping steps is not an option.
+Each skill feeds into the next. `/nano` writes an artifact that `/review` reads for scope drift detection. `/review` catches conflicts with `/security` findings. `/ship` verifies everything is clean before creating the PR. On Claude Code the phase gate enforces the pipeline at the hook layer: `git commit` is blocked until review, security, and qa have fresh artifacts. On agents without hook support the same gate runs as guided instructions, so the safety depends on the agent following them; see [What enforces on which agent](#what-enforces-on-which-agent).
 
 | Skill | Your specialist | What they do |
 |-------|----------------|--------------|
@@ -346,7 +346,7 @@ Discuss the idea, approve the brief, walk away. The agent runs the full sprint:
 /nano → build → /review → /security → /qa → /ship
 ```
 
-The phase gate enforces the pipeline. Even if the agent judges a task as "simple" and tries to skip review or security, `git commit` is blocked until all phases have fresh artifacts. No instructions to follow. The hook stops the commit.
+On Claude Code the phase gate enforces the pipeline at the hook layer: even if the agent judges a task as "simple" and tries to skip review or security, `git commit` is blocked until all phases have fresh artifacts. The hook stops the commit, no instructions involved. On agents that do not support pre-action hooks the same gate runs as a rule the agent reads; the gate is honest about the difference and `/nano-doctor` reports the actual level for your install.
 
 Autopilot only stops if:
 - `/review` finds blocking issues that need your decision
@@ -461,19 +461,19 @@ All rules live in [`guard/rules.json`](guard/rules.json). Each rule has an ID, r
 
 ### What enforces on which agent
 
-Honest scope. Nanostack ships skill files that work the same in every supported agent, but the **enforcement layer** (hooks that block commands before they run) depends on what each agent supports today.
+Honest scope. Nanostack ships skill files that work the same in every supported agent, but the **enforcement layer** (hooks that block commands before they run) depends on what each agent supports today. The capability that ships for each host lives in [`adapters/`](adapters/) as a small JSON file; setup, doctor, and this table all read from those files. Levels follow the L0-L3 vocabulary documented in [`reference/host-adapter-schema.md`](reference/host-adapter-schema.md).
 
-| Agent | Skills | Hook enforcement | What this means |
-|---|---|---|---|
-| Claude Code | yes | yes (Bash, Write, Edit, MultiEdit) | Block rules and the Write/Edit denylist run before every tool call. The user does not have to read the rules; the hook does. |
-| Cursor | yes | no | Skills are exposed as rules text. The agent reads the rules and is expected to follow them. There is no pre-tool-use hook on Cursor today. |
-| OpenAI Codex | yes | no | Same as Cursor: instructions only. |
-| OpenCode | yes | no | Same. |
-| Gemini CLI / Antigravity / Amp / Cline | yes | no | Same. |
+| Agent | Bash guard | Write/Edit guard | Phase gate | What this means |
+|---|---|---|---|---|
+| Claude Code | enforced (L3) | enforced (L3) | enforced (L3) | Block rules and the Write/Edit denylist run before every tool call. The user does not have to read the rules; the hook does. CI continuously verifies the hook still blocks. |
+| Cursor | guided (L0) | guided (L0) | guided (L0) | Skills are exposed as rules text. The agent reads the rules and is expected to follow them. No pre-tool-use hook on Cursor today. |
+| OpenAI Codex | guided (L0) | guided (L0) | guided (L0) | Skill folder under `~/.codex/skills/`; no hook integration today. |
+| OpenCode | guided (L0) | guided (L0) | guided (L0) | Native skill folder; no hook integration today. |
+| Gemini CLI | guided (L0) | guided (L0) | guided (L0) | Installed as a Gemini extension; no hook integration today. |
 
-When hooks are not available, the protection downgrades from "blocked at the system call" to "agent should know better." Run `/nano-doctor` after install on any agent to see the actual state. If you want hard enforcement, use Claude Code; if you accept agent-level discipline, the rest still ship the same workflow.
+When hooks are not available, the protection downgrades from "blocked at the system call" to "agent should know better." Run `/nano-doctor` after install on any agent to see the actual state, including any drift between what the adapter declares and what your install really wires. If you want hard enforcement, use Claude Code; if you accept agent-level discipline, the rest still ship the same workflow.
 
-This gap is the single biggest known caveat in the framework. The roadmap is to add the same enforcement layer per agent as their tooling exposes the right hooks.
+This gap is the single biggest known caveat in the framework. The roadmap is to add the same enforcement layer per agent as their tooling exposes the right hooks. Each adapter file carries a `last_verified` date and a verification source so users can tell which guarantees are CI-asserted today and which are manual.
 
 ## Install
 
