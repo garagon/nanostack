@@ -353,7 +353,94 @@ else
   fi
 fi
 
-# ─── 7. Worker reachability ────────────────────────────────────────────
+# ─── 7. Host protection level ──────────────────────────────────────────
+# Detect which host CLIs are installed, look up each one's declared
+# capabilities from adapters/<host>.json, and cross-check against what
+# this install actually does. The "observation overrides declaration"
+# rule from reference/host-adapter-schema.md applies: if Claude's
+# adapter declares bash_guard=enforced but the local settings.json
+# lacks the hook, the user gets the lower observed capability, not the
+# stale promise.
+
+_adapters_dir="$NANO_SKILL_DIR/adapters"
+
+_capability_label() {
+  case "$1" in
+    enforced)          echo "Blocked when unsafe (L3)" ;;
+    hooked)            echo "Guarded (L2)" ;;
+    detectable)        echo "Checked (L1)" ;;
+    instructions_only) echo "Guided (L0)" ;;
+    unsupported)       echo "Not available" ;;
+    host_dependent)    echo "Depends on host config" ;;
+    *)                 echo "$1" ;;
+  esac
+}
+
+if [ ! -d "$_adapters_dir" ]; then
+  add_check warn host adapters_present "adapters/ directory missing at $_adapters_dir; reinstall to get capability declarations."
+else
+  _detected_hosts=""
+  command -v claude   >/dev/null 2>&1 && _detected_hosts="$_detected_hosts claude"
+  command -v codex    >/dev/null 2>&1 && _detected_hosts="$_detected_hosts codex"
+  command -v cursor   >/dev/null 2>&1 && _detected_hosts="$_detected_hosts cursor"
+  command -v opencode >/dev/null 2>&1 && _detected_hosts="$_detected_hosts opencode"
+  command -v gemini   >/dev/null 2>&1 && _detected_hosts="$_detected_hosts gemini"
+  _detected_hosts=$(echo "$_detected_hosts" | sed 's/^[[:space:]]*//')
+
+  if [ -z "$_detected_hosts" ]; then
+    add_check pass host detected "no agent CLI found; nanostack is installed but the agent it runs in is the source of protection."
+  else
+    for _host in $_detected_hosts; do
+      _adapter="$_adapters_dir/$_host.json"
+      if [ ! -f "$_adapter" ]; then
+        add_check warn host "${_host}_protection" "no adapter file at adapters/$_host.json. Reinstall or open an issue."
+        continue
+      fi
+      _decl_bash=$(jq -r '.bash_guard'  "$_adapter" 2>/dev/null)
+      _decl_write=$(jq -r '.write_guard' "$_adapter" 2>/dev/null)
+      _decl_phase=$(jq -r '.phase_gate'  "$_adapter" 2>/dev/null)
+      _verif=$(jq -r '.verification.method // "unknown"' "$_adapter" 2>/dev/null)
+
+      # Observation override: only Claude has a local settings.json
+      # whose contents we can read to confirm the declaration. For
+      # every other host the declaration is the best we have today
+      # (verified at last_verified, no runtime cross-check possible
+      # from inside the agent's own process).
+      _obs_bash="$_decl_bash"
+      _obs_write="$_decl_write"
+      if [ "$_host" = "claude" ]; then
+        if [ -n "$_settings_paths" ]; then
+          if [ "$_decl_bash" = "enforced" ] && [ "$_bash_hook_ok" -ne 0 ]; then
+            _obs_bash="instructions_only"
+          fi
+          if [ "$_decl_write" = "enforced" ] && [ "$_write_hook_ok" -ne 0 ]; then
+            _obs_write="instructions_only"
+          fi
+        fi
+      fi
+
+      _label_bash=$(_capability_label "$_obs_bash")
+      _label_write=$(_capability_label "$_obs_write")
+      _label_phase=$(_capability_label "$_decl_phase")
+
+      _drift=""
+      [ "$_decl_bash"  != "$_obs_bash"  ] && _drift="${_drift:+$_drift; }bash declared $_decl_bash but observed $_obs_bash"
+      [ "$_decl_write" != "$_obs_write" ] && _drift="${_drift:+$_drift; }write declared $_decl_write but observed $_obs_write"
+
+      _detail="bash=$_label_bash, write=$_label_write, phase=$_label_phase, verification=$_verif"
+      if [ -n "$_drift" ]; then
+        add_check warn host "${_host}_protection" "$_detail. Drift: $_drift. Run /nano-doctor --fix to wire missing hooks."
+      else
+        case "$_obs_bash" in
+          enforced) add_check pass host "${_host}_protection" "$_detail" ;;
+          *)        add_check pass host "${_host}_protection" "$_detail (workflow is guided, not enforced, on this host)" ;;
+        esac
+      fi
+    done
+  fi
+fi
+
+# ─── 8. Worker reachability ────────────────────────────────────────────
 
 if $OFFLINE_MODE; then
   add_check pass network worker_reachable "skipped (--offline)"
@@ -370,7 +457,7 @@ else
   fi
 fi
 
-# ─── 8. Hook wire-up under --fix ───────────────────────────────────────
+# ─── 9. Hook wire-up under --fix ───────────────────────────────────────
 # When the user passes --fix and the bash_guard or write_guard rows
 # warned, write the missing PreToolUse entry into the local
 # .claude/settings.json. Round 4 audit asked for migration to be a
