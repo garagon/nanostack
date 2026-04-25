@@ -73,7 +73,16 @@ The guard runs on every Bash tool use, ahead of the in-project fast-path, and lo
 
 Installs that existed before the narrowing got `Bash(rm:*)` written to their `.claude/settings.json`. Running `init-project.sh` a second time does NOT remove it. The install keeps what it had.
 
-`/nano-doctor` surfaces a warning when a broad `Bash(rm:*)` entry is present. To migrate, edit `.claude/settings.json`, remove the `Bash(rm:*)` line, and re-run `init-project.sh` to pick up the narrow defaults.
+`/nano-doctor` surfaces a warning when a broad `Bash(rm:*)` entry is present. To migrate without editing JSON by hand, run one of:
+
+| Command | What it does |
+|---|---|
+| `init-project.sh --check` | Read-only diagnostic. Runs `/nano-doctor` and exits. |
+| `init-project.sh --repair` | Adds missing hooks and adds narrow rm rules. Never removes existing entries. Safe to run on any project. |
+| `init-project.sh --migrate-hooks` | Adds missing PreToolUse hooks only. |
+| `init-project.sh --migrate-permissions` | Removes `Bash(rm:*)` and adds `Bash(rm:.nanostack/**)` and `Bash(rm:/tmp/**)`. |
+
+Every migration path makes a timestamped backup of `.claude/settings.json` before changing anything, and re-runs `/nano-doctor` at the end so you can see the new state without a separate command.
 
 ### Write and Edit are hooked too
 
