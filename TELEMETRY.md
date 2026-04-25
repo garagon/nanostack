@@ -67,7 +67,7 @@ Every recorded event is one JSON object on one line in `~/.nanostack/analytics/s
   "ts": "2026-04-21T12:00:00Z",
   "skill": "think",
   "session_id": "12345-1776747000",
-  "nanostack_version": "0.8.0",
+  "nanostack_version": "0.9.0",
   "os": "darwin",
   "arch": "arm64",
   "duration_s": 180,
