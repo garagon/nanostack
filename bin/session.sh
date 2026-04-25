@@ -10,6 +10,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+NANOSTACK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
 source "$SCRIPT_DIR/lib/audit.sh"
 [ -f "$SCRIPT_DIR/lib/preflight.sh" ] && { source "$SCRIPT_DIR/lib/preflight.sh"; nanostack_require jq; }
@@ -19,22 +20,150 @@ PROJECT="$(pwd)"
 PROJECT_NAME=$(basename "$PROJECT")
 NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+# ─── host + capability detection ────────────────────────────
+# Used by cmd_init to snapshot what the running host can actually
+# enforce. Resolution order: explicit flag > NANOSTACK_HOST env >
+# script path > first detected CLI > "unknown".
+detect_host() {
+  if [ -n "${NANOSTACK_HOST:-}" ]; then
+    echo "$NANOSTACK_HOST"; return
+  fi
+  case "$SCRIPT_DIR" in
+    */.claude/*)       echo "claude"; return ;;
+    */.cursor/*)       echo "cursor"; return ;;
+    */.codex/*)        echo "codex"; return ;;
+    */opencode/*)      echo "opencode"; return ;;
+    */.gemini/*)       echo "gemini"; return ;;
+  esac
+  for h in claude codex cursor opencode gemini; do
+    if command -v "$h" >/dev/null 2>&1; then echo "$h"; return; fi
+  done
+  echo "unknown"
+}
+
+# Read host adapter capabilities into a JSON object suitable for
+# the session.capabilities field. If the adapter is missing or
+# unreadable, fall back to instructions_only (the conservative
+# default that never overstates what the host actually does).
+read_capabilities() {
+  local host="$1"
+  local adapter="$NANOSTACK_ROOT/adapters/${host}.json"
+  if [ -f "$adapter" ]; then
+    jq '{
+      skill_discovery: (.skill_discovery // "instructions_only"),
+      bash_guard:      (.bash_guard      // "instructions_only"),
+      write_guard:     (.write_guard     // "instructions_only"),
+      phase_gate:      (.phase_gate      // "instructions_only"),
+      verification_method: (.verification.method // "unknown"),
+      last_verified:   (.last_verified   // null)
+    }' "$adapter"
+  else
+    jq -n '{
+      skill_discovery: "instructions_only",
+      bash_guard:      "instructions_only",
+      write_guard:     "instructions_only",
+      phase_gate:      "instructions_only",
+      verification_method: "unknown",
+      last_verified: null
+    }'
+  fi
+}
+
+# Resolve the v1.0 profile per the spec rules:
+#   1. explicit --profile flag (if non-empty)
+#   2. .nanostack/config.json preferences.profile
+#   3. no git repo -> guided
+#   4. all guards instructions_only -> guided
+#   5. else professional
+resolve_profile() {
+  local explicit="$1"
+  local caps_json="$2"
+  if [ -n "$explicit" ]; then echo "$explicit"; return; fi
+  if [ -f .nanostack/config.json ]; then
+    local cfg
+    cfg=$(jq -r '.preferences.profile // empty' .nanostack/config.json 2>/dev/null)
+    if [ -n "$cfg" ]; then echo "$cfg"; return; fi
+  fi
+  if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    echo "guided"; return
+  fi
+  local bash_g write_g phase_g
+  bash_g=$(echo "$caps_json"  | jq -r '.bash_guard')
+  write_g=$(echo "$caps_json" | jq -r '.write_guard')
+  phase_g=$(echo "$caps_json" | jq -r '.phase_gate')
+  if [ "$bash_g" = "instructions_only" ] && [ "$write_g" = "instructions_only" ] && [ "$phase_g" = "instructions_only" ]; then
+    echo "guided"
+  else
+    echo "professional"
+  fi
+}
+
+# Default policy values per profile. Guided defaults must never
+# be `allow` (spec). User config can override per-key but cannot
+# downgrade Guided to allow.
+default_policy_json() {
+  local profile="$1"
+  case "$profile" in
+    guided)
+      jq -n '{outside_project_write:"block", env_read:"block", plain_language:true}'
+      ;;
+    *)
+      jq -n '{outside_project_write:"warn",  env_read:"warn",  plain_language:false}'
+      ;;
+  esac
+}
+
 # ─── init ───────────────────────────────────────────────────
 cmd_init() {
   local type="${1:-development}"
   local issue_url=""
   local autopilot="false"
   local goal=""
+  local profile_flag=""
+  local run_mode="normal"
+  local plan_approval=""
+  local host_flag=""
 
   shift || true
   while [ $# -gt 0 ]; do
     case "$1" in
-      --issue) issue_url="$2"; shift 2 ;;
-      --autopilot) autopilot="true"; shift ;;
-      --goal) goal="$2"; shift 2 ;;
+      --issue)         issue_url="$2"; shift 2 ;;
+      --autopilot)     autopilot="true"; shift ;;
+      --goal)          goal="$2"; shift 2 ;;
+      --profile)       profile_flag="$2"; shift 2 ;;
+      --run-mode)      run_mode="$2"; shift 2 ;;
+      --plan-approval) plan_approval="$2"; shift 2 ;;
+      --host)          host_flag="$2"; shift 2 ;;
       *) shift ;;
     esac
   done
+
+  # Validate enumerated flag values up-front. The session is the
+  # workflow source of truth, so silently accepting a typo would
+  # poison every downstream skill that reads from it.
+  case "$profile_flag" in
+    ""|guided|professional) ;;
+    *) echo "ERROR: --profile must be guided or professional, got: $profile_flag" >&2; exit 1 ;;
+  esac
+  case "$run_mode" in
+    normal|report_only) ;;
+    *) echo "ERROR: --run-mode must be normal or report_only, got: $run_mode" >&2; exit 1 ;;
+  esac
+  case "$plan_approval" in
+    ""|manual|auto|not_required) ;;
+    *) echo "ERROR: --plan-approval must be manual, auto, or not_required, got: $plan_approval" >&2; exit 1 ;;
+  esac
+
+  # Implications declared in the spec:
+  #   --autopilot        => plan_approval=auto (unless caller set explicitly)
+  #   --run-mode report_only => plan_approval=not_required (always)
+  if [ "$autopilot" = "true" ] && [ -z "$plan_approval" ]; then
+    plan_approval="auto"
+  fi
+  if [ "$run_mode" = "report_only" ]; then
+    plan_approval="not_required"
+  fi
+  [ -z "$plan_approval" ] && plan_approval="manual"
 
   # Archive existing session if present
   if [ -f "$SESSION_FILE" ]; then
@@ -49,6 +178,34 @@ cmd_init() {
   local repo=""
   repo=$(git remote get-url origin 2>/dev/null | sed 's|.*github.com[:/]||; s|\.git$||') || true
 
+  local host
+  host="${host_flag:-$(detect_host)}"
+
+  local capabilities_json
+  capabilities_json=$(read_capabilities "$host")
+
+  local profile
+  profile=$(resolve_profile "$profile_flag" "$capabilities_json")
+
+  local policy_json
+  policy_json=$(default_policy_json "$profile")
+  # Merge user overrides from .nanostack/config.json. Allowed values
+  # are allow|warn|confirm|block; Guided refuses to downgrade to
+  # allow per spec (silent allow is forbidden).
+  if [ -f .nanostack/config.json ]; then
+    local user_policy
+    user_policy=$(jq -r '.preferences.policies // {} | tojson' .nanostack/config.json 2>/dev/null)
+    if [ -n "$user_policy" ] && [ "$user_policy" != "null" ] && [ "$user_policy" != "{}" ]; then
+      policy_json=$(echo "$policy_json" | jq --argjson u "$user_policy" --arg profile "$profile" '
+        . as $base
+        | reduce ($u | to_entries[]) as $e ($base;
+            if ($e.value == "allow" and $profile == "guided") then .
+            else .[$e.key] = $e.value
+            end)
+      ')
+    fi
+  fi
+
   jq -n \
     --arg id "$session_id" \
     --arg type "$type" \
@@ -57,19 +214,33 @@ cmd_init() {
     --arg repo "$repo" \
     --arg workspace "$PROJECT" \
     --arg date "$NOW" \
+    --arg host "$host" \
+    --arg profile "$profile" \
+    --arg run_mode "$run_mode" \
+    --arg plan_approval "$plan_approval" \
     --argjson autopilot "$autopilot" \
+    --argjson capabilities "$capabilities_json" \
+    --argjson policy "$policy_json" \
     '{
+      schema_version: "2",
       session_id: $id,
       type: $type,
       issue_url: (if $issue != "" then $issue else null end),
       goal: (if $goal != "" then $goal else null end),
       repo: (if $repo != "" then $repo else null end),
       workspace: $workspace,
+      host: $host,
+      profile: $profile,
+      run_mode: $run_mode,
+      autopilot: $autopilot,
+      plan_approval: $plan_approval,
+      capabilities: $capabilities,
+      policy: $policy,
       current_phase: null,
       next_phase: null,
-      autopilot: $autopilot,
       stop_conditions_met: [],
       phase_log: [],
+      evidence: {review:null, security:null, qa:null, ship:null},
       budget: {
         max_usd: null,
         spent_usd: 0,
@@ -258,6 +429,52 @@ cmd_phase_complete() {
   echo "OK: $phase completed"
 }
 
+# Compatibility layer for v1 sessions. When schema_version is missing
+# or "1", derive v2 fields from what is available: profile from local
+# git presence, plan_approval from autopilot, etc. Readers must never
+# fail on a v1 session.
+v2_compat_filter() {
+  cat <<'JQ'
+. as $s
+| ($s.schema_version // "1") as $sv
+| ($s.autopilot // false) as $autopilot
+| ($s.profile // "") as $explicit_profile
+| ($s.workspace // "") as $ws
+| (if $explicit_profile != "" then $explicit_profile
+   else (if ($s.capabilities // null) == null then "guided" else "professional" end)
+  end) as $profile
+| (if ($s.plan_approval // "") != "" then $s.plan_approval
+   elif $autopilot then "auto"
+   else "manual" end) as $plan_approval
+| (if ($s.run_mode // "") != "" then $s.run_mode else "normal" end) as $run_mode
+| (if ($s.host // "") != "" then $s.host else "unknown" end) as $host
+| (if ($s.capabilities // null) != null then $s.capabilities
+   else {
+     skill_discovery: "instructions_only",
+     bash_guard: "instructions_only",
+     write_guard: "instructions_only",
+     phase_gate: "instructions_only",
+     verification_method: "unknown",
+     last_verified: null
+   } end) as $caps
+| (if ($s.policy // null) != null then $s.policy
+   else (if $profile == "guided"
+         then {outside_project_write:"block", env_read:"block", plain_language:true}
+         else {outside_project_write:"warn",  env_read:"warn",  plain_language:false} end)
+   end) as $policy
+| $s + {
+    schema_version: $sv,
+    profile: $profile,
+    run_mode: $run_mode,
+    autopilot: $autopilot,
+    plan_approval: $plan_approval,
+    host: $host,
+    capabilities: $caps,
+    policy: $policy
+  }
+JQ
+}
+
 # ─── resume ─────────────────────────────────────────────────
 cmd_resume() {
   if [ ! -f "$SESSION_FILE" ]; then
@@ -273,44 +490,25 @@ cmd_resume() {
     exit 0
   fi
 
-  local session_id current_phase type autopilot next_phase
-  session_id=$(jq -r '.session_id' "$SESSION_FILE")
-  current_phase=$(jq -r '.current_phase // "none"' "$SESSION_FILE")
-  type=$(jq -r '.type' "$SESSION_FILE")
-  autopilot=$(jq -r '.autopilot // false' "$SESSION_FILE")
-  next_phase=$(jq -r '.next_phase // "none"' "$SESSION_FILE")
-
-  local completed_phases
-  completed_phases=$(jq -r '[.phase_log[] | select(.status == "completed") | .phase] | join(", ")' "$SESSION_FILE")
-
-  local last_status
-  last_status=$(jq -r '.phase_log[-1].status // "none"' "$SESSION_FILE")
-
-  local last_phase
-  last_phase=$(jq -r '.phase_log[-1].phase // "none"' "$SESSION_FILE")
-
-  jq -n \
-    --arg resumable "true" \
-    --arg session_id "$session_id" \
-    --arg type "$type" \
-    --arg current_phase "$current_phase" \
-    --arg last_phase "$last_phase" \
-    --arg last_status "$last_status" \
-    --arg completed "$completed_phases" \
-    --argjson autopilot "$autopilot" \
-    --arg next_phase "$next_phase" \
-    '{
-      resumable: true,
-      session_id: $session_id,
-      type: $type,
-      autopilot: $autopilot,
-      current_phase: $current_phase,
-      next_phase: $next_phase,
-      last_phase: $last_phase,
-      last_status: $last_status,
-      completed_phases: $completed,
-      action: (if $last_status == "in_progress" then "restart_phase" else "next_phase" end)
-    }'
+  jq "$(v2_compat_filter)"' | {
+    resumable: true,
+    session_id: .session_id,
+    type: .type,
+    schema_version: .schema_version,
+    profile: .profile,
+    run_mode: .run_mode,
+    autopilot: .autopilot,
+    plan_approval: .plan_approval,
+    host: .host,
+    capabilities: .capabilities,
+    policy: .policy,
+    current_phase: (.current_phase // "none"),
+    next_phase: (.next_phase // "none"),
+    last_phase: (.phase_log[-1].phase // "none"),
+    last_status: (.phase_log[-1].status // "none"),
+    completed_phases: ([.phase_log[] | select(.status == "completed") | .phase] | join(", ")),
+    action: (if (.phase_log[-1].status // "") == "in_progress" then "restart_phase" else "next_phase" end)
+  }' "$SESSION_FILE"
 }
 
 # ─── status ─────────────────────────────────────────────────
@@ -320,10 +518,18 @@ cmd_status() {
     exit 0
   fi
 
-  jq '{
+  jq "$(v2_compat_filter)"' | {
     active: true,
     session_id: .session_id,
     type: .type,
+    schema_version: .schema_version,
+    profile: .profile,
+    run_mode: .run_mode,
+    autopilot: .autopilot,
+    plan_approval: .plan_approval,
+    host: .host,
+    capabilities: .capabilities,
+    policy: .policy,
     current_phase: .current_phase,
     phases_completed: [.phase_log[] | select(.status == "completed") | .phase],
     phases_in_progress: [.phase_log[] | select(.status == "in_progress") | .phase],

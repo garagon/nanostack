@@ -600,3 +600,150 @@ jobs:
             esac
           done
           exit $fail
+
+  session-schema-v2:
+    name: Session schema v2 contract
+    runs-on: ubuntu-latest
+    # bin/session.sh is the canonical writer of session.json. Every other
+    # skill reads from it. Drift in the v2 shape silently breaks
+    # plan_approval routing, profile detection, and policy enforcement.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Init sessions and assert v2 fields
+        run: |
+          set -e
+          fail=0
+          tmp=$(mktemp -d)
+          cd "$tmp"
+          git init -q
+          mkdir -p .nanostack
+          export NANOSTACK_STORE="$tmp/.nanostack"
+          NS=$GITHUB_WORKSPACE/bin/session.sh
+
+          assert_field() {
+            local file="$1" expr="$2" want="$3"
+            local got
+            got=$(jq -r "$expr" "$file")
+            if [ "$got" != "$want" ]; then
+              echo "FAIL: $file $expr = '$got' (want '$want')"
+              fail=1
+            fi
+          }
+
+          # 1. --profile guided
+          "$NS" init development --profile guided >/dev/null
+          assert_field .nanostack/session.json '.schema_version' '2'
+          assert_field .nanostack/session.json '.profile'        'guided'
+          assert_field .nanostack/session.json '.run_mode'       'normal'
+          assert_field .nanostack/session.json '.plan_approval'  'manual'
+          # Policy defaults for guided
+          assert_field .nanostack/session.json '.policy.outside_project_write' 'block'
+          assert_field .nanostack/session.json '.policy.env_read'              'block'
+
+          # 2. --autopilot implies plan_approval=auto
+          "$NS" init feature --autopilot >/dev/null
+          assert_field .nanostack/session.json '.autopilot'      'true'
+          assert_field .nanostack/session.json '.plan_approval'  'auto'
+
+          # 3. --run-mode report_only forces plan_approval=not_required
+          "$NS" init development --run-mode report_only >/dev/null
+          assert_field .nanostack/session.json '.run_mode'       'report_only'
+          assert_field .nanostack/session.json '.plan_approval'  'not_required'
+
+          # 4. Bad enum values are rejected
+          if "$NS" init development --profile bogus >/dev/null 2>&1; then
+            echo "FAIL: --profile bogus was accepted"
+            fail=1
+          fi
+          if "$NS" init development --run-mode bogus >/dev/null 2>&1; then
+            echo "FAIL: --run-mode bogus was accepted"
+            fail=1
+          fi
+
+          # 5. v1 session compatibility — readers must not crash
+          cat > .nanostack/session.json <<EOF
+          {
+            "session_id": "old-v1",
+            "type": "development",
+            "workspace": "$tmp",
+            "autopilot": true,
+            "phase_log": [],
+            "started_at": "2026-01-01T00:00:00Z",
+            "last_updated": "2026-01-01T00:00:00Z"
+          }
+          EOF
+          out=$("$NS" status)
+          echo "$out" | jq -e '.profile' >/dev/null || { echo "FAIL: status on v1 session has no profile"; fail=1; }
+          echo "$out" | jq -e '.plan_approval == "auto"' >/dev/null || { echo "FAIL: v1 autopilot=true should map to plan_approval=auto"; fail=1; }
+          echo "$out" | jq -e '.host' >/dev/null || { echo "FAIL: status on v1 session has no host"; fail=1; }
+
+          exit $fail
+
+  next-step-contract:
+    name: next-step.sh state matrix
+    runs-on: ubuntu-latest
+    # next-step.sh is the single source of truth for "what runs next".
+    # Skills will be wired to its --json output in Sprint 3, so the JSON
+    # shape and the legacy text shape both have to stay stable.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise next-step in each post-build state
+        run: |
+          set -e
+          fail=0
+          tmp=$(mktemp -d)
+          cd "$tmp"
+          git init -q
+          mkdir -p .nanostack
+          export NANOSTACK_STORE="$tmp/.nanostack"
+          NS=$GITHUB_WORKSPACE/bin/session.sh
+          NEXT=$GITHUB_WORKSPACE/bin/next-step.sh
+
+          "$NS" init feature --profile guided --autopilot >/dev/null
+
+          # Empty post-build state: review/security/qa all pending.
+          out=$("$NEXT" --json)
+          echo "$out" | jq -e '.profile == "guided"' >/dev/null || { echo "FAIL: profile not propagated"; fail=1; }
+          echo "$out" | jq -e '.next_phase == "review"' >/dev/null || { echo "FAIL: empty state should suggest review"; fail=1; }
+          echo "$out" | jq -e '.can_ship == false' >/dev/null || { echo "FAIL: empty state should not allow ship"; fail=1; }
+          echo "$out" | jq -e '.pending_phases | length == 3' >/dev/null || { echo "FAIL: empty state should list 3 pending peers"; fail=1; }
+          echo "$out" | jq -e '.user_message | length > 0' >/dev/null || { echo "FAIL: user_message empty"; fail=1; }
+
+          # Legacy text mode: review/security/qa caller passes its own phase.
+          legacy=$("$NEXT" review)
+          echo "$legacy" | grep -q "security" || { echo "FAIL: legacy review should still list security"; fail=1; }
+          echo "$legacy" | grep -q "qa" || { echo "FAIL: legacy review should still list qa"; fail=1; }
+          echo "$legacy" | grep -q "ship" || { echo "FAIL: legacy review should still list ship"; fail=1; }
+
+          # Mark review + security + qa complete in session phase_log.
+          for phase in review security qa; do
+            "$NS" phase-start "$phase" >/dev/null
+            jq --arg p "$phase" '.phase_log[-1].status = "completed"' .nanostack/session.json > .tmp && mv .tmp .nanostack/session.json
+          done
+          out=$("$NEXT" --json)
+          echo "$out" | jq -e '.next_phase == "ship"' >/dev/null || { echo "FAIL: all peers done should suggest ship"; fail=1; }
+          echo "$out" | jq -e '.can_ship == true' >/dev/null || { echo "FAIL: all peers done should allow ship"; fail=1; }
+
+          exit $fail
+
+  feature-autopilot-contract:
+    name: /feature autopilot wiring
+    runs-on: ubuntu-latest
+    # /feature must always be autopilot. The session must record both
+    # --autopilot and --plan-approval auto so plan/review/security/qa
+    # can read plan_approval directly without inferring from autopilot.
+    steps:
+      - uses: actions/checkout@v4
+      - name: feature/SKILL.md initializes session with auto plan_approval
+        run: |
+          set -e
+          fail=0
+          if ! grep -qE "session\.sh init feature --autopilot --plan-approval auto" feature/SKILL.md; then
+            echo "FAIL: feature/SKILL.md must call 'session.sh init feature --autopilot --plan-approval auto'"
+            fail=1
+          fi
+          if grep -qE "/feature[[:space:]]+--manual" feature/SKILL.md; then
+            echo "FAIL: feature/SKILL.md mentions --manual; /feature is always autopilot per v1 spec"
+            fail=1
+          fi
+          exit $fail

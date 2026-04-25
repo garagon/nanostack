@@ -37,16 +37,19 @@ If the output shows `"active":false`, create a session:
 
 Then run `session.sh phase-start plan`.
 
-**AUTOPILOT detection.** This skill checks "if AUTOPILOT is active" in several places below. Treat it as active when ANY of the following is true:
+**Plan approval mode.** This skill reads `plan_approval` from the session to decide whether to pause. The field has three values:
 
-1. The caller (e.g. `/think --autopilot`, `/feature`) said so in context.
-2. `session.json` reports it. Verify with:
-   ```bash
-   jq -r '.autopilot // false' .nanostack/session.json 2>/dev/null
-   ```
-   `true` means autopilot. Anything else means manual.
+- `auto` — Present a short plan and continue without waiting. `/feature` always sets this.
+- `manual` — Default. Present the plan and wait for explicit approval before building.
+- `not_required` — Used by `--run-mode report_only` sprints. Skip the approval gate entirely.
 
-If neither is true, behave as manual: present the plan and wait for explicit approval.
+Read the value with v1-compat fallback (older sessions may only have `autopilot`):
+
+```bash
+PLAN_APPROVAL=$(jq -r '.plan_approval // (if .autopilot then "auto" else "manual" end)' .nanostack/session.json 2>/dev/null)
+```
+
+If the file is missing entirely, treat as `manual`.
 
 **Local mode:** Run `source bin/lib/git-context.sh && detect_git_mode`. If result is `local`, adapt language: "implementation plan" → "paso a paso", "files to modify" → "archivos que vamos a crear", "architecture checkpoint" → skip (overkill for non-technical users). Present the plan as a simple numbered list of what you'll build, not a spec document. Same rigor, accessible words. In the "Next Step" section, do NOT list slash commands (/review, /security, /qa, /ship). Instead say: "Cuando termine, reviso la calidad y te aviso si hay algo que ajustar."
 
@@ -143,21 +146,23 @@ If the plan is a pure library with no user-facing output, skip this section.
 
 ### 7. Present and Confirm
 
-**If AUTOPILOT is active:** Present the plan briefly and proceed immediately. Do not wait for approval. The user chose autopilot because they trust the process.
+Behavior depends on `PLAN_APPROVAL` (read above):
 
-**Otherwise:** Present the plan to the user. Wait for explicit approval before executing. If the user modifies the plan, update it before proceeding.
+- **`auto`** — Present the plan briefly and proceed immediately. The caller (`/feature` or autopilot) chose this; do not pause.
+- **`not_required`** — Skip the approval gate entirely. Save the artifact and continue. This applies to report-only sprints.
+- **`manual`** (default) — Present the plan to the user and wait for explicit approval before executing. If the user modifies the plan, update it before proceeding.
 
-After the plan is approved (or auto-approved in autopilot), do these two steps in order:
+After the plan is approved (or auto-approved), do these two steps in order:
 
-**Step 1: Save the artifact.** Run this command now — do not skip it:
+**Step 1: Save the artifact.** Run this command now — do not skip it. Include the resolved `plan_approval` so reviewers can see how the plan was approved:
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh --from-session plan 'N files planned: file1, file2, ... Key decisions: X, Y.'
+~/.claude/skills/nanostack/bin/save-artifact.sh --from-session plan 'N files planned: file1, file2, ... Key decisions: X, Y. plan_approval: '"$PLAN_APPROVAL"'.'
 ```
 
 Or pass full JSON for richer detail (recommended — `/review` uses `planned_files` for scope drift):
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh plan '<json with phase, summary including planned_files array, context_checkpoint>'
+~/.claude/skills/nanostack/bin/save-artifact.sh plan '<json with phase, summary including planned_files array, plan_approval, context_checkpoint>'
 ```
 
 **Step 2: Build and proceed.**
@@ -166,7 +171,7 @@ Or pass full JSON for richer detail (recommended — `/review` uses `planned_fil
 
 After the user approves the plan and you finish building:
 
-**If AUTOPILOT is active:**
+**If `PLAN_APPROVAL` is `auto`:**
 
 After build completes, invoke each skill in sequence using the Skill tool. Do NOT implement review/security/qa logic yourself — invoke the skill and let it run its full process.
 
@@ -183,7 +188,7 @@ After build completes, invoke each skill in sequence using the Skill tool. Do NO
 
 Stop the sequence if any skill finds blocking issues or critical vulnerabilities. For parallel execution across multiple terminals, use `/conductor`.
 
-**Otherwise (default):**
+**Otherwise (`manual` or `not_required`):**
 
 Tell the user:
 
