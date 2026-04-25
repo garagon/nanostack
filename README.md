@@ -6,11 +6,10 @@
 <br>
 
 <p align="center">
-  Turns your AI agent into an engineering team that challenges scope, plans, reviews, tests, audits, and ships.
- 
+  Turns your AI agent into a professional delivery team. Challenges scope, plans, reviews, tests, audits, and ships — in language anyone can read.
 </p>
 
-<p align="center"><strong>One sprint. Minutes, not weeks.</strong></p>
+<p align="center"><strong>One sprint. Minutes, not weeks. For technical and non-technical users.</strong></p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
@@ -20,7 +19,7 @@
 
 <p align="center">
   <a href="#what-is-nanostack">What is it</a> &middot;
-  <a href="#nanostack-is-right-for-you-if">Right for you</a> &middot;
+  <a href="#two-profiles-same-rigor">Profiles</a> &middot;
   <a href="#quick-start">Install</a> &middot;
   <a href="#the-sprint">The Sprint</a> &middot;
   <a href="#know-how">Know-how</a> &middot;
@@ -50,6 +49,19 @@ Every step reads the artifact the previous step wrote, so nothing falls through 
 | **05** | `/security`       | OWASP A01-A10 audit + STRIDE threat modeling. Graded A-F.               |
 | **06** | `/qa`             | Tests the thing. Browser, API, CLI, or root-cause debug.                |
 | **07** | `/ship`           | PR creation, CI verification, post-deploy canary, sprint journal.       |
+
+## Two profiles, same rigor
+
+Nanostack adapts what it shows you based on your context. The workflow does not change; the wording does.
+
+| Profile | When you get it | What output looks like |
+|---|---|---|
+| **Guided** | Local mode (no git repo), or when you choose it explicitly. | Plain language. No PR/CI/branch/diff jargon. Each phase tells you the result, how to try it, what was checked, and what remains unverified. |
+| **Professional** | Git repository with the standard developer toolchain, or when you choose it. | Findings, evidence, file paths, PR/CI status preserved. Phase-aware next-step prose. |
+
+Either way: scope is challenged before planning, the plan names every file, review/security/qa run before ship, and the agent honestly reports what it could and could not check. Nanostack does not only protect the workflow; it guides delivery like a professional engineering team, understandable for technical and non-technical users.
+
+The wording rules live in [`reference/plain-language-contract.md`](reference/plain-language-contract.md). The session fields that select the profile live in [`reference/session-state-contract.md`](reference/session-state-contract.md).
 
 ## Features
 

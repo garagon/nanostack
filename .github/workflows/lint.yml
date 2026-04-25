@@ -821,6 +821,73 @@ jobs:
           echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
           exit $fail
 
+  v1-release-framing:
+    name: v1.0 release framing (Guided/Professional in READMEs)
+    runs-on: ubuntu-latest
+    # Sprint 6 release contract. Once v1.0 is out, both READMEs must
+    # carry the Guided/Professional framing — the public face of the
+    # delivery-experience release. Reverting that wording would orphan
+    # the implementation work in Sprints 1-5. Lock it in CI.
+    steps:
+      - uses: actions/checkout@v4
+      - name: VERSION file is well-formed semver
+        run: |
+          set -e
+          ver=$(tr -d '[:space:]' < VERSION 2>/dev/null)
+          if [ -z "$ver" ]; then
+            echo "FAIL: VERSION file is missing or empty"
+            exit 1
+          fi
+          if ! echo "$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "FAIL: VERSION '$ver' is not semver MAJOR.MINOR.PATCH"
+            exit 1
+          fi
+
+      - name: README.md introduces Guided + Professional profiles
+        run: |
+          set -e
+          fail=0
+          # Both terms appear, plus the section heading. The section
+          # name "Two profiles, same rigor" anchors the navigation
+          # link so it cannot drift silently.
+          for term in 'Guided' 'Professional' 'Two profiles, same rigor'; do
+            if ! grep -q "$term" README.md; then
+              echo "FAIL: README.md must mention '$term'"
+              fail=1
+            fi
+          done
+          # The session-state and plain-language references must be
+          # public-facing too so users can find the wording rules.
+          if ! grep -q "reference/plain-language-contract.md" README.md; then
+            echo "FAIL: README.md must link to reference/plain-language-contract.md"
+            fail=1
+          fi
+          if ! grep -q "reference/session-state-contract.md" README.md; then
+            echo "FAIL: README.md must link to reference/session-state-contract.md"
+            fail=1
+          fi
+          exit $fail
+
+      - name: README.es.md mirrors the framing in Spanish
+        run: |
+          set -e
+          fail=0
+          for term in 'Guiado' 'Profesional' 'Dos perfiles, mismo rigor'; do
+            if ! grep -q "$term" README.es.md; then
+              echo "FAIL: README.es.md must mention '$term'"
+              fail=1
+            fi
+          done
+          if ! grep -q "reference/plain-language-contract.md" README.es.md; then
+            echo "FAIL: README.es.md must link to reference/plain-language-contract.md"
+            fail=1
+          fi
+          if ! grep -q "reference/session-state-contract.md" README.es.md; then
+            echo "FAIL: README.es.md must link to reference/session-state-contract.md"
+            fail=1
+          fi
+          exit $fail
+
   spanish-surface-parity:
     name: Spanish surface parity
     runs-on: ubuntu-latest

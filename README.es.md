@@ -1,7 +1,7 @@
 <h1 align="center">Nanostack</h1>
 <p align="center">
-  Convertí a tu agente de IA en un equipo de ingeniería que cuestiona el alcance, planifica, revisa, prueba, audita y ships.<br>
-  Un sprint. Minutos, no semanas.
+  Convertí a tu agente de IA en un equipo profesional de delivery. Cuestiona el alcance, planifica, revisa, prueba, audita y publica — en lenguaje que cualquiera puede leer.<br>
+  <strong>Un sprint. Minutos, no semanas. Para usuarios técnicos y no técnicos.</strong>
 </p>
 
 <br>
@@ -17,6 +17,7 @@
 
 <p align="center">
   <a href="#instalacion">Instalación</a> &middot;
+  <a href="#dos-perfiles-mismo-rigor">Perfiles</a> &middot;
   <a href="#el-sprint">El sprint</a> &middot;
   <a href="#autopilot">Autopilot</a> &middot;
   <a href="#guard">Guard</a> &middot;
@@ -65,6 +66,19 @@ Después del install, según tu agente:
 - [jq](https://jqlang.github.io/jq/) (`brew install jq` en macOS, `apt install jq` en Linux, `choco install jq` en Windows)
 - macOS, Linux o Windows (con Git Bash o WSL)
 - Uno de: Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp, Cline
+
+## Dos perfiles, mismo rigor
+
+Nanostack adapta lo que te muestra según tu contexto. El workflow no cambia; las palabras sí.
+
+| Perfil | Cuándo lo recibís | Cómo se ve la salida |
+|---|---|---|
+| **Guiado** | Modo local (sin repositorio git), o cuando lo elegís explícitamente. | Lenguaje claro. Sin jerga de proceso. Cada paso te dice el resultado, cómo verlo, qué se revisó y qué queda sin verificar. |
+| **Profesional** | Repositorio git con herramientas de developer estándar, o cuando lo elegís. | Hallazgos, evidencia, rutas de archivos, estado de chequeos automáticos. Próximo paso consciente de la fase. |
+
+En ambos casos: el alcance se cuestiona antes de planificar, el plan nombra cada archivo, las revisiones (review, seguridad, qa) corren antes de publicar, y el agente reporta con honestidad qué chequeó y qué no. Nanostack no solo protege el workflow; ahora guía el delivery como un equipo profesional, entendible para usuarios técnicos y no técnicos.
+
+Las reglas de lenguaje viven en [`reference/plain-language-contract.md`](reference/plain-language-contract.md). Los campos de sesión que seleccionan el perfil viven en [`reference/session-state-contract.md`](reference/session-state-contract.md).
 
 ## Ejemplo
 
