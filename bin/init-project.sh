@@ -71,8 +71,13 @@ if [ -f "$SETTINGS" ]; then
   echo "$UPDATED" | jq '.' > "$SETTINGS"
   echo "Updated: $SETTINGS (merged permissions)"
 else
-  # Create new settings
-  cat > "$SETTINGS" << 'EOF'
+  # Create new settings. Fresh installs get the PreToolUse hooks wired
+  # automatically so Bash, Write, and Edit all pass through the guard.
+  # Existing installs are left alone; see SECURITY.md for the manual
+  # wire-up and /nano-doctor for a warning when the hooks are missing.
+  _GUARD_CHECK_DANGEROUS="$HOME/.claude/skills/nanostack/guard/bin/check-dangerous.sh"
+  _GUARD_CHECK_WRITE="$HOME/.claude/skills/nanostack/guard/bin/check-write.sh"
+  cat > "$SETTINGS" << EOF
 {
   "permissions": {
     "allow": [
@@ -107,10 +112,22 @@ else
       "Write(*)",
       "Edit(*)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{"type": "command", "command": "$_GUARD_CHECK_DANGEROUS"}]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [{"type": "command", "command": "$_GUARD_CHECK_WRITE"}]
+      }
+    ]
   }
 }
 EOF
-  echo "Created: $SETTINGS"
+  echo "Created: $SETTINGS (with PreToolUse hooks for Bash, Write, Edit)"
 fi
 
 # Add .nanostack/ to .gitignore if not already there

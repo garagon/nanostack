@@ -423,3 +423,64 @@ jobs:
           # it must not trip G-007/G-008.
           run_case 0 'git push --force-with-lease'
           exit $fail
+
+  write-guard-regression:
+    name: Write/Edit guard regression cases
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run write-guard matrix
+        run: |
+          set +e
+          set -u
+          script=guard/bin/check-write.sh
+          fail=0
+          run_case() {
+            local expected="$1" path="$2"
+            (bash "$script" "$path" >/dev/null 2>&1)
+            local got=$?
+            if [ "$got" != "$expected" ]; then
+              echo "FAIL: '$path' expected exit $expected, got $got"
+              fail=1
+            else
+              printf '  ok   exit=%s  %s\n' "$got" "$path"
+            fi
+          }
+          # Blocked: secrets by basename + system paths.
+          run_case 1 '.env'
+          run_case 1 '.env.local'
+          run_case 1 '.env.production'
+          run_case 1 './secrets/key.pem'
+          run_case 1 'path/to/authorized_keys'
+          run_case 1 'config.key'
+          run_case 1 '/etc/passwd'
+          run_case 1 '/var/log/auth.log'
+          run_case 1 '/usr/bin/ls'
+          run_case 1 "$HOME/.ssh/id_rsa"
+          run_case 1 "$HOME/.aws/credentials"
+          # Allowed: templates + regular project files.
+          run_case 0 '.env.example'
+          run_case 0 '.env.sample'
+          run_case 0 '.env.template'
+          run_case 0 'README.md'
+          run_case 0 'src/config.js'
+          run_case 0 'package.json'
+          run_case 0 '/tmp/scratch.txt'
+          # JSON input path (Claude Code PreToolUse contract).
+          if ! echo '{"tool_name":"Write","tool_input":{"file_path":".env"}}' \
+            | bash "$script" >/dev/null 2>&1; then
+            printf '  ok   stdin-json blocks .env\n'
+          else
+            echo "FAIL: JSON stdin did not block .env"
+            fail=1
+          fi
+          if echo '{"tool_name":"Edit","tool_input":{"file_path":"README.md"}}' \
+            | bash "$script" >/dev/null 2>&1; then
+            printf '  ok   stdin-json allows README.md\n'
+          else
+            echo "FAIL: JSON stdin did not allow README.md"
+            fail=1
+          fi
+          exit $fail
