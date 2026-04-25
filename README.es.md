@@ -162,14 +162,34 @@ Los agentes cometen errores. Corren `rm -rf` cuando querían `rm -r`, hacen forc
 
 ### Seis tiers de seguridad
 
-1. **Allowlist**: comandos como `git status`, `ls`, `cat` pasan sin chequeo.
-2. **In-project**: operaciones que solo tocan archivos del repo actual pasan. El control de versiones es la red.
-3. **Concurrencia por fase**: durante fases read-only (review, qa, security), las operaciones de escritura quedan bloqueadas para evitar race conditions.
-4. **Phase gate**: cuando hay un sprint activo, `git commit` y `git push` quedan bloqueados hasta que existan artifacts frescos de review, security y qa.
-5. **Budget gate**: cuando el sprint tiene un presupuesto y se gastó 95%+, todos los comandos no-allowlist quedan bloqueados.
-6. **Pattern matching**: todo lo demás se chequea contra reglas de bloqueo y advertencia. 33 reglas para borrado masivo, destrucción de historia, drops de DB, deploys a producción, ejecución remota de código.
+Cada comando de Bash pasa por estos seis tiers, en este orden:
+
+1. **Block rules**: las reglas de bloqueo corren primero. 35 reglas cubren borrado masivo (`rm -rf .`, `find . -delete`), destrucción de historia (`git push --force`), lecturas de secretos (`.env`, `*.pem`), drops de DB, deploys a producción y ejecución remota (`curl | sh`). Una coincidencia bloquea aunque el binario esté en el allowlist de abajo.
+2. **Allowlist**: para comandos que pasaron las block rules, los allowlisteados (`git status`, `ls`, `cat`, `jq`, etc.) saltan el resto.
+3. **In-project**: operaciones que solo tocan archivos del repo actual pasan. El control de versiones es la red de seguridad.
+4. **Concurrencia por fase**: durante fases read-only (review, qa, security), las operaciones de escritura quedan bloqueadas para evitar race conditions.
+5. **Phase gate**: cuando hay un sprint activo, `git commit` y `git push` quedan bloqueados hasta que existan artifacts frescos de review, security y qa.
+6. **Budget gate**: cuando el sprint tiene un presupuesto y se gastó 95%+, todos los comandos no-allowlist quedan bloqueados.
+
+Plus 9 reglas de advertencia para operaciones que requieren atención sin llegar a bloqueo.
+
+Las herramientas Write, Edit y MultiEdit pasan por su propio hook (`guard/bin/check-write.sh`) que niega rutas protegidas: archivos de secretos (`.env` y variantes, `*.pem`, `*.key`, llaves SSH) y directorios de sistema o usuario-secreto (`/etc`, `/var`, `/usr/bin`, `~/.ssh`, `~/.aws`, `~/.kube`). Los symlinks se resuelven antes de matchear, así que un `mylink/config -> ~/.ssh/config` se trata como destino resuelto.
 
 Cuando guard bloquea un comando, no solo dice "no". Sugiere una alternativa segura. El agente la lee y reintenta.
+
+### Qué se aplica en cada agente
+
+Honestidad por host: nanostack manda los mismos archivos de skills a todos los agentes soportados, pero la capa de **enforcement** (los hooks que bloquean acciones antes de ejecutarse) depende de lo que cada host expone. Cada adapter en [`adapters/`](adapters/) declara su capacidad real; setup, doctor, y este cuadro leen de esos archivos. Niveles según [`reference/host-adapter-schema.md`](reference/host-adapter-schema.md):
+
+| Agente | Bash guard | Write/Edit guard | Phase gate | Qué significa |
+|---|---|---|---|---|
+| Claude Code | enforced (L3) | enforced (L3) | enforced (L3) | Hooks bloquean comandos peligrosos antes de correr. CI verifica continuamente. |
+| Cursor | guided (L0) | guided (L0) | guided (L0) | Skills se cargan como reglas de texto. El agente las lee y debe seguirlas. Sin pre-tool-use hook hoy. |
+| OpenAI Codex | guided (L0) | guided (L0) | guided (L0) | Skills disponibles, sin hooks de bloqueo. |
+| OpenCode | guided (L0) | guided (L0) | guided (L0) | Skills disponibles, sin hooks de bloqueo. |
+| Gemini CLI | guided (L0) | guided (L0) | guided (L0) | Instalado como extensión Gemini, sin hooks de bloqueo. |
+
+Si querés enforcement duro, usá Claude Code. Si aceptás disciplina a nivel agente, los demás corren el mismo workflow guiado. Corré `/nano-doctor` después de instalar para ver el estado real de tu install.
 
 ## Problemas comunes
 
