@@ -45,6 +45,8 @@ The script prints one line per check, grouped by category. Status values:
 - `warn` — minor issue. Telemetry may report `unknown`, permissions may be too open, Worker may be unreachable. None of these block `/think`, `/nano`, etc.
 - `FAIL` — critical issue. A missing dependency or missing skill file. Usage is impaired.
 
+The `host` category reports the protection level for every detected agent CLI (Claude Code, Cursor, Codex, OpenCode, Gemini). Each row reads a host's declared capability from `adapters/<host>.json` and cross-checks against this install. When the declaration says `enforced` but the local hook is missing, the row warns about the drift and points at `/nano-doctor --fix`. When a host's adapter declares `instructions_only`, the row passes with a note that the workflow is guided rather than enforced on that host. See `reference/host-adapter-schema.md` for the full vocabulary.
+
 Exit codes:
 
 | Exit | Meaning |
