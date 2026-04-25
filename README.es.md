@@ -199,7 +199,7 @@ Si querés enforcement duro, usá Claude Code. Si aceptás disciplina a nivel ag
 
 ¿Phase gate bloqueó tu commit? Completá `/review`, `/security`, `/qa` para el sprint activo. O si el commit no es del sprint: `NANOSTACK_SKIP_GATE=1 git commit ...`.
 
-Para la guía completa de problemas (Windows, proxy corporativo, sprints atascados, conflictos de nombres), ver [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+Para la guía completa de problemas en español (slash commands, jq, phase gate, puerto en uso, Windows, sprints atascados, conflictos de nombres), ver [TROUBLESHOOTING.es.md](TROUBLESHOOTING.es.md). Para temas avanzados (proxy corporativo, doble ejecución en autopilot, telemetría) consultá la versión canónica en inglés: [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ## Más documentación
 
