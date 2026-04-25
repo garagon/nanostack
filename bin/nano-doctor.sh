@@ -55,9 +55,15 @@ NANO_WORKER_URL="${NANO_WORKER_URL:-https://nanostack-telemetry.remoto.workers.d
 
 # ─── Check registry ────────────────────────────────────────────────────
 # Each check appends a line to CHECK_LINES of the form:
-#   <status>|<category>|<name>|<detail>
+#   <status>\t<category>\t<name>\t<detail>
+# Uses a tab separator instead of `|` so detail strings that include the
+# pipe character (e.g. "Write|Edit|MultiEdit", "curl | sh") survive the
+# round-trip into the JSON output without being truncated. Round 4
+# audit caught this on a settings file with no hooks: the JSON detail
+# ended at "Add the Write" because awk -F'|' split on the first |.
 # status: pass | warn | fail
 
+_NANO_DOCTOR_SEP=$'\t'
 CHECK_LINES=""
 FIX_LINES=""
 PASS=0
@@ -66,7 +72,7 @@ FAIL=0
 
 add_check() {
   local status="$1" category="$2" name="$3" detail="$4"
-  CHECK_LINES="$CHECK_LINES$status|$category|$name|$detail
+  CHECK_LINES="$CHECK_LINES$status$_NANO_DOCTOR_SEP$category$_NANO_DOCTOR_SEP$name$_NANO_DOCTOR_SEP$detail
 "
   case "$status" in
     pass) PASS=$((PASS + 1)) ;;
@@ -364,23 +370,102 @@ else
   fi
 fi
 
+# ─── 8. Hook wire-up under --fix ───────────────────────────────────────
+# When the user passes --fix and the bash_guard or write_guard rows
+# warned, write the missing PreToolUse entry into the local
+# .claude/settings.json. Round 4 audit asked for migration to be a
+# guided action, not "edit JSON by hand". This runs ONLY against the
+# project-local settings (not ~/.claude/settings.json) and only after
+# making a timestamped backup. jq merges into existing hooks rather
+# than replacing them.
+
+if $FIX_MODE && command -v jq >/dev/null 2>&1; then
+  _local_settings=".claude/settings.json"
+  if [ -f "$_local_settings" ]; then
+    _need_bash=0
+    _need_write=0
+    if ! jq -e '
+      (.hooks.PreToolUse // [])
+      | any(
+          (.matcher // "" | test("Bash"))
+          and ((.hooks // []) | any((.command // "") | contains("check-dangerous.sh")))
+        )
+    ' "$_local_settings" >/dev/null 2>&1; then
+      _need_bash=1
+    fi
+    if ! jq -e '
+      (.hooks.PreToolUse // [])
+      | any(
+          (.matcher // "" | test("Write|Edit"))
+          and ((.hooks // []) | any((.command // "") | contains("check-write.sh")))
+        )
+    ' "$_local_settings" >/dev/null 2>&1; then
+      _need_write=1
+    fi
+
+    if [ "$_need_bash" -eq 1 ] || [ "$_need_write" -eq 1 ]; then
+      _backup="$_local_settings.$(date +%Y%m%d-%H%M%S).bak"
+      if cp "$_local_settings" "$_backup" 2>/dev/null; then
+        _bashcmd="$HOME/.claude/skills/nanostack/guard/bin/check-dangerous.sh"
+        _writecmd="$HOME/.claude/skills/nanostack/guard/bin/check-write.sh"
+        _tmp="$_local_settings.tmp.$$"
+        if jq \
+            --arg bashcmd "$_bashcmd" \
+            --arg writecmd "$_writecmd" \
+            --argjson need_bash "$_need_bash" \
+            --argjson need_write "$_need_write" '
+          .hooks //= {}
+          | .hooks.PreToolUse //= []
+          | if $need_bash == 1 then
+              .hooks.PreToolUse += [{
+                "matcher": "Bash",
+                "hooks": [{"type": "command", "command": $bashcmd}]
+              }]
+            else . end
+          | if $need_write == 1 then
+              .hooks.PreToolUse += [{
+                "matcher": "Write|Edit|MultiEdit",
+                "hooks": [{"type": "command", "command": $writecmd}]
+              }]
+            else . end
+        ' "$_local_settings" > "$_tmp" 2>/dev/null && mv "$_tmp" "$_local_settings"; then
+          _added=""
+          [ "$_need_bash" -eq 1 ] && _added="Bash"
+          [ "$_need_write" -eq 1 ] && _added="${_added:+$_added + }Write|Edit|MultiEdit"
+          add_fix "Wired $_added PreToolUse hook(s) into $_local_settings (backup: $_backup). Restart your agent to apply."
+        else
+          rm -f "$_tmp" 2>/dev/null
+          add_fix "Tried to wire hooks into $_local_settings but jq merge failed. Restored from backup not needed (original untouched)."
+        fi
+      else
+        add_fix "Tried to wire hooks but could not write backup of $_local_settings. Skipped."
+      fi
+    fi
+  fi
+fi
+
 # ─── Output ────────────────────────────────────────────────────────────
 
 if $JSON_OUTPUT; then
-  # Emit a JSON document with per-check rows and a summary.
-  _checks_json=$(printf '%s' "$CHECK_LINES" | awk -F'|' -v OFS='' '
-    /^$/ { next }
-    {
-      gsub(/"/, "\\\"", $4)
-      printf "%s{\"status\":\"%s\",\"category\":\"%s\",\"name\":\"%s\",\"detail\":\"%s\"}", (NR>1?",":""), $1, $2, $3, $4
-    }
-  ')
+  # Build the entire envelope with jq. Tab-separated CHECK_LINES split
+  # cleanly even when detail strings contain pipes or quotes. Round 4
+  # audit caught the previous awk -F'|' truncating "Write|Edit|MultiEdit"
+  # at the first |; jq -R -s split keeps the field intact.
   _overall="pass"
   if [ "$FAIL" -gt 0 ]; then _overall="fail"
   elif [ "$WARN" -gt 0 ]; then _overall="warn"
   fi
-  printf '{"overall":"%s","pass":%d,"warn":%d,"fail":%d,"checks":[%s]}\n' \
-    "$_overall" "$PASS" "$WARN" "$FAIL" "$_checks_json"
+  printf '%s' "$CHECK_LINES" | jq -R -s \
+    --arg overall "$_overall" \
+    --argjson pass "$PASS" \
+    --argjson warn "$WARN" \
+    --argjson fail "$FAIL" '
+      split("\n")
+      | map(select(length > 0))
+      | map(split("\t"))
+      | map({status:.[0], category:.[1], name:.[2], detail:.[3]}) as $checks
+      | {overall:$overall, pass:$pass, warn:$warn, fail:$fail, checks:$checks}
+    '
 else
   # Human-readable report.
   echo ""
@@ -392,7 +477,7 @@ else
   echo "  pass: $PASS  warn: $WARN  fail: $FAIL"
   echo "============================================"
   _last_cat=""
-  printf '%s' "$CHECK_LINES" | while IFS='|' read -r status category name detail; do
+  printf '%s' "$CHECK_LINES" | while IFS=$'\t' read -r status category name detail; do
     [ -z "$status" ] && continue
     if [ "$category" != "$_last_cat" ]; then
       echo ""

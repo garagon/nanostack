@@ -35,7 +35,7 @@ Optional flags:
 
 - `--json` — machine-readable output. Use when invoked by another tool or when piping to `jq`.
 - `--offline` — skip Worker reachability. Use in air-gapped environments or during CI.
-- `--fix` — repair mechanical issues (`chmod 700` on `~/.nanostack/`, `chmod +x` on the sender). Never touches config or data.
+- `--fix` — repair mechanical issues. Currently covers: `chmod 700` on `~/.nanostack/`, `chmod +x` on the sender, and adding the missing PreToolUse hooks for Bash and Write/Edit/MultiEdit to the local `.claude/settings.json`. Always backs up the file first as `.claude/settings.json.YYYYMMDD-HHMMSS.bak`. Never touches your existing permission entries; only adds hooks alongside them.
 
 ## Interpreting the output
 
@@ -55,7 +55,7 @@ Exit codes:
 
 ## When to recommend `--fix`
 
-If the report shows warnings for `home permissions` or `sender_executable`, re-run with `--fix`. For any other warning or failure, surface the detail to the user and let them decide. Do NOT try to fix missing dependencies, missing VERSION files, or misconfigured tiers automatically.
+If the report shows warnings for `home permissions`, `sender_executable`, `bash_guard`, or `write_guard`, re-run with `--fix`. The `--fix` mode handles those four mechanically and leaves a backup. For any other warning or failure (missing VERSION, broad `Bash(rm:*)`, broken telemetry tier), surface the detail to the user and let them decide. Do NOT try to fix missing dependencies or rewrite permission lists automatically.
 
 ## When to recommend a reinstall
 
