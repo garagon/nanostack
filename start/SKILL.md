@@ -90,17 +90,31 @@ Run the canonical config probe:
 ~/.claude/skills/nanostack/bin/init-config.sh
 ```
 
+Then probe the host config separately for legacy state. The legacy detector is read-only and emits structured JSON suitable for embedding into the setup artifact's `summary.legacy` field:
+
+```bash
+LEGACY=$(~/.claude/skills/nanostack/bin/detect-legacy-setup.sh)
+LEGACY_DETECTED=$(echo "$LEGACY" | jq -r '.detected')
+MIGRATION_NEEDS_CONFIRMATION=$(echo "$LEGACY" | jq -r '.migration_requires_confirmation')
+```
+
 Decide the path:
 
 | Detection | Path |
 |---|---|
-| Config exists, hooks present, no broad permissions | Configured. Ask what they want to do (Step 4). |
-| Config exists but `.claude/settings.json` is missing hooks or has `Bash(rm:*)` / `Write(*)` / `Edit(*)` | Legacy install. See "Repair flow" below. |
+| Config exists, hooks present, no broad permissions, `.detected=false` | Configured. Ask what they want to do (Step 4). |
+| `.claude/settings.json` is missing hooks or has `Bash(rm:*)` / `Write(*)` / `Edit(*)`, `.detected=true` | Legacy install. See "Repair flow" below. |
 | No config | First-time setup. Continue to Step 2. |
 
 ## Repair flow (legacy detection)
 
-If `.claude/settings.json` exists but is missing the PreToolUse hooks, or carries broad permissions like `Bash(rm:*)` / `Write(*)` / `Edit(*)`, do not silently mutate. Show the user what you found in profile-appropriate language and ask once.
+When `bin/detect-legacy-setup.sh` reports `.detected = true`, do not silently mutate. The detector also tells you which hooks are missing and which broad permissions are present:
+
+```bash
+echo "$LEGACY" | jq '{missing_hooks, broad_permissions, repair_available, migration_requires_confirmation}'
+```
+
+Show the user what you found in profile-appropriate language and ask once. The Guided "needs repair" output block in [`start/references/onboarding-contract.md`](references/onboarding-contract.md) is the canonical wording.
 
 `/nano-run` may recommend:
 
@@ -110,13 +124,15 @@ bin/init-project.sh --repair
 
 Repair is **additive**: it adds missing hooks and creates a timestamped `.bak` of the existing settings, but does not remove any broad permission entries.
 
-`/nano-run` must NOT silently run:
+When `migration_requires_confirmation` is `true`, `/nano-run` must NOT silently run:
 
 ```bash
 bin/init-project.sh --migrate-permissions
 ```
 
-That command removes `Bash(rm:*)` and similar broad rules. Only run it when the user explicitly approves the migration. The setup artifact records `summary.legacy.migration_requires_confirmation = true` so the choice is auditable.
+That command removes `Bash(rm:*)` and similar broad rules. Only run it when the user explicitly approves the migration. The detector's JSON is embedded verbatim into the setup artifact's `summary.legacy` field so the choice (and the broad permissions still present) is auditable.
+
+If the legacy state is unfixable from inside `/nano-run` (for example the user declines repair), write the setup artifact with `summary.status = "needs_repair"`. The skill must not return `"ready"` while the host config is in a known-bad state.
 
 ## Step 2: Configure
 

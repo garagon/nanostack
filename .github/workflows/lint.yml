@@ -6,6 +6,84 @@ on:
     branches: [main]
 
 jobs:
+  nano-run-repair-aware:
+    name: /nano-run repair-aware (no silent --migrate-permissions)
+    runs-on: ubuntu-latest
+    # /nano-run vNext PR 4. Two invariants:
+    #   1. The skill calls bin/detect-legacy-setup.sh (read-only)
+    #      before any mutation, so legacy state lands in the setup
+    #      artifact instead of being silently overwritten.
+    #   2. --migrate-permissions never appears in start/SKILL.md
+    #      without "explicit confirmation" or "user approval"
+    #      language nearby. This refuses the silent destructive
+    #      narrowing path.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detector exists, is executable, runs on a sandbox
+        run: |
+          set -e
+          fail=0
+          if [ ! -x bin/detect-legacy-setup.sh ]; then
+            echo "FAIL: bin/detect-legacy-setup.sh is missing or not executable"
+            exit 1
+          fi
+
+          tmp=$(mktemp -d /tmp/legacy-ci.XXXXXX)
+          # Case A: empty project. Detector says detected=false.
+          out=$(bin/detect-legacy-setup.sh "$tmp")
+          if [ "$(echo "$out" | jq -r .detected)" != "false" ]; then
+            echo "FAIL: detector should report detected=false on an empty project"
+            fail=1
+          fi
+
+          # Case B: legacy settings with broad perms and no hooks.
+          mkdir -p "$tmp/.claude"
+          cat > "$tmp/.claude/settings.json" <<'EOF'
+          {"permissions":{"allow":["Bash(rm:*)","Write(*)","Edit(*)"]}}
+          EOF
+          out=$(bin/detect-legacy-setup.sh "$tmp")
+          if [ "$(echo "$out" | jq -r .detected)" != "true" ]; then
+            echo "FAIL: detector should report detected=true on legacy settings"
+            fail=1
+          fi
+          if [ "$(echo "$out" | jq -r .migration_requires_confirmation)" != "true" ]; then
+            echo "FAIL: detector should require confirmation when broad permissions are present"
+            fail=1
+          fi
+          if [ "$(echo "$out" | jq -r '.broad_permissions | length')" -lt 3 ]; then
+            echo "FAIL: detector should list all three broad permissions"
+            fail=1
+          fi
+          if [ "$(echo "$out" | jq -r '.missing_hooks | length')" -lt 2 ]; then
+            echo "FAIL: detector should list both missing hooks"
+            fail=1
+          fi
+          exit $fail
+
+      - name: start/SKILL.md calls detect-legacy-setup.sh and refuses silent migration
+        run: |
+          set -e
+          fail=0
+          if ! grep -q 'detect-legacy-setup\.sh' start/SKILL.md; then
+            echo "FAIL: start/SKILL.md must call bin/detect-legacy-setup.sh before any setup mutation"
+            fail=1
+          fi
+          # Whenever --migrate-permissions appears in start/SKILL.md
+          # the surrounding 5 lines must include 'explicit', 'approve',
+          # or 'confirmation'. The flag must never appear in a "the
+          # skill should run this" context without a guard.
+          while IFS=: read -r line _; do
+            [ -z "$line" ] && continue
+            start=$((line - 5)); [ "$start" -lt 1 ] && start=1
+            end=$((line + 5))
+            ctx=$(sed -n "${start},${end}p" start/SKILL.md)
+            if ! echo "$ctx" | grep -qiE 'explicit|approv|confirm'; then
+              echo "FAIL: --migrate-permissions on line $line lacks 'explicit'/'approve'/'confirm' in surrounding context"
+              fail=1
+            fi
+          done < <(grep -n 'migrate-permissions' start/SKILL.md)
+          exit $fail
+
   setup-artifact-schema:
     name: Setup artifact writer enforces schema
     runs-on: ubuntu-latest
