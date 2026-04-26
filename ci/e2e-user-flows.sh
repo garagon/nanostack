@@ -525,6 +525,29 @@ flow_phase_registry() {
   resolved_kind=$( echo "$resolved" | jq -r '.phase_kind' )
   assert_eq "resolve.sh emits phase_kind=custom" "custom" "$resolved_kind"
 
+  # Lifecycle round-trip with one custom artifact saved (PR 4): analytics
+  # counts it, sprint-journal emits a section for it, default discard
+  # --dry-run includes its file path.
+  "$REPO/bin/save-artifact.sh" audit-licenses \
+    '{"phase":"audit-licenses","summary":{"status":"OK","headline":"smoke audit"},"context_checkpoint":{"summary":"ok"}}' \
+    >/dev/null
+  local analytics_json
+  analytics_json=$( "$REPO/bin/analytics.sh" --json )
+  assert_true "analytics.sprints.custom.audit-licenses == 1" \
+    bash -c "echo '$analytics_json' | jq -e '.sprints.\"custom\".\"audit-licenses\" == 1' >/dev/null"
+  assert_true "analytics.sprints.total includes the custom count" \
+    bash -c "echo '$analytics_json' | jq -e '.sprints.total >= 1' >/dev/null"
+  local journal_path
+  journal_path=$( "$REPO/bin/sprint-journal.sh" )
+  assert_true "sprint-journal emits a /audit-licenses section" \
+    bash -c "grep -qF '## /audit-licenses' '$journal_path'"
+  assert_true "sprint-journal includes the custom artifact path" \
+    bash -c "grep -qF 'Artifact:' '$journal_path'"
+  local discard_out
+  discard_out=$( "$REPO/bin/discard-sprint.sh" --dry-run )
+  assert_true "default discard --dry-run includes the custom artifact" \
+    bash -c "echo '$discard_out' | grep -qF 'audit-licenses'"
+
   # Add a phase_graph so the resolver populates upstream_artifacts;
   # build appears as null (no artifact dir), plan appears as a path.
   printf '%s' '{"custom_phases":["audit-licenses"],"phase_graph":[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"audit-licenses","depends_on":["build","plan"]},{"name":"ship","depends_on":["audit-licenses"]}]}' > .nanostack/config.json

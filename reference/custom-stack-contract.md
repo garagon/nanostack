@@ -82,6 +82,60 @@ The resolver looks for the custom phase's dependency list in this order:
 - It does not enforce the conductor's `concurrency` field. That work belongs to PR 5 (conductor custom graph).
 - It does not check skill discovery files (`agents/openai.yaml`). That belongs to PR 3 (copy-paste template) and PR 6 (`bin/check-custom-skill.sh`).
 
+## Lifecycle outputs
+
+`bin/analytics.sh`, `bin/sprint-journal.sh`, and `bin/discard-sprint.sh` each include registered custom phases.
+
+### Analytics
+
+`bin/analytics.sh --json` adds three fields to the existing `sprints` object:
+
+```json
+{
+  "sprints": {
+    "think": 1, "plan": 1, "review": 1, "qa": 1, "security": 1, "ship": 1,
+    "core_total": 6,
+    "custom": { "audit-licenses": 1 },
+    "custom_total": 1,
+    "total": 7
+  }
+}
+```
+
+Rules:
+
+- The six core phase keys keep their historical names and counts. Existing consumers see no shape change.
+- `core_total` is the sum of the six core counts. `custom_total` is the sum of all registered custom phases. `total` is the sum of both.
+- `custom` is an object keyed on registered custom phase names. With no registered custom phases, it is `{}` and `custom_total` is `0`. In that case `total` equals `core_total`, matching the historical behavior.
+
+The text and Obsidian-dashboard outputs add one row per registered custom phase under the existing "Sprint phases" block.
+
+### Sprint journal
+
+`bin/sprint-journal.sh` emits the existing `/think`, `/plan`, `/review`, `/qa`, `/security`, `/ship` sections for core phases, then iterates over registered custom phases and emits a generic section per phase that has an artifact for the current project:
+
+```
+## /audit-licenses
+
+**Status:** OK
+**Summary:** 47 deps scanned, 0 GPL/AGPL flagged
+**Next:** none
+**Artifact:** .nanostack/audit-licenses/20260426-145855.json
+```
+
+Field resolution order for the section body:
+
+- **Status** — `summary.status`. Skipped if absent.
+- **Summary** — first hit of `summary.headline`, then `summary.result`. If both are missing AND `summary.status` is also missing, falls back to a compact JSON dump of `summary` so the section is never silently empty.
+- **Next** — `summary.next_action`. Skipped if absent.
+- **Artifact** — always present, full path to the JSON file.
+
+A custom phase with no artifact for the current project produces no section.
+
+### Discard
+
+`bin/discard-sprint.sh --dry-run` (no `--phase` flag) iterates over every registered phase, core and custom, and lists `[dry-run] would delete: <path>` for each artifact in the date window. Without registered custom phases this is identical to the historical behavior; with custom phases registered, the default discard cleans them too. The explicit `--phase <name>` flag still narrows to a single phase.
+
 ## Stability
 
 `phase_kind` is the load-bearing addition. Once shipped, downstream skills can branch on it. Future PRs may add new fields to the resolver output, but the existing shape stays — consumers should keep using `jq` field access rather than positional or shape-strict parsing.

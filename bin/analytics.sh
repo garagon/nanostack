@@ -6,6 +6,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
+. "$SCRIPT_DIR/lib/phases.sh"
 
 STORE="$NANOSTACK_STORE"
 KNOW_HOW="$NANOSTACK_STORE/know-how"
@@ -50,14 +51,31 @@ count_phase() {
   echo "$count"
 }
 
-# Collect stats
+# Collect stats — core phases keep their named fields for backward
+# compatibility; custom phases are tallied separately below.
 THINK=$(count_phase think)
 PLAN=$(count_phase plan)
 REVIEW=$(count_phase review)
 QA=$(count_phase qa)
 SECURITY=$(count_phase security)
 SHIP=$(count_phase ship)
-TOTAL=$((THINK + PLAN + REVIEW + QA + SECURITY + SHIP))
+CORE_TOTAL=$((THINK + PLAN + REVIEW + QA + SECURITY + SHIP))
+
+# Custom phases come from .custom_phases in .nanostack/config.json.
+# Build a JSON object {phase: count} and a running custom_total. An
+# empty object is the right default when no custom phases are
+# registered, so existing consumers see the same shape.
+CUSTOM_JSON="{}"
+CUSTOM_TOTAL=0
+CUSTOM_PHASES=$(nano_custom_phases 2>/dev/null)
+if [ -n "$CUSTOM_PHASES" ]; then
+  for phase in $CUSTOM_PHASES; do
+    n=$(count_phase "$phase")
+    CUSTOM_JSON=$(echo "$CUSTOM_JSON" | jq --arg p "$phase" --argjson n "$n" '. + {($p): $n}')
+    CUSTOM_TOTAL=$((CUSTOM_TOTAL + n))
+  done
+fi
+TOTAL=$((CORE_TOTAL + CUSTOM_TOTAL))
 
 # Mode breakdown from review/qa/security
 count_mode() {
@@ -114,13 +132,22 @@ if $JSON_OUTPUT; then
     --argjson security "$SECURITY" \
     --argjson ship "$SHIP" \
     --argjson total "$TOTAL" \
+    --argjson core_total "$CORE_TOTAL" \
+    --argjson custom_total "$CUSTOM_TOTAL" \
+    --argjson custom "$CUSTOM_JSON" \
     --argjson quick "$QUICK" \
     --argjson standard "$STANDARD" \
     --argjson thorough "$THOROUGH" \
     --arg last_security "$LAST_SECURITY" \
     '{
       month: $month,
-      sprints: { think: $think, plan: $plan, review: $review, qa: $qa, security: $security, ship: $ship, total: $total },
+      sprints: {
+        think: $think, plan: $plan, review: $review, qa: $qa, security: $security, ship: $ship,
+        core_total: $core_total,
+        custom: $custom,
+        custom_total: $custom_total,
+        total: $total
+      },
       modes: { quick: $quick, standard: $standard, thorough: $thorough },
       last_security_findings: $last_security
     }')
@@ -161,6 +188,16 @@ echo "  review      $REVIEW"
 echo "  qa          $QA"
 echo "  security    $SECURITY"
 echo "  ship        $SHIP"
+if [ -n "$CUSTOM_PHASES" ]; then
+  for phase in $CUSTOM_PHASES; do
+    n=$(echo "$CUSTOM_JSON" | jq -r --arg p "$phase" '.[$p] // 0')
+    # %-12s pads short names to the core-column width; long names
+    # (e.g. audit-licenses) overflow and still keep one separator
+    # space before the count thanks to the trailing space in the
+    # format string.
+    printf "  %-12s %s\n" "$phase" "$n"
+  done
+fi
 echo "  total       $TOTAL"
 echo ""
 echo "  Intensity modes"
@@ -222,6 +259,12 @@ if $OBSIDIAN_OUTPUT; then
     echo "| qa | $QA |"
     echo "| security | $SECURITY |"
     echo "| ship | $SHIP |"
+    if [ -n "$CUSTOM_PHASES" ]; then
+      for phase in $CUSTOM_PHASES; do
+        n=$(echo "$CUSTOM_JSON" | jq -r --arg p "$phase" '.[$p] // 0')
+        echo "| $phase | $n |"
+      done
+    fi
     echo "| **total** | **$TOTAL** |"
     echo ""
     echo "## Intensity Modes"
