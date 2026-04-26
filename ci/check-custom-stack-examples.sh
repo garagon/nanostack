@@ -242,6 +242,36 @@ for stack_dir in "${stack_dirs[@]}"; do
     fail "$stack_name skills declared but not in phase_graph:$missing_in_graph"
   fi
 
+  # 10d. phase_graph is acyclic. Conductor's runtime validator will
+  #      reject a cyclic graph at sprint start, but a stack that ships
+  #      with a cycle would only fail under PR 3 runtime E2E. Catch it
+  #      here statically using the same Kahn's-algorithm reduction the
+  #      registry uses (bin/lib/phases.sh _nano_phase_graph_is_valid).
+  if jq -e '
+    .phase_graph as $g |
+    def acyclic:
+      reduce range(0; ($g | length) + 1) as $_ (
+        $g;
+        if length == 0 then .
+        else
+          ([.[] | select(.depends_on | length == 0) | .name]) as $leaves |
+          if ($leaves | length) == 0 then null
+          else
+            [.[]
+              | select(.name as $n | ($leaves | index($n)) | not)
+              | .depends_on |= map(select(. as $d | ($leaves | index($d)) | not))
+            ]
+          end
+        end
+      ) |
+      . != null and length == 0;
+    acyclic
+  ' "$stack_dir/stack.json" >/dev/null 2>&1; then
+    ok "$stack_name phase_graph is acyclic"
+  else
+    fail "$stack_name phase_graph contains a cycle"
+  fi
+
   # 11. ship depends on the stack's composer (if there is a release-readiness
   #     skill, ship must depend on it, not directly on the review/security/qa
   #     trio). Spec rule for this stack; future stacks may declare a

@@ -64,10 +64,12 @@ STACK_DIR="$NANOSTACK_ROOT/examples/custom-stack-template/compliance-release"
 
 `bin/create-skill.sh` resolves the install destination via `bin/lib/store-path.sh` (your repo root's `.nanostack/`, or `$HOME/.nanostack/` outside git), so the skills land where every lifecycle script reads from regardless of which subdirectory you ran the command from.
 
-Then wire the `phase_graph` so the conductor knows the full topology. Resolve the store path the same way the scaffolder did:
+Then wire the `phase_graph` so the conductor knows the full topology. Resolve the store path the same way the scaffolder did, by sourcing `bin/lib/store-path.sh`. That gives `$NANOSTACK_STORE` with the same priority order lifecycle scripts use: an explicit `NANOSTACK_STORE` env var first, then the git repo root, then `$HOME/.nanostack/`. Skipping this step would split the install across two stores when a user or harness has `NANOSTACK_STORE` exported.
 
 ```bash
-STORE="$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME")/.nanostack"
+NANOSTACK_ROOT="${NANOSTACK_ROOT:-$HOME/.claude/skills/nanostack}"
+. "$NANOSTACK_ROOT/bin/lib/store-path.sh"
+
 jq '.phase_graph = [
   {"name":"think","depends_on":[]},
   {"name":"plan","depends_on":["think"]},
@@ -79,20 +81,22 @@ jq '.phase_graph = [
   {"name":"privacy-check","depends_on":["build"]},
   {"name":"release-readiness","depends_on":["review","qa","security","license-audit","privacy-check"]},
   {"name":"ship","depends_on":["release-readiness"]}
-]' "$STORE/config.json" > "$STORE/config.json.tmp" \
-  && mv "$STORE/config.json.tmp" "$STORE/config.json"
+]' "$NANOSTACK_STORE/config.json" > "$NANOSTACK_STORE/config.json.tmp" \
+  && mv "$NANOSTACK_STORE/config.json.tmp" "$NANOSTACK_STORE/config.json"
 ```
 
 Validate each scaffolded skill against the framework contract:
 
 ```bash
 NANOSTACK_ROOT="${NANOSTACK_ROOT:-$HOME/.claude/skills/nanostack}"
-"$NANOSTACK_ROOT/bin/check-custom-skill.sh" "$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME")/.nanostack/skills/license-audit"
-"$NANOSTACK_ROOT/bin/check-custom-skill.sh" "$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME")/.nanostack/skills/privacy-check"
-"$NANOSTACK_ROOT/bin/check-custom-skill.sh" "$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME")/.nanostack/skills/release-readiness"
+. "$NANOSTACK_ROOT/bin/lib/store-path.sh"
+
+"$NANOSTACK_ROOT/bin/check-custom-skill.sh" "$NANOSTACK_STORE/skills/license-audit"
+"$NANOSTACK_ROOT/bin/check-custom-skill.sh" "$NANOSTACK_STORE/skills/privacy-check"
+"$NANOSTACK_ROOT/bin/check-custom-skill.sh" "$NANOSTACK_STORE/skills/release-readiness"
 ```
 
-Each invocation should end with `OK: <name> passed N checks.`. The path expression resolves the same store `bin/create-skill.sh` wrote to (your repo root's `.nanostack/skills/` inside git, or `$HOME/.nanostack/skills/` outside git).
+Each invocation should end with `OK: <name> passed N checks.`. The path resolves through `bin/lib/store-path.sh`, the exact same priority order `bin/create-skill.sh` used to install the skill: explicit `NANOSTACK_STORE` env var, then git repo root's `.nanostack/`, then `$HOME/.nanostack/`.
 
 Restart your agent so it picks up the three new slash commands.
 
@@ -102,14 +106,14 @@ The skills are read-only and idempotent. Run them in any order; the conductor (a
 
 ```bash
 NANOSTACK_ROOT="${NANOSTACK_ROOT:-$HOME/.claude/skills/nanostack}"
-SKILLS_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME")/.nanostack/skills"
+. "$NANOSTACK_ROOT/bin/lib/store-path.sh"
 
 # License + privacy can run in parallel (both are concurrency=read).
-"$SKILLS_ROOT/license-audit/bin/audit.sh"
-"$SKILLS_ROOT/privacy-check/bin/check.sh"
+"$NANOSTACK_STORE/skills/license-audit/bin/audit.sh"
+"$NANOSTACK_STORE/skills/privacy-check/bin/check.sh"
 
 # release-readiness composes the upstream artifacts into a status.
-"$SKILLS_ROOT/release-readiness/bin/summarize.sh"
+"$NANOSTACK_STORE/skills/release-readiness/bin/summarize.sh"
 ```
 
 Each helper saves an artifact via `bin/save-artifact.sh`. The full schedule, including parallelism, comes from the conductor:
@@ -139,31 +143,33 @@ If any of these fails, `release-readiness` is supposed to surface it. That's the
 
 ## Reset
 
-To remove the stack from a sandbox project (resolves the same store the scaffolder wrote to: repo root inside git, `$HOME/.nanostack/` outside):
+To remove the stack from a sandbox project (resolves the same store the scaffolder wrote to: explicit `NANOSTACK_STORE` env var, then git repo root, then `$HOME/.nanostack/`):
 
 ```bash
-STORE="$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME")/.nanostack"
+NANOSTACK_ROOT="${NANOSTACK_ROOT:-$HOME/.claude/skills/nanostack}"
+. "$NANOSTACK_ROOT/bin/lib/store-path.sh"
 
-rm -rf "$STORE/skills/license-audit" \
-       "$STORE/skills/privacy-check" \
-       "$STORE/skills/release-readiness"
+rm -rf "$NANOSTACK_STORE/skills/license-audit" \
+       "$NANOSTACK_STORE/skills/privacy-check" \
+       "$NANOSTACK_STORE/skills/release-readiness"
 
 jq '.custom_phases -= ["license-audit","privacy-check","release-readiness"]' \
-  "$STORE/config.json" > "$STORE/config.json.tmp" \
-  && mv "$STORE/config.json.tmp" "$STORE/config.json"
+  "$NANOSTACK_STORE/config.json" > "$NANOSTACK_STORE/config.json.tmp" \
+  && mv "$NANOSTACK_STORE/config.json.tmp" "$NANOSTACK_STORE/config.json"
 
 # Optional: drop the saved artifacts too.
-rm -rf "$STORE/license-audit" \
-       "$STORE/privacy-check" \
-       "$STORE/release-readiness"
+rm -rf "$NANOSTACK_STORE/license-audit" \
+       "$NANOSTACK_STORE/privacy-check" \
+       "$NANOSTACK_STORE/release-readiness"
 ```
 
 If you also wired `phase_graph` and want to revert to the canonical default sprint, remove the field:
 
 ```bash
-STORE="$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME")/.nanostack"
-jq 'del(.phase_graph)' "$STORE/config.json" > "$STORE/config.json.tmp" \
-  && mv "$STORE/config.json.tmp" "$STORE/config.json"
+NANOSTACK_ROOT="${NANOSTACK_ROOT:-$HOME/.claude/skills/nanostack}"
+. "$NANOSTACK_ROOT/bin/lib/store-path.sh"
+jq 'del(.phase_graph)' "$NANOSTACK_STORE/config.json" > "$NANOSTACK_STORE/config.json.tmp" \
+  && mv "$NANOSTACK_STORE/config.json.tmp" "$NANOSTACK_STORE/config.json"
 ```
 
 Restart your agent so it stops surfacing the slash commands.
