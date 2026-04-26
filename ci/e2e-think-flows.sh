@@ -145,7 +145,9 @@ build_think_json() {
 
 # Pure jq evaluation of the brief gate. Mirrors the snippet in
 # think/SKILL.md Phase 6.6 so a regression in the doc shows up as a
-# behavior change here.
+# behavior change here. premise_validated is checked by type so that
+# both true and false count as a complete answer; only null / missing
+# / wrong-type fails.
 brief_gate_pass() {
   local file="$1"
   jq -r '
@@ -153,7 +155,7 @@ brief_gate_pass() {
     (.summary.target_user        // "") != "" and
     (.summary.narrowest_wedge    // "") != "" and
     (.summary.key_risk           // "") != "" and
-    (.summary.premise_validated // null) != null
+    ((.summary.premise_validated | type) == "boolean")
   ' "$file"
 }
 
@@ -225,7 +227,8 @@ cell_claude_git_professional() {
 # ─── Cell 4: brief gate passes on a complete brief ────────────────────
 
 cell_brief_gate_complete() {
-  new_project "cell4"
+  # 4a: premise_validated=true. Standard "we validated it" flow.
+  new_project "cell4-true"
   git init -q
   "$REPO/bin/session.sh" init development --autopilot >/dev/null
   local think_json
@@ -235,7 +238,34 @@ cell_brief_gate_complete() {
   artifact=$(ls .nanostack/think/*.json | head -1)
   local result
   result=$(brief_gate_pass "$artifact")
-  assert_eq "complete brief: gate passes (true)" "true" "$result"
+  assert_eq "complete brief, premise_validated=true: gate passes" "true" "$result"
+
+  # 4b: premise_validated=false. Honest "no, premise not validated".
+  # This is the case Codex retest caught: the previous filter treated
+  # false identically to null because `false // null` evaluates to
+  # null in jq. The fix uses a type test so true and false both pass.
+  new_project "cell4-false"
+  git init -q
+  "$REPO/bin/session.sh" init development --autopilot >/dev/null
+  think_json=$(jq -n '{
+    phase:"think",
+    summary:{
+      value_proposition:"Test thing",
+      scope_mode:"reduce",
+      target_user:"Solo dev",
+      narrowest_wedge:"Smallest path",
+      key_risk:"Premise might be wrong",
+      premise_validated: false,
+      out_of_scope:[],
+      manual_delivery_test:{possible:false, steps:[]},
+      search_summary:{mode:"local_only", result:"", existing_solution:"none"}
+    },
+    context_checkpoint:{summary:""}
+  }')
+  "$REPO/bin/save-artifact.sh" think "$think_json" >/dev/null
+  artifact=$(ls .nanostack/think/*.json | head -1)
+  result=$(brief_gate_pass "$artifact")
+  assert_eq "complete brief, premise_validated=false: gate passes (regression)" "true" "$result"
 }
 
 # ─── Cell 5: brief gate fails on incomplete brief ─────────────────────
