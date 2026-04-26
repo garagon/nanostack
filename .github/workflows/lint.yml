@@ -821,6 +821,71 @@ jobs:
           echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
           exit $fail
 
+  think-search-privacy:
+    name: /think search-before-building has modes + privacy boundary
+    runs-on: ubuntu-latest
+    # /think vNext PR 5. Search must respect privacy (private repos,
+    # sensitive keywords, non-technical users) and offline. The
+    # reference doc carries the contract; this job prevents
+    # accidental simplification that drops a mode or a boundary.
+    steps:
+      - uses: actions/checkout@v4
+      - name: search-before-building.md declares the three modes
+        run: |
+          set -e
+          fail=0
+          for mode in local_only private public; do
+            if ! grep -qE "\`?${mode}\`?" think/references/search-before-building.md; then
+              echo "FAIL: search-before-building.md missing mode '$mode'"
+              fail=1
+            fi
+          done
+          # The doc must mention each load-bearing concept. Loose grep
+          # by keyword: any phrasing is fine as long as the concept is
+          # covered.
+          for concept in 'Default selection' 'Offline fallback' 'Prompt-injection' 'search_summary'; do
+            if ! grep -qi "$concept" think/references/search-before-building.md; then
+              echo "FAIL: search-before-building.md missing concept '$concept'"
+              fail=1
+            fi
+          done
+          # search_summary fields by name.
+          for field in mode result existing_solution; do
+            if ! grep -qE "\"$field\"" think/references/search-before-building.md; then
+              echo "FAIL: search-before-building.md must document search_summary.$field"
+              fail=1
+            fi
+          done
+          # Sensitive-signal trigger words: at least four of the spec's
+          # examples must appear. The spec is intentionally not a
+          # closed set; this gate just stops the doc from drifting to
+          # zero-signal generic prose.
+          hits=0
+          for kw in cliente client contrato contract compliance auth payments credentials internal proprietary stealth nda; do
+            if grep -qiw "$kw" think/references/search-before-building.md; then
+              hits=$((hits+1))
+            fi
+          done
+          if [ "$hits" -lt 4 ]; then
+            echo "FAIL: search-before-building.md mentions only $hits sensitive-signal keywords (need >=4)"
+            fail=1
+          fi
+          exit $fail
+
+      - name: think/SKILL.md routes search results into search_summary
+        run: |
+          set -e
+          fail=0
+          if ! grep -q 'search-before-building.md' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must reference search-before-building.md"
+            fail=1
+          fi
+          if ! grep -q 'summary.search_summary' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must say search results land in summary.search_summary"
+            fail=1
+          fi
+          exit $fail
+
   think-preset-no-dump:
     name: /think preset loading without output noise
     runs-on: ubuntu-latest

@@ -322,7 +322,9 @@ Pendiente:
 
 ### Phase 1.5: Search Before Building
 
-Read `think/references/search-before-building.md` and follow the instructions before running the diagnostic.
+Read `think/references/search-before-building.md` and follow the instructions before running the diagnostic. The reference defines three search modes (`local_only` / `private` / `public`), the defaults that pick a mode automatically, the offline fallback, and the prompt-injection boundary.
+
+Whatever mode you used, write the result to `summary.search_summary` in the structured think artifact (`mode`, `result`, `existing_solution`). Downstream, `/nano` reads `existing_solution` and may shortcut the plan when it is `covers_80_percent`.
 
 ### Phase 2: The Diagnostic
 
