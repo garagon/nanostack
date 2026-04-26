@@ -1221,6 +1221,24 @@ jobs:
           fi
           exit $fail
 
+  examples-library:
+    name: Examples library contract
+    runs-on: ubuntu-latest
+    # Examples Library spec PR 5. Locks the eight-section README
+    # contract across every sandbox archetype so a fifth example
+    # added later cannot drift from the shape that
+    # examples/README.md promises to readers.
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq + node available
+        run: |
+          jq --version
+          node --version
+      - name: Run examples contract
+        run: |
+          chmod +x ci/check-examples.sh
+          ci/check-examples.sh
+
   v1-release-framing:
     name: v1.0 release framing (Guided/Professional in READMEs)
     runs-on: ubuntu-latest
