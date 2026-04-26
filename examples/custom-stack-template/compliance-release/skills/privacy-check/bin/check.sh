@@ -59,10 +59,14 @@ scan_personal_data() {
     [ -d "$root" ] || continue
     grep -rEn "$PERSONAL_RE" "$root" 2>/dev/null | head -20 | while IFS=: read -r file line evidence; do
       [ -z "$file" ] && continue
-      # Extract just the matching token for evidence.
-      token=$(printf '%s' "$evidence" | grep -oE "$PERSONAL_RE" | head -1)
-      [ -z "$token" ] && token="(field)"
-      printf 'personal_data\t%s\t%s\n' "$file" "$token"
+      # Emit one signal per UNIQUE matching token in the line. The
+      # earlier `head -1` form silently dropped the second token when
+      # a single line collected both, e.g. `{ email: ..., name: ... }`
+      # would only report email. Users expect both fields to surface.
+      printf '%s' "$evidence" | grep -oE "$PERSONAL_RE" | sort -u | while read -r token; do
+        [ -z "$token" ] && continue
+        printf 'personal_data\t%s\t%s\n' "$file" "$token"
+      done
     done
   done
 }
@@ -72,9 +76,12 @@ scan_telemetry() {
     [ -d "$root" ] || continue
     grep -rEn "$TELEMETRY_RE" "$root" 2>/dev/null | head -20 | while IFS=: read -r file line evidence; do
       [ -z "$file" ] && continue
-      token=$(printf '%s' "$evidence" | grep -oiE "$TELEMETRY_RE" | head -1 | tr '[:upper:]' '[:lower:]')
-      [ -z "$token" ] && token="(library)"
-      printf 'telemetry\t%s\t%s\n' "$file" "$token"
+      # Same fix: emit one signal per unique library reference in the
+      # line so `import { posthog } from "sentry"` reports both.
+      printf '%s' "$evidence" | grep -oiE "$TELEMETRY_RE" | tr '[:upper:]' '[:lower:]' | sort -u | while read -r token; do
+        [ -z "$token" ] && continue
+        printf 'telemetry\t%s\t%s\n' "$file" "$token"
+      done
     done
   done
 }
