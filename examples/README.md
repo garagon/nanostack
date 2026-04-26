@@ -11,7 +11,7 @@ The goal is not perfect apps. It is showing the full workflow end to end: idea, 
 | [starter-todo](starter-todo/) | New users, non-technical | One HTML file, zero dependencies | 5 to 10 minutes | `/nano-run` then `/think` |
 | [cli-notes](cli-notes/) | Technical users learning the CLI archetype | Bash script, plain text storage | 5 to 15 minutes | `/feature` or `/think` |
 | [api-healthcheck](api-healthcheck/) | Backend developers | Node stdlib HTTP server, zero dependencies | 10 to 15 minutes | `/feature` or `/think` |
-| static-landing (coming) | Founders and designers validating a visual demo | Static HTML | 5 to 15 minutes | `/think` |
+| [static-landing](static-landing/) | Founders and designers validating a visual demo | Static HTML, plain CSS, no framework | 10 to 15 minutes | `/feature` or `/think` |
 
 If you are new and unsure, start with `starter-todo`. It is intentionally the smallest case: a TODO app that fits in one HTML file with three feature ideas already written for you.
 
