@@ -283,6 +283,90 @@ The Guided first screen names what `/think` will do in plain language. It never 
 
 `always blocks`, `guaranteed blocks`, `all agents enforce`, `hard-blocks on every agent` (per `start/SKILL.md`'s capability-honesty rule). Archetypes do not override capability honesty.
 
+### Canonical Guided output per archetype
+
+Each archetype's Guided four-block output. Copy these shapes verbatim except for the variable parts. Lint scans inside the fences to verify no banned term leaks.
+
+#### founder_validation (Spanish)
+
+<!-- guided-output:start -->
+```
+Resultado: Vale la pena probar una version mas chica antes de construir todo.
+
+Como verlo:
+1. Cuando me digas "dale", lo convierto en un plan concreto.
+
+Que revise:
+- Hay un usuario claro.
+- La primera version puede probarse sin cuentas, pagos ni integraciones.
+- El mayor riesgo es que estemos resolviendo el sintoma equivocado.
+
+Pendiente:
+- No validamos todavia si mas personas tienen este dolor.
+- No medimos retencion ni conversion.
+```
+<!-- guided-output:end -->
+
+#### cli_tooling
+
+<!-- guided-output:start -->
+```
+Result: The feature is small enough if it stays to one command and preserves the existing file format.
+
+How to try:
+1. Run the current command first, then run the new command after the change.
+
+What was checked:
+- The command shape is clear.
+- Existing behavior has to keep working.
+- The main risk is corrupting local data.
+
+What remains:
+- I have not tested the command yet.
+- Windows shell behavior may need a separate check.
+```
+<!-- guided-output:end -->
+
+#### api_backend
+
+<!-- guided-output:start -->
+```
+Result: The safest first version is one endpoint with a real request check.
+
+How to try:
+1. Start the server and call the endpoint with curl.
+
+What was checked:
+- The response shape is clear.
+- Existing status codes must keep working.
+- Logging and headers are the main safety risks.
+
+What remains:
+- I have not load-tested it.
+- I have not checked production deployment settings.
+```
+<!-- guided-output:end -->
+
+#### landing_experience (Spanish)
+
+<!-- guided-output:start -->
+```
+Resultado: Primero conviene aclarar el mensaje, no agregar mas secciones.
+
+Como verlo:
+1. Abrir la pagina y leer el hero como si fueras un visitante nuevo.
+
+Que revise:
+- El visitante tiene que entender el producto en cinco segundos.
+- La accion principal tiene que ser obvia.
+- No hace falta agregar scripts ni trackers para esta prueba.
+
+Pendiente:
+- No medimos conversion real.
+- No probamos con usuarios externos.
+```
+<!-- guided-output:end -->
+
 ## Artifact Fields
 
 The five archetype fields the `/think` artifact may include in `summary`:

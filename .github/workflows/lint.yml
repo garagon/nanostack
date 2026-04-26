@@ -1134,6 +1134,82 @@ jobs:
           echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
           exit $fail
 
+  think-archetype-lens-routing:
+    name: /think archetype lens routing + preset interaction
+    runs-on: ubuntu-latest
+    # Guided Archetypes v1 PR 3. Three rules to lock at lint time:
+    #   1. Explicit --preset wins over the archetype's default lens.
+    #   2. The archetype -> internal lens table is documented in
+    #      think/SKILL.md so the runtime can read it without
+    #      re-deriving rules from prose.
+    #   3. Guided fenced output blocks for each archetype (in
+    #      think/references/archetypes.md) do NOT contain "preset",
+    #      "archetype", or "mode" — the three archetype-specific
+    #      banned terms on top of the plain-language contract bans.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preset section names explicit-preset-wins rule
+        run: |
+          set -e
+          # Loose grep: any phrasing is fine as long as the rule is
+          # named in the user-facing surface. Common phrasings:
+          # "Explicit --preset always wins", "explicit preset wins",
+          # "--preset always wins".
+          if ! grep -qE 'Explicit `?--preset`?[^\\n]*wins|explicit (--)?preset.*wins' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must state that explicit --preset wins over the archetype's lens"
+            exit 1
+          fi
+
+      - name: Per-archetype lens map present in think/SKILL.md
+        run: |
+          set -e
+          fail=0
+          # Loose grep: each canonical archetype must appear in the
+          # Preset Selection section (where the lens table lives).
+          # The exact wording can change; the names cannot drift.
+          for arch in founder_validation cli_tooling api_backend landing_experience; do
+            if ! grep -q "$arch" think/SKILL.md; then
+              echo "FAIL: think/SKILL.md missing archetype lens entry: $arch"
+              fail=1
+            fi
+          done
+          # Each archetype's default lens name must appear too.
+          for lens in yc devex eng design; do
+            if ! grep -q "\`$lens\`" think/SKILL.md; then
+              echo "FAIL: think/SKILL.md missing internal lens reference: $lens"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Guided fenced blocks in archetypes.md pass banned-term grep
+        run: |
+          set -e
+          fail=0
+          # Plain-language banned terms PLUS the three archetype-
+          # specific words (archetype, preset, mode). Patterns use
+          # word boundaries so "diff" does not match "different".
+          patterns='\bartifact\b|\bartifacts\b|\bPR\b|\bPRs\b|\bCI\b|\bbranch\b|\bbranches\b|\bdiff\b|\bdiffs\b|\bhook\b|\bhooks\b|\bphase\b|\bphases\b|\bsecurity audit\b|\bQA\b|\bscope drift\b|\barchetype\b|\bpreset\b|\bmode\b'
+          blocks=$(awk '
+            /<!-- guided-output:start -->/ { capture=1; buf=""; next }
+            /<!-- guided-output:end -->/   { if (capture) { print buf; buf="" } capture=0; next }
+            capture { buf = buf " " $0 }
+          ' think/references/archetypes.md)
+          if [ -z "$blocks" ]; then
+            echo "FAIL: archetypes.md must contain at least one <!-- guided-output --> example block"
+            exit 1
+          fi
+          while IFS= read -r block; do
+            [ -z "$block" ] && continue
+            hit=$(echo "$block" | grep -i -oE "$patterns" || true)
+            if [ -n "$hit" ]; then
+              echo "FAIL: archetypes.md guided block contains banned term(s): $(echo "$hit" | sort -u | tr '\n' ' ')"
+              echo "      block: $block"
+              fail=1
+            fi
+          done < <(printf '%s\n' "$blocks")
+          exit $fail
+
   think-archetype-aliases:
     name: /think archetypes alias map present
     runs-on: ubuntu-latest
