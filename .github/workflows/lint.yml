@@ -2571,6 +2571,92 @@ jobs:
           done
           exit $fail
 
+  custom-skill-template-portable:
+    name: examples/custom-skill-template is portable after copy
+    runs-on: ubuntu-latest
+    # PR 3 of the Custom Stack Framework v1 round. The template's
+    # SKILL.md used to reference ./examples/custom-skill-template/...
+    # so a copied skill broke with status 127 the first time the agent
+    # invoked it. Lock the four acceptance criteria from the spec:
+    #   - SKILL.md does not embed the repo-relative example path
+    #   - agents/openai.yaml exists and parses
+    #   - bin/smoke.sh exists, is executable, and passes on a tmp copy
+    #   - the copied skill works without referencing the source folder
+    steps:
+      - uses: actions/checkout@v4
+      - name: SKILL.md does not embed repo-relative example paths
+        run: |
+          set -e
+          if grep -nE '\./examples/custom-skill-template/' \
+            examples/custom-skill-template/audit-licenses/SKILL.md; then
+            echo "FAIL: SKILL.md still references ./examples/custom-skill-template/"
+            echo "      Use a post-copy path like \$HOME/.claude/skills/audit-licenses/bin/audit.sh"
+            exit 1
+          fi
+      - name: SKILL.md tells the user to register the phase before saving
+        run: |
+          set -e
+          if ! grep -qE 'custom_phases.*audit-licenses' \
+            examples/custom-skill-template/audit-licenses/SKILL.md; then
+            echo "FAIL: SKILL.md does not show the .custom_phases registration step"
+            echo "      Without registration, save-artifact.sh exits 1 the first time the agent runs the skill."
+            exit 1
+          fi
+      - name: SKILL.md uses host-agnostic NANOSTACK_ROOT and SKILL_DIR env vars
+        run: |
+          set -e
+          f=examples/custom-skill-template/audit-licenses/SKILL.md
+          # Both vars must be defined (with the ${VAR:-default} pattern).
+          if ! grep -qE 'NANOSTACK_ROOT=.*HOME' "$f"; then
+            echo "FAIL: SKILL.md does not define NANOSTACK_ROOT with a default"
+            exit 1
+          fi
+          if ! grep -qE 'SKILL_DIR=.*HOME' "$f"; then
+            echo "FAIL: SKILL.md does not define SKILL_DIR with a default"
+            exit 1
+          fi
+          # Helper invocations must not hardcode ~/.claude/skills/nanostack/bin/...
+          # That defeats the host-agnostic claim and locks the template
+          # to one agent layout.
+          if grep -nE '~/\.claude/skills/nanostack/bin/(resolve|save-artifact|find-artifact)\.sh' "$f"; then
+            echo "FAIL: SKILL.md hardcodes ~/.claude/skills/nanostack/bin/... paths"
+            echo "      Use \"\$NANOSTACK_ROOT/bin/...\" so non-Claude agents can substitute the path."
+            exit 1
+          fi
+      - name: agents/openai.yaml exists and parses
+        run: |
+          set -e
+          f=examples/custom-skill-template/audit-licenses/agents/openai.yaml
+          test -f "$f" || { echo "FAIL: $f missing"; exit 1; }
+          python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "$f"
+          # Minimum surface (matches the built-in skill convention)
+          for k in display_name short_description default_prompt; do
+            if ! grep -qE "^[[:space:]]+${k}:" "$f"; then
+              echo "FAIL: $f missing key '$k'"
+              exit 1
+            fi
+          done
+      - name: bin/smoke.sh exists and is executable
+        run: |
+          set -e
+          f=examples/custom-skill-template/audit-licenses/bin/smoke.sh
+          test -x "$f" || { echo "FAIL: $f is not executable"; exit 1; }
+          bash -n "$f"
+      - name: Copied skill runs from a fake skills root with no link back
+        run: |
+          set -e
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          cp -R examples/custom-skill-template/audit-licenses "$tmp/audit-licenses"
+          # Drop the SKILL.md path that mentions the repo so the test
+          # really exercises an island copy.
+          if grep -qE '\./examples/custom-skill-template/' "$tmp/audit-licenses/SKILL.md"; then
+            echo "FAIL: copied SKILL.md retains repo-relative example path"
+            exit 1
+          fi
+          # The smoke runner picks the helper from its own dir.
+          "$tmp/audit-licenses/bin/smoke.sh"
+
   guard-rule-ids-unique:
     name: Guard rule ids are unique
     runs-on: ubuntu-latest

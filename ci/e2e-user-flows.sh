@@ -540,6 +540,94 @@ flow_phase_registry() {
   unset NANOSTACK_STORE
 }
 
+
+
+# ─── Flow 9: custom skill template copy ───────────────────────────
+# After PR 3, copying examples/custom-skill-template/audit-licenses
+# into a fake skills root must work without referencing the source
+# folder. This flow exercises the spec's acceptance scenario:
+#   1. cp -R the template into /tmp/skills/audit-licenses
+#   2. cd into a sibling fake project
+#   3. run the helper from its absolute path (smoke.sh proxies for
+#      the helper since it covers all three stacks)
+#   4. confirm the SKILL.md does not embed the repo example path
+
+flow_custom_skill_template_copy() {
+  local skills_root="$TMP_ROOT/skills"
+  local proj="$TMP_ROOT/copy-test-proj"
+  mkdir -p "$skills_root" "$proj"
+  cd "$proj"
+  git init -q
+
+  cp -R "$REPO/examples/custom-skill-template/audit-licenses" "$skills_root/audit-licenses"
+
+  assert_true "copied SKILL.md does not embed the repo example path" \
+    bash -c "! grep -qE '\\./examples/custom-skill-template/' '$skills_root/audit-licenses/SKILL.md'"
+
+  assert_true "copied SKILL.md uses NANOSTACK_ROOT and SKILL_DIR env vars" \
+    bash -c "grep -qE 'NANOSTACK_ROOT=.*HOME' '$skills_root/audit-licenses/SKILL.md' && grep -qE 'SKILL_DIR=.*HOME' '$skills_root/audit-licenses/SKILL.md'"
+
+  assert_true 'copied SKILL.md does NOT hardcode ~/.claude/skills/nanostack/bin paths' \
+    bash -c "! grep -qE '~/\\.claude/skills/nanostack/bin/(resolve|save-artifact|find-artifact)\\.sh' '$skills_root/audit-licenses/SKILL.md'"
+
+  assert_true "copied agents/openai.yaml is present" \
+    test -f "$skills_root/audit-licenses/agents/openai.yaml"
+
+  assert_true "copied bin/smoke.sh is executable" \
+    test -x "$skills_root/audit-licenses/bin/smoke.sh"
+
+  # Run the smoke check from the copied location. Three "ok" lines.
+  local smoke_out
+  smoke_out=$( "$skills_root/audit-licenses/bin/smoke.sh" 2>&1 )
+  assert_true "copied skill smoke passes (node)" \
+    bash -c "echo '$smoke_out' | grep -qE 'ok[[:space:]]+node manifest scans'"
+  assert_true "copied skill smoke passes (python)" \
+    bash -c "echo '$smoke_out' | grep -qE 'ok[[:space:]]+python manifest scans'"
+  assert_true "copied skill smoke passes (go)" \
+    bash -c "echo '$smoke_out' | grep -qE 'ok[[:space:]]+go manifest scans'"
+
+  # Full user journey: register the phase, run the helper against a
+  # real Node manifest, save the artifact, find it back, and verify
+  # the resolver classifies the phase as custom. This is the path
+  # that previously failed with "invalid phase" before the user
+  # learned about .custom_phases.
+  mkdir -p .nanostack
+  printf '%s' '{"custom_phases":["audit-licenses"]}' > .nanostack/config.json
+  export NANOSTACK_STORE="$proj/.nanostack"
+
+  # Minimal manifest so audit.sh has something to read.
+  printf '%s\n' '{"name":"copy-test","dependencies":{"lodash":"4.17.21"}}' > package.json
+
+  # Resolver knows the phase now.
+  local kind
+  kind=$( "$REPO/bin/resolve.sh" audit-licenses 2>/dev/null | jq -r '.phase_kind' )
+  assert_eq "registered custom phase resolves with phase_kind=custom" "custom" "$kind"
+
+  # Run the helper from its copied location and save the artifact.
+  local audit_json
+  audit_json=$( "$skills_root/audit-licenses/bin/audit.sh" node 2>/dev/null )
+  assert_true "audit.sh emits a JSON object with .counts" \
+    bash -c "echo '$audit_json' | jq -e '.counts' >/dev/null"
+
+  # Build a save-artifact-shaped JSON from the audit result.
+  local save_json
+  save_json=$( jq -n --argjson counts "$(echo "$audit_json" | jq '.counts')" \
+    '{phase:"audit-licenses", summary:{flagged:[],counts:$counts}, context_checkpoint:{summary:"smoke save"}}' )
+  assert_true "save-artifact accepts the registered custom phase" \
+    "$REPO/bin/save-artifact.sh" audit-licenses "$save_json"
+
+  # find-artifact returns the path we just saved.
+  local found
+  found=$( "$REPO/bin/find-artifact.sh" audit-licenses 30 2>/dev/null )
+  assert_true "find-artifact returns the saved audit-licenses path" \
+    test -f "$found"
+  assert_true "saved artifact has the expected phase field" \
+    bash -c "jq -e '.phase == \"audit-licenses\"' '$found' >/dev/null"
+
+  cd "$REPO"
+  unset NANOSTACK_STORE
+}
+
 # ─── Run ──────────────────────────────────────────────────────────────
 
 echo "Nanostack E2E user flows"
@@ -554,6 +642,7 @@ flow sprint_phase_gate
 flow legacy_repair
 flow local_no_git
 flow phase_registry
+flow custom_skill_template_copy
 
 echo ""
 echo "========================"
