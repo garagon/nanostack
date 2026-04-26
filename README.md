@@ -9,7 +9,7 @@
   Turns your AI coding agent into a delivery team: scope, plan, build, review, test, audit, and ship in language anyone can read.
 </p>
 
-<p align="center"><strong>One workflow. Technical or guided. Honest about what each agent can enforce.</strong></p>
+<p align="center"><strong>Small sandbox sprints run in minutes. Real projects keep the same professional workflow.</strong></p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>

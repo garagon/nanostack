@@ -1,7 +1,7 @@
 <h1 align="center">Nanostack</h1>
 <p align="center">
   Convertí a tu agente de código con IA en un equipo de delivery: definí alcance, planificá, construí, revisá, probá, auditá y publicá en lenguaje que cualquiera puede leer.<br>
-  <strong>Un workflow. Modo guiado o profesional. Honesto sobre lo que cada agente puede bloquear.</strong>
+  <strong>Sprints en sandbox que corren en minutos. Los proyectos reales mantienen el mismo workflow profesional.</strong>
 </p>
 
 <br>
