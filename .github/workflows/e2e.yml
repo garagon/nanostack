@@ -39,3 +39,21 @@ jobs:
         run: |
           chmod +x ci/e2e-delivery-matrix.sh
           ci/e2e-delivery-matrix.sh
+
+  e2e-think-flows:
+    name: E2E /think vNext flows
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Behavior coverage for the /think vNext spec (PRs #167-#171):
+    # structured artifact, profile resolution, autopilot brief gate,
+    # preset no-dump regression, search privacy modes. Static lint
+    # already covers the structural side (file X says Y); this
+    # harness exercises the runtime contract end-to-end.
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq is present
+        run: jq --version
+      - name: Run /think E2E flows
+        run: |
+          chmod +x ci/e2e-think-flows.sh
+          ci/e2e-think-flows.sh
