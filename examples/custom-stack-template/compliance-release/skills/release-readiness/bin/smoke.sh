@@ -121,7 +121,50 @@ run_case "mixed-warn-missing" "BLOCKED" \
   review=OK qa=WARN security=OK privacy-check=OK
 # (license-audit deliberately omitted to simulate MISSING)
 
+# Case 6: tampered artifact -> rollup BLOCKED, per-check TAMPERED.
+# A release gate must not treat a modified-after-save artifact as
+# clean evidence. The smoke writes a security artifact with an
+# explicit (wrong) integrity hash so find-artifact.sh --verify fails.
+proj="$tmp/tampered"
+mkdir -p "$proj"
+cd "$proj"
+git init -q 2>/dev/null || true
+store="$proj/.nanostack"
+mkdir -p "$store"
+write_artifact "$store" review OK
+write_artifact "$store" qa OK
+write_artifact "$store" license-audit OK
+write_artifact "$store" "privacy-check" OK
+sec_dir="$store/security"
+mkdir -p "$sec_dir"
+ts=$(date -u +"%Y%m%d-%H%M%S")
+jq -n --arg phase "security" --arg ts "$ts" --arg project "$proj" '
+  {
+    phase: $phase,
+    status: "completed",
+    project: $project,
+    timestamp: ($ts | gsub("(?<a>[0-9]{4})(?<b>[0-9]{2})(?<c>[0-9]{2})-(?<d>[0-9]{2})(?<e>[0-9]{2})(?<f>[0-9]{2})"; "\(.a)-\(.b)-\(.c)T\(.d):\(.e):\(.f)Z")),
+    summary: { status: "OK", headline: "tampered case" },
+    context_checkpoint: { summary: "smoke" },
+    integrity: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+  }' > "$sec_dir/$ts.json"
+out=$(
+  NANOSTACK_ROOT="$REPO_ROOT" \
+  NANOSTACK_STORE="$store" \
+  "$SUMMARIZE" 2>&1
+)
+cd "$tmp"
+got=$( echo "$out" | jq -r '.rollup_status' 2>/dev/null )
+sec_status=$( echo "$out" | jq -r '.checks[] | select(.phase == "security") | .status' 2>/dev/null )
+if [ "$got" = "BLOCKED" ] && [ "$sec_status" = "TAMPERED" ]; then
+  echo "  ok    tampered: per-check is TAMPERED, rollup is BLOCKED"
+else
+  echo "FAIL: tampered case wrong (rollup=$got, security=$sec_status)"
+  echo "$out"
+  fail=1
+fi
+
 if [ "$fail" -eq 0 ]; then
-  echo "OK: release-readiness smoke passed (5 cases)"
+  echo "OK: release-readiness smoke passed (6 cases)"
 fi
 exit $fail

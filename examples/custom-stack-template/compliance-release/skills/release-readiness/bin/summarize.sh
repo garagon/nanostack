@@ -7,18 +7,24 @@
 # each artifact's summary to a per-check status.
 #
 # Per-upstream status:
-#   - artifact missing            -> MISSING
-#   - artifact present, status=OK -> OK
-#   - artifact present, status=WARN -> WARN
-#   - artifact present, status=BLOCKED -> BLOCKED
-#   - artifact present, status absent or unrecognized -> WARN
-#     (the upstream did not declare a status; treat as soft warning)
+#   - artifact missing                              -> MISSING
+#   - artifact present but integrity hash mismatch  -> TAMPERED
+#   - artifact present + verified, status=OK        -> OK
+#   - artifact present + verified, status=WARN      -> WARN
+#   - artifact present + verified, status=BLOCKED   -> BLOCKED
+#   - artifact present + verified, status absent or
+#     unrecognized                                  -> WARN
+#
+# Each lookup goes through find-artifact.sh --verify so a tampered
+# artifact (mtime untouched, content rewritten) cannot quietly roll
+# the gate up to OK. The tampered case is recorded as TAMPERED in
+# the per-check entry and forces the rollup to BLOCKED, separately
+# from "artifact never saved" which records as MISSING.
 #
 # Rollup (monotonic, worst case wins):
-#   - any check is BLOCKED                          -> BLOCKED
-#   - else any check is MISSING (required upstream)  -> BLOCKED
-#   - else any check is WARN                         -> WARN
-#   - else                                           -> OK
+#   - any check is BLOCKED, TAMPERED, or MISSING -> BLOCKED
+#   - else any check is WARN                     -> WARN
+#   - else                                       -> OK
 #
 # Output: JSON object with `checks` array and `rollup_status`. The
 # calling skill saves the artifact and surfaces a headline + next
@@ -40,62 +46,56 @@ fi
 
 UPSTREAMS="review qa security license-audit privacy-check"
 
-# Status precedence used by the rollup: lower index = worse.
-status_rank() {
-  case "$1" in
-    BLOCKED) printf '0' ;;
-    MISSING) printf '1' ;;
-    WARN)    printf '2' ;;
-    OK)      printf '3' ;;
-    *)       printf '2' ;; # unknown maps to WARN-ish
-  esac
-}
-
 CHECKS_JSON='[]'
 ROLLUP="OK"
-ROLLUP_RANK=3
-HAS_BLOCKER=false
-HAS_MISSING=false
+HAS_FAILURE=false  # any of BLOCKED, TAMPERED, MISSING
+HAS_WARN=false
 
 for phase in $UPSTREAMS; do
-  artifact=$( "$FIND_ARTIFACT" "$phase" 30 2>/dev/null || true )
-  if [ -z "$artifact" ] || [ ! -f "$artifact" ]; then
+  # First: does an artifact exist at all (any artifact, regardless of
+  # integrity)? Used to distinguish "never saved" from "saved but
+  # tampered with".
+  raw=$( "$FIND_ARTIFACT" "$phase" 30 2>/dev/null || true )
+  if [ -z "$raw" ] || [ ! -f "$raw" ]; then
     status="MISSING"
     evidence=""
-    HAS_MISSING=true
   else
-    raw_status=$( jq -r '.summary.status // ""' "$artifact" 2>/dev/null )
-    case "$raw_status" in
-      OK|WARN|BLOCKED) status="$raw_status" ;;
-      "") status="WARN" ;;  # artifact present but no declared status
-      *)  status="WARN" ;;  # unrecognized status string
-    esac
-    evidence="artifact"
-    [ "$status" = "BLOCKED" ] && HAS_BLOCKER=true
+    # Then: does it pass integrity verification? --verify exits 1 and
+    # prints "INTEGRITY FAILED" to stderr when the stored hash does
+    # not match the recomputed hash. A release gate must surface that
+    # explicitly, not treat a tampered file as clean evidence.
+    verified=$( "$FIND_ARTIFACT" "$phase" 30 --verify 2>/dev/null || true )
+    if [ -z "$verified" ] || [ ! -f "$verified" ]; then
+      status="TAMPERED"
+      evidence="integrity_failure"
+    else
+      raw_status=$( jq -r '.summary.status // ""' "$verified" 2>/dev/null )
+      case "$raw_status" in
+        OK|WARN|BLOCKED) status="$raw_status" ;;
+        "") status="WARN" ;;
+        *)  status="WARN" ;;
+      esac
+      evidence="artifact"
+    fi
   fi
+
+  case "$status" in
+    BLOCKED|TAMPERED|MISSING) HAS_FAILURE=true ;;
+    WARN)                     HAS_WARN=true ;;
+  esac
 
   CHECKS_JSON=$( echo "$CHECKS_JSON" | jq \
     --arg phase "$phase" \
     --arg status "$status" \
     --arg evidence "$evidence" \
     '. + [{phase: $phase, status: $status, evidence: ($evidence | select(. != "") // null)}]' )
-
-  rank=$(status_rank "$status")
-  if [ "$rank" -lt "$ROLLUP_RANK" ]; then
-    ROLLUP_RANK=$rank
-    case "$rank" in
-      0) ROLLUP="BLOCKED" ;;
-      1) ROLLUP="BLOCKED" ;; # MISSING required upstream blocks the gate
-      2) ROLLUP="WARN" ;;
-      3) ROLLUP="OK" ;;
-    esac
-  fi
 done
 
-# Always-blocked override: if anything was BLOCKED or MISSING, the
-# rollup must reflect that even if a later check OK'd the rank.
-if [ "$HAS_BLOCKER" = "true" ] || [ "$HAS_MISSING" = "true" ]; then
+# Monotonic worst-case rollup. BLOCKED dominates everything.
+if [ "$HAS_FAILURE" = "true" ]; then
   ROLLUP="BLOCKED"
+elif [ "$HAS_WARN" = "true" ]; then
+  ROLLUP="WARN"
 fi
 
 jq -n \

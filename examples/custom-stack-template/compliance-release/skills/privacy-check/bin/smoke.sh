@@ -115,7 +115,42 @@ else
   echo "FAIL: env_template case wrong"; echo "$out"; fail=1
 fi
 
+# ─── Case 7: name-only collection ──────────────────────────
+# Spec contract names `name` as a personal-data field. A signup form
+# that only collects name must trigger personal_data even when no
+# email field is present.
+mkdir -p "$tmp/name-only/src"
+cat > "$tmp/name-only/src/profile.js" <<'JS'
+const profile = { name: req.body.name };
+JS
+out=$( cd "$tmp/name-only" && "$CHECK" 2>&1 )
+if echo "$out" | jq -e '
+  (.signals | any(.kind == "personal_data" and (.evidence == "name")))
+' >/dev/null 2>&1; then
+  echo "  ok    name-only collection triggers personal_data"
+else
+  echo "FAIL: name-only case wrong"; echo "$out"; fail=1
+fi
+
+# ─── Case 8: telemetry library `ga` ─────────────────────────
+# Spec contract names `ga` (Google Analytics) as a telemetry library.
+# A short token is noisy but the SKILL claims coverage; the smoke
+# locks the claim against quiet drift.
+mkdir -p "$tmp/ga/src"
+cat > "$tmp/ga/src/track.js" <<'JS'
+import ga from 'react-ga';
+ga('send', 'pageview');
+JS
+out=$( cd "$tmp/ga" && "$CHECK" 2>&1 )
+if echo "$out" | jq -e '
+  (.signals | any(.kind == "telemetry" and (.evidence == "ga")))
+' >/dev/null 2>&1; then
+  echo "  ok    ga import triggers telemetry signal"
+else
+  echo "FAIL: ga case wrong"; echo "$out"; fail=1
+fi
+
 if [ "$fail" -eq 0 ]; then
-  echo "OK: privacy-check smoke passed (6 cases)"
+  echo "OK: privacy-check smoke passed (8 cases)"
 fi
 exit $fail

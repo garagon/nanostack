@@ -109,7 +109,28 @@ else
   fail=1
 fi
 
+# ─── Case 6: Go single-line require form ────────────────────
+# A common minimal go.mod uses `require <module> <version>` without
+# a require block. The original scanner only matched indented entries
+# inside `require (...)`, dropping single-line deps silently.
+mkdir -p "$tmp/go-single"
+cat > "$tmp/go-single/go.mod" <<'GOMOD'
+module smoke
+
+go 1.21
+
+require github.com/spf13/cobra v1.8.0
+GOMOD
+out=$( cd "$tmp/go-single" && "$AUDIT" 2>&1 )
+if echo "$out" | jq -e '.stack == "go" and .counts.total == 1 and .counts.unknown == 1' >/dev/null 2>&1; then
+  echo "  ok    go single-line require captures the dep"
+else
+  echo "FAIL: go single-line case wrong (counts.total should be 1)"
+  echo "$out"
+  fail=1
+fi
+
 if [ "$fail" -eq 0 ]; then
-  echo "OK: license-audit smoke passed (5 cases)"
+  echo "OK: license-audit smoke passed (6 cases)"
 fi
 exit $fail

@@ -85,7 +85,24 @@ scan_python() {
 
 scan_go() {
   [ -f go.mod ] || return 0
-  grep -E '^[[:space:]]+[a-zA-Z0-9._/-]+' go.mod 2>/dev/null | awk '{print $1}' | while read -r dep; do
+  # go.mod has two require forms:
+  #   1. Block:  `require ( <module> <version>\n ... )` -> indented module names.
+  #   2. Single: `require <module> <version>`           -> top-level statement.
+  # Cover both; the original implementation only handled the block
+  # form and silently dropped single-line require statements.
+  awk '
+    BEGIN { in_block = 0 }
+    /^require[[:space:]]*\(/ { in_block = 1; next }
+    /^\)/                    { in_block = 0; next }
+    in_block && /^[[:space:]]+[a-zA-Z0-9._\/-]+/ {
+      # Strip indirect comments and emit module name (column 1 after trim).
+      sub(/^[[:space:]]+/, ""); print $1; next
+    }
+    /^require[[:space:]]+[a-zA-Z0-9._\/-]+/ {
+      # Single-line: `require <module> <version>` -> module is column 2.
+      print $2
+    }
+  ' go.mod 2>/dev/null | while read -r dep; do
     [ -z "$dep" ] && continue
     printf '%s\tunknown\n' "$dep"
   done

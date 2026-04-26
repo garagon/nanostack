@@ -37,13 +37,18 @@ SOURCE_ROOTS="src app pages server api lib"
 
 # Personal-data field markers. Match as whole-word tokens to avoid
 # false positives on identifiers that happen to contain "email" as a
-# substring (e.g. "emailing-list-name").
-PERSONAL_RE='\b(email|phone|address|payment|credit_?card|ssn|api[_-]?key|access[_-]?token|file[_-]?upload)\b'
+# substring (e.g. "emailing-list-name"). The `name` token is a known
+# false-positive magnet (it appears in lots of code unrelated to user
+# collection); we keep it because the SKILL contract says we cover
+# it, and the user triages the per-file evidence list.
+PERSONAL_RE='\b(email|name|phone|address|payment|credit_?card|ssn|api[_-]?key|access[_-]?token|file[_-]?upload)\b'
 
 # Telemetry libraries. These are import-statement substrings;
 # language-agnostic so the same pattern catches `from sentry`,
-# `require('posthog')`, `import segment from`, etc.
-TELEMETRY_RE='\b(analytics|tracking|telemetry|segment|posthog|mixpanel|sentry)\b'
+# `require('posthog')`, `import segment from`, etc. `ga` (Google
+# Analytics) is short and noisy, but the SKILL contract names it
+# explicitly; the user triages the per-file evidence list.
+TELEMETRY_RE='\b(analytics|tracking|telemetry|segment|posthog|ga|mixpanel|sentry)\b'
 
 # Env-template indicators that hint at collection. Matches against
 # variable names like EMAIL_API_KEY or USER_PHONE_NUMBER.
