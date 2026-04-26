@@ -227,6 +227,30 @@ Si querés enforcement duro, usá Claude Code. Si aceptás disciplina a nivel ag
 
 Para la guía completa de problemas en español (slash commands, jq, phase gate, puerto en uso, Windows, sprints atascados, conflictos de nombres), ver [TROUBLESHOOTING.es.md](TROUBLESHOOTING.es.md). Para temas avanzados (proxy corporativo, doble ejecución en autopilot, telemetría) consultá la versión canónica en inglés: [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
+## Construí tu propio skill
+
+Nanostack es un framework de workflow, no solo un set fijo de skills. Podés crear tus propios skills, registrarlos como fases, y reutilizar el mismo artifact store, resolver, sprint journal, analytics, conductor y vault local que usan los skills built-in.
+
+Generá un skill desde el template, validalo, reiniciá tu agente:
+
+```bash
+bin/create-skill.sh license-audit --concurrency read --depends-on build
+bin/check-custom-skill.sh .nanostack/skills/license-audit
+```
+
+Lo que ese skill hereda automáticamente, todo cubierto por `ci/e2e-custom-stack-flows.sh`:
+
+- `save-artifact.sh license-audit` y `find-artifact.sh license-audit` aceptan la fase custom igual que una core.
+- `resolve.sh license-audit` devuelve `phase_kind: "custom"` con `upstream_artifacts` derivados del `depends_on` del skill.
+- `sprint-journal.sh` emite una sección `## /license-audit` con status, headline y artifact path.
+- `analytics.sh --json` cuenta el skill en `sprints.custom.license-audit` y lo suma a `sprints.total`.
+- `discard-sprint.sh --dry-run` lista los artefactos del skill junto con los core.
+- `conductor/bin/sprint.sh start --phases <json>` acepta un grafo que incluye la fase custom; `batch` lee la `concurrency:` desde el `SKILL.md` del skill.
+
+Un equipo de marketing arma `/audience` y `/campaign`. Un equipo de datos arma `/explore` y `/model`. Un equipo de compliance arma `/license-audit` y `/privacy`. Todos componen con `/think` para ideas, `/review` para calidad y `/ship` para entrega.
+
+El contrato del framework está en [`reference/custom-stack-contract.md`](reference/custom-stack-contract.md). Walkthrough completo: [`EXTENDING.md`](EXTENDING.md).
+
 ## Privacidad
 
 Nanostack no tiene un servicio cloud propio. Guarda planes, artefactos, journals y know-how localmente en `.nanostack/`. No envía tu código, prompts, nombres de proyecto ni rutas de archivo a servidores de Nanostack. Tu proveedor de agente de IA puede procesar el contexto que le des; usá las opciones de privacidad de tu proveedor y tus propias políticas de datos para trabajo sensible.
@@ -237,11 +261,10 @@ Niveles: `off` (default), `anonymous`, `community`. Las instalaciones desde v0.4
 
 ## Más documentación
 
-Esta es una traducción de las secciones críticas. Para los temas avanzados (know-how, compounding, conductor, build on nanostack, analytics) consultá el [README en inglés](README.md):
+Esta es una traducción de las secciones críticas. Para los temas avanzados (know-how, compounding, conductor, analytics) consultá el [README en inglés](README.md):
 
 - [Know-how y memoria entre sprints](README.md#know-how)
 - [Sprints en paralelo (`/conductor`)](README.md#parallel-sprints)
-- [Build on nanostack: extender con tus propias skills](README.md#build-on-nanostack)
 - [Privacidad](README.md#privacy)
 
 ## Contribuir

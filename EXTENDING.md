@@ -2,7 +2,18 @@
 
 Add your own skills that plug into nanostack's workflow. Your skills save artifacts, read what other skills produced, and compose with /think, /review and /ship.
 
-> **Quickest way to start:** copy `examples/custom-skill-template/audit-licenses/` and edit it. The template is a working `/audit-licenses` skill (~100 lines) that demonstrates frontmatter, the artifact store, stack detection and the standard output format. See `examples/custom-skill-template/README.md` for the walkthrough.
+> **Quickest way to start:**
+>
+> ```bash
+> bin/create-skill.sh license-audit --concurrency read --depends-on build
+> bin/check-custom-skill.sh .nanostack/skills/license-audit
+> ```
+>
+> The first command scaffolds a working skill from the bundled template, registers it as a custom phase in `.nanostack/config.json`, and rewrites every helper path to be self-contained. The second runs an 11-point check: frontmatter shape, `agents/openai.yaml` parses, `bash -n` on helpers, registration in config, save-and-read smoke through the artifact store. Restart your agent and `/license-audit` is live.
+>
+> The contract those tools enforce lives in [`reference/custom-stack-contract.md`](reference/custom-stack-contract.md). The 12-cell end-to-end harness that proves the journey works is at [`ci/e2e-custom-stack-flows.sh`](ci/e2e-custom-stack-flows.sh).
+>
+> Prefer copying by hand? The template still lives at `examples/custom-skill-template/audit-licenses/` and its README walks through the structure.
 
 ## Configure your stack
 

@@ -2930,6 +2930,88 @@ jobs:
           fi
           rm -f "$err_log"
 
+  custom-stack-tooling:
+    name: bin/create-skill.sh + bin/check-custom-skill.sh round-trip
+    runs-on: ubuntu-latest
+    # PR 6 of the Custom Stack Framework v1 round. Lock the contract
+    # between the scaffolder and the validator: a skill created by
+    # bin/create-skill.sh must pass bin/check-custom-skill.sh on a
+    # clean /tmp project. Also asserts the README sections (English +
+    # Spanish) describe what the tools actually do, so public copy
+    # never drifts ahead of the implementation.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Both helpers exist and are executable
+        run: |
+          set -e
+          for f in bin/create-skill.sh bin/check-custom-skill.sh ci/e2e-custom-stack-flows.sh; do
+            test -x "$f" || { echo "FAIL: $f is not executable"; exit 1; }
+            bash -n "$f"
+          done
+      - name: Scaffold and validate on a /tmp project
+        run: |
+          set -e
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          cd "$tmp"
+          git init -q
+          # Scaffold a custom skill.
+          "$GITHUB_WORKSPACE/bin/create-skill.sh" license-audit \
+            --concurrency read --depends-on build >/dev/null
+          # Skill landed under .nanostack/skills/<name>/ with the
+          # expected layout.
+          test -f .nanostack/skills/license-audit/SKILL.md
+          test -f .nanostack/skills/license-audit/agents/openai.yaml
+          test -x .nanostack/skills/license-audit/bin/audit.sh
+          # Phase registered idempotently in config.
+          jq -e '.custom_phases | index("license-audit")' \
+            .nanostack/config.json >/dev/null
+          # check-custom-skill exits 0 on the scaffolded skill.
+          out=$("$GITHUB_WORKSPACE/bin/check-custom-skill.sh" \
+            .nanostack/skills/license-audit)
+          echo "$out" | tail -1 | grep -qE '^OK:'
+      - name: Reject invalid skill names
+        run: |
+          set -e
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          cd "$tmp"
+          git init -q
+          # Uppercase fails the phase regex.
+          if "$GITHUB_WORKSPACE/bin/create-skill.sh" BAD_NAME >/dev/null 2>&1; then
+            echo "FAIL: create-skill accepted 'BAD_NAME'"
+            exit 1
+          fi
+          # Core phase name reserved.
+          if "$GITHUB_WORKSPACE/bin/create-skill.sh" review >/dev/null 2>&1; then
+            echo "FAIL: create-skill accepted core phase name 'review'"
+            exit 1
+          fi
+      - name: README + EXTENDING describe the new tooling
+        run: |
+          set -e
+          fail=0
+          for f in README.md README.es.md EXTENDING.md; do
+            if ! grep -qF 'bin/create-skill.sh' "$f"; then
+              echo "FAIL: $f does not mention bin/create-skill.sh"
+              fail=1
+            fi
+            if ! grep -qF 'bin/check-custom-skill.sh' "$f"; then
+              echo "FAIL: $f does not mention bin/check-custom-skill.sh"
+              fail=1
+            fi
+          done
+          # The English README's Build-on-nanostack section claims a
+          # specific list of guarantees. Keep it grounded in the
+          # actual harness.
+          for token in 'phase_kind' 'sprint-journal' 'analytics' 'discard-sprint' 'conductor' 'phase_graph'; do
+            if ! grep -qF "$token" README.md; then
+              echo "FAIL: README.md Build-on-nanostack section dropped token: $token"
+              fail=1
+            fi
+          done
+          exit $fail
+
   guard-rule-ids-unique:
     name: Guard rule ids are unique
     runs-on: ubuntu-latest

@@ -176,6 +176,44 @@ A failed validation aborts with exit `2` and the message `ERROR: invalid phase g
 
 The output of `sprint.sh status` is keyed on phase names from the chosen graph. A custom graph that includes `audit-licenses` produces an `audit-licenses` entry under `.phases`, exactly as if it were a core phase. `sprint.sh batch` emits the same `{batch, type, phases}` JSON objects whether the phases are core, custom, or a mix.
 
+## Tooling
+
+`bin/create-skill.sh` scaffolds a custom skill and (by default) registers it as a custom phase in one shot.
+
+```bash
+bin/create-skill.sh license-audit --concurrency read --depends-on build
+```
+
+What it does:
+
+- Validates the skill name against the registry's regex (`^[a-z][a-z0-9-]*$`) and rejects any name that collides with a core phase.
+- Copies the bundled template (`examples/custom-skill-template/audit-licenses` by default; override with `--from <dir>`) into `.nanostack/skills/<name>/`.
+- Substitutes the source skill name with `<name>` in `SKILL.md`, `agents/openai.yaml`, and `README.md`.
+- Optionally rewrites the frontmatter `concurrency:` field (`--concurrency read|write|exclusive`) and `depends_on:` field (`--depends-on <phase>`, repeatable).
+- Adds `<name>` to `.custom_phases` in `.nanostack/config.json`. Idempotent — already-present names are not duplicated. `--no-register` skips this step.
+
+`bin/check-custom-skill.sh` validates a copied or scaffolded skill against the framework contract.
+
+```bash
+bin/check-custom-skill.sh .nanostack/skills/license-audit
+```
+
+What it checks:
+
+- `SKILL.md` exists with a `name:`, `description:`, and `concurrency:` frontmatter (`concurrency` must be `read`, `write`, or `exclusive`).
+- `agents/openai.yaml` exists and parses as YAML.
+- Every `bin/*.sh` passes `bash -n`.
+- The skill directory name matches the phase regex.
+- The phase is registered in `.nanostack/config.json:custom_phases` so `save-artifact.sh` and `resolve.sh` accept it.
+- `SKILL.md` does not embed `./examples/custom-skill-template/...` paths (would break after copy).
+- `save-artifact.sh` round-trips a smoke artifact and `find-artifact.sh` reads it back. The smoke artifact is removed after the check.
+
+Output is one `OK` or `FAIL` line per check, ending in `OK: <name> passed N checks.` or `FAIL: <K> of <N> checks failed for <name>.`. Exit `0` on full pass, `1` on any failure.
+
+## End-to-end coverage
+
+`ci/e2e-custom-stack-flows.sh` runs the full new-user journey on a real `/tmp` project: scaffold → check → run helper → save → find → resolve → journal → analytics → discard → conductor start → conductor batch → openai.yaml present → no example-path leak. Twelve cells, nineteen assertions. The `e2e-custom-stack` GitHub Actions job runs it on every PR (`workflow_dispatch` for full e2e suite). When the harness is green, the framework claims in `README.md` and `EXTENDING.md` are grounded in working code.
+
 ## Stability
 
 `phase_kind` is the load-bearing addition. Once shipped, downstream skills can branch on it. Future PRs may add new fields to the resolver output, but the existing shape stays — consumers should keep using `jq` field access rather than positional or shape-strict parsing.

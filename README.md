@@ -763,19 +763,27 @@ Open `.nanostack/know-how/` in Obsidian. Sprint journals link to conflict preced
 
 ## Build on nanostack
 
-Nanostack is a platform. Build your own skill set on top of it for any domain.
+Nanostack is a workflow framework, not just a fixed skill bundle. Create your own skills, register them as phases, and reuse the same artifact store, resolver, sprint journal, analytics, conductor, and local vault that the built-in skills run on.
 
-Register custom phases in `.nanostack/config.json`:
+Scaffold a skill from the template, validate it, restart your agent:
 
-```json
-{ "custom_phases": ["audience", "campaign", "measure"] }
+```bash
+bin/create-skill.sh license-audit --concurrency read --depends-on build
+bin/check-custom-skill.sh .nanostack/skills/license-audit
 ```
 
-Your skills use the same infrastructure: `save-artifact.sh` persists artifacts, `find-artifact.sh` reads them, skills cross-reference each other. The sprint journal, analytics and Obsidian vault work with custom phases.
+What that gets you, all proven by `ci/e2e-custom-stack-flows.sh`:
 
-A marketing team builds `/audience` and `/campaign`. A data team builds `/explore` and `/model`. A design team builds `/wireframe` and `/usability`. All compose with nanostack's `/think` for ideation, `/review` for quality and `/ship` for delivery.
+- `save-artifact.sh license-audit` and `find-artifact.sh license-audit` accept the custom phase the same way they accept a core phase.
+- `resolve.sh license-audit` returns `phase_kind: "custom"` with `upstream_artifacts` driven by the skill's `depends_on` (or by `phase_graph` in `.nanostack/config.json`).
+- `sprint-journal.sh` emits a `## /license-audit` section with the skill's status, headline, and artifact path.
+- `analytics.sh --json` adds the skill to `sprints.custom.license-audit` and counts it in `sprints.total`.
+- `discard-sprint.sh --dry-run` lists the skill's artifacts alongside the core ones.
+- `conductor/bin/sprint.sh start --phases <json>` accepts a graph that includes the custom phase; `conductor/bin/sprint.sh batch` reads its `concurrency:` from `SKILL.md`.
 
-Full guide: [`EXTENDING.md`](EXTENDING.md). Working starting point: [`examples/custom-skill-template/`](examples/custom-skill-template/) is a `/audit-licenses` skill you can copy and adapt.
+A marketing team builds `/audience` and `/campaign`. A data team builds `/explore` and `/model`. A design team builds `/wireframe` and `/usability`. A compliance team builds `/license-audit`, `/privacy`, and `/release-readiness`. All compose with nanostack's `/think` for ideation, `/review` for quality, and `/ship` for delivery.
+
+The framework contract is in [`reference/custom-stack-contract.md`](reference/custom-stack-contract.md). Full walkthrough: [`EXTENDING.md`](EXTENDING.md). Starting point you can copy: [`examples/custom-skill-template/`](examples/custom-skill-template/).
 
 ## Privacy
 
