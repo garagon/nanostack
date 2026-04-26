@@ -1,6 +1,6 @@
 <h1 align="center">Nanostack</h1>
 <p align="center">
-  Convertí a tu agente de código con IA en un equipo de delivery: definí alcance, planificá, construí, revisá, probá, auditá y publicá en lenguaje que cualquiera puede leer.<br>
+  Nanostack convierte tu agente de AI coding en un flujo de delivery: clarifica alcance, planifica el cambio, construye, revisa, prueba, audita y deja registro de lo ocurrido.<br>
   <strong>Sprints en sandbox que corren en minutos. Los proyectos reales mantienen el mismo workflow profesional.</strong>
 </p>
 
@@ -78,14 +78,14 @@ Cada ejemplo trae prompt para pegar, flujo esperado, criterios de éxito y pasos
 
 ## Dos perfiles, mismo rigor
 
-Nanostack adapta lo que te muestra según tu contexto. El workflow no cambia; las palabras sí.
+Guided cambia el lenguaje, no baja el estándar.
 
-| Perfil | Cuándo lo recibís | Cómo se ve la salida |
-|---|---|---|
-| **Guiado** | Modo local (sin repositorio git), o cuando lo elegís explícitamente. | Lenguaje claro. Sin jerga de proceso. Cada paso te dice el resultado, cómo verlo, qué se revisó y qué queda sin verificar. |
-| **Profesional** | Repositorio git con herramientas de developer estándar, o cuando lo elegís. | Hallazgos, evidencia, rutas de archivos, estado de chequeos automáticos. Próximo paso consciente de la fase. |
+| Perfil | Qué cambia |
+|---------|------------|
+| **Guiado** | Lenguaje claro, una sola próxima acción, defaults más seguros, sin jerga oculta. |
+| **Profesional** | Salida más densa, tradeoffs explícitos, archivos, comandos y riesgos nombrados. |
 
-En ambos casos: el alcance se cuestiona antes de planificar, el plan nombra cada archivo, las revisiones (review, seguridad, qa) corren antes de publicar, y el agente reporta con honestidad qué chequeó y qué no. Nanostack no solo protege el workflow; ahora guía el delivery como un equipo profesional, entendible para usuarios técnicos y no técnicos.
+El modo local usa Guiado por defecto. Un proyecto con git también puede usar Guiado si querés explicaciones más simples.
 
 Las reglas de lenguaje viven en [`reference/plain-language-contract.md`](reference/plain-language-contract.md). Los campos de sesión que seleccionan el perfil viven en [`reference/session-state-contract.md`](reference/session-state-contract.md).
 
@@ -229,9 +229,9 @@ Para la guía completa de problemas en español (slash commands, jq, phase gate,
 
 ## Privacidad
 
-Los datos del sprint (briefs, planes, artifacts, journals) quedan en tu máquina en `.nanostack/`.
+Nanostack no tiene un servicio cloud propio. Guarda planes, artefactos, journals y know-how localmente en `.nanostack/`. No envía tu código, prompts, nombres de proyecto ni rutas de archivo a servidores de Nanostack. Tu proveedor de agente de IA puede procesar el contexto que le des; usá las opciones de privacidad de tu proveedor y tus propias políticas de datos para trabajo sensible.
 
-La telemetría es opt-in y por defecto está apagada. El cliente siempre escribe eventos locales bajo `~/.nanostack/` para que puedas inspeccionar tu propia actividad. Si activás el upload, los eventos se envían al Cloudflare Worker documentado en [`TELEMETRY.md`](TELEMETRY.md). El código del Worker, su schema, las invariantes de privacidad y los smoke tests adversarios viven en este repo.
+La telemetría es opt-in y se limita a eventos de uso agregados. No es necesaria para el workflow. Si la activás, los eventos van al Cloudflare Worker documentado en [`TELEMETRY.md`](TELEMETRY.md). El código del Worker, su schema, las invariantes de privacidad y los smoke tests adversarios viven en este repo.
 
 Niveles: `off` (default), `anonymous`, `community`. Las instalaciones desde v0.4 y anteriores quedan en `off` y no ven prompt. Las instalaciones nuevas reciben un prompt una sola vez en el primer skill run.
 
