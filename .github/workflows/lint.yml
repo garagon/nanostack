@@ -2010,12 +2010,17 @@ jobs:
         run: |
           set -e
           fail=0
-          # Five-adapter set + opt-in E2E framing must appear by name
-          # so the public claim cannot quietly degrade to "and more"
-          # or "always-on" again.
+          # Every name in the verified-adapter set must appear by
+          # itself (not just under a generic "Verified adapters"
+          # heading), so a future edit cannot drop Claude Code or
+          # Cursor from the public claim while keeping the rest.
+          # The opt-in E2E framing is locked here too so the claim
+          # cannot quietly degrade to "always-on" again.
           for tok in \
             'opt-in E2E workflow' \
             'Verified adapters' \
+            'Claude Code' \
+            'Cursor' \
             'OpenAI Codex' \
             'OpenCode' \
             'Gemini CLI'; do
@@ -2039,20 +2044,21 @@ jobs:
         run: |
           set -e
           fail=0
-          # Literal substrings handled with grep -F. Includes both
-          # Spanish and English variants and tightens the existing
-          # stale-strings list with phrases that have been seen in
-          # drafts but did not yet have a hard lock.
+          # Case-insensitive literal-substring sweep. Earlier draft
+          # used grep -F (case-sensitive) which would have let trivial
+          # variants slip through (Marketplace, GDPR Ready, Every
+          # workflow run, Full engineering team, etc.). For a public-
+          # narrative lock the casing should not matter; -iF locks
+          # the claim regardless of how it is capitalized.
+          # Spanish forms collapse with -i (cero/Cero, cuatro/Cuatro).
           for bad in \
             'npx create-nanostack install' \
             'on every workflow run' \
             'every workflow run' \
             '4 commands' \
-            'Cuatro comandos' \
+            'cuatro comandos' \
             'zero dependencies' \
-            'Zero dependencies' \
             'cero dependencias' \
-            'Cero dependencias' \
             'marketplace' \
             'plugin ecosystem' \
             'GDPR ready' \
@@ -2060,9 +2066,9 @@ jobs:
             'compliance certified' \
             'works in every agent identically' \
             'full engineering team'; do
-            hits=$(grep -nF "$bad" README.md README.es.md 2>/dev/null || true)
+            hits=$(grep -niF "$bad" README.md README.es.md 2>/dev/null || true)
             if [ -n "$hits" ]; then
-              echo "FAIL: forbidden phrase '$bad' present:"
+              echo "FAIL: forbidden phrase '$bad' present (case-insensitive):"
               echo "$hits"
               fail=1
             fi
@@ -2072,16 +2078,16 @@ jobs:
         run: |
           set -e
           fail=0
-          # Use word boundaries so legitimate uses like "amplifier",
-          # "decline", or "incline" do not trip the lock. The spec
-          # set blocks bare references to Amp, Cline, and Antigravity
-          # because Nanostack does not have verified adapters for
-          # them today; the README must claim only the five verified
-          # hosts.
+          # Word-boundary regex so legitimate words like "amplifier",
+          # "decline", or "incline" do not trip the lock. Match is
+          # case-insensitive so trivial variants (AMP, amp, Cline,
+          # CLINE, ANTIGRAVITY) are caught the same way. Nanostack
+          # does not ship verified adapters for any of these hosts;
+          # the README must claim only the five verified ones.
           for name in 'Amp' 'Cline' 'Antigravity'; do
-            hits=$(grep -nE "\\b${name}\\b" README.md README.es.md 2>/dev/null || true)
+            hits=$(grep -niE "\\b${name}\\b" README.md README.es.md 2>/dev/null || true)
             if [ -n "$hits" ]; then
-              echo "FAIL: forbidden agent name '$name' (bare word) present:"
+              echo "FAIL: forbidden agent name '$name' (bare word, case-insensitive) present:"
               echo "$hits"
               fail=1
             fi
