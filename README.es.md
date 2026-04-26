@@ -1,7 +1,7 @@
 <h1 align="center">Nanostack</h1>
 <p align="center">
-  Convertí a tu agente de IA en un equipo profesional de delivery. Cuestiona el alcance, planifica, revisa, prueba, audita y publica — en lenguaje que cualquiera puede leer.<br>
-  <strong>Un sprint. Minutos, no semanas. Para usuarios técnicos y no técnicos.</strong>
+  Convertí a tu agente de código con IA en un equipo de delivery: definí alcance, planificá, construí, revisá, probá, auditá y publicá en lenguaje que cualquiera puede leer.<br>
+  <strong>Sprints en sandbox que corren en minutos. Los proyectos reales mantienen el mismo workflow profesional.</strong>
 </p>
 
 <br>
@@ -28,7 +28,7 @@
 
 > **Nota:** la versión en inglés ([README.md](README.md)) es la canónica. Si encontrás divergencias o algo desactualizado en este documento, por favor abrí un issue.
 
-Inspirado en [gstack](https://github.com/garrytan/gstack) de [Garry Tan](https://x.com/garrytan). 13 skills. Cero dependencias. Cero build step.
+Inspirado en [gstack](https://github.com/garrytan/gstack) de [Garry Tan](https://x.com/garrytan). 13 skills en total. El sprint principal usa siete especialistas. Cero dependencias. Cero paso de build.
 
 Funciona con Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp y Cline.
 
@@ -58,7 +58,16 @@ Después del install, según tu agente:
 
 ### Probar primero sin riesgo
 
-¿Querés probar antes de tocar tu proyecto real? `examples/starter-todo/` es una app TODO chica con tres ideas para arrancar. Ver [`examples/starter-todo/README.md`](examples/starter-todo/README.md).
+La forma más rápida de entender Nanostack es correrlo en un proyecto que no importa todavía. Elegí un sandbox de la Examples Library:
+
+| Ejemplo | Ideal para | Stack | Tiempo |
+|---|---|---|---|
+| [`starter-todo`](examples/starter-todo/) | usuarios nuevos o no técnicos | un HTML | 5-10 min |
+| [`cli-notes`](examples/cli-notes/) | workflows CLI | Bash | 5-15 min |
+| [`api-healthcheck`](examples/api-healthcheck/) | flujos backend | Node HTTP sin dependencias | 10-15 min |
+| [`static-landing`](examples/static-landing/) | founders y diseño | HTML/CSS estático | 10-15 min |
+
+Cada ejemplo trae prompt para pegar, flujo esperado, criterios de éxito y pasos de reset. Library completa: [`examples/`](examples/).
 
 ### Requisitos
 
@@ -101,9 +110,9 @@ Agente: Voy a empujar contra "notificaciones". Dijiste que abren la
 
         Un sistema de notificaciones (email, push, in-app, preferencias,
         digest, unsubscribe) es un proyecto de 3 semanas. Un puntito
-        rojo en el ícono que diga "hay algo nuevo" se ships esta tarde.
+        rojo en el ícono que diga "hay algo nuevo" sale esta tarde.
 
-        RECOMENDACIÓN: Reducir alcance. Ship el puntito. Ver si bajan
+        RECOMENDACIÓN: Reducir alcance. Publicá el puntito. Ver si bajan
         los reclamos. Si bajan, te ahorraste 3 semanas. Si no bajan,
         ahí construís push notifications, pero ya con datos.
 
@@ -163,7 +172,7 @@ Discutí la idea, aprobá el brief, alejate. El agente corre el sprint completo:
 /nano → build → /review → /security → /qa → /ship
 ```
 
-**Autopilot avanza con un brief completo, no adivinando.** `/think --autopilot` siempre arma un brief primero. Si el brief tiene los campos requeridos (`value_proposition`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`), `/think` continúa a `/nano` sin pausar. Si falta alguno, `/think` para una vez y hace una sola pregunta enfocada — no inventa campos para seguir.
+**Autopilot avanza con un brief completo, no adivinando.** `/think --autopilot` siempre arma un brief primero. Si el brief tiene los campos requeridos (`value_proposition`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`), `/think` continúa a `/nano` sin pausar. Si falta alguno, `/think` para una vez y hace una sola pregunta enfocada. No inventa campos para seguir.
 
 Autopilot solo para si:
 - `/think` no puede armar el brief desde el contexto (hace una pregunta y sigue)
@@ -217,6 +226,14 @@ Si querés enforcement duro, usá Claude Code. Si aceptás disciplina a nivel ag
 ¿Phase gate bloqueó tu commit? Completá `/review`, `/security`, `/qa` para el sprint activo. O si el commit no es del sprint: `NANOSTACK_SKIP_GATE=1 git commit ...`.
 
 Para la guía completa de problemas en español (slash commands, jq, phase gate, puerto en uso, Windows, sprints atascados, conflictos de nombres), ver [TROUBLESHOOTING.es.md](TROUBLESHOOTING.es.md). Para temas avanzados (proxy corporativo, doble ejecución en autopilot, telemetría) consultá la versión canónica en inglés: [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+## Privacidad
+
+Los datos del sprint (briefs, planes, artifacts, journals) quedan en tu máquina en `.nanostack/`.
+
+La telemetría es opt-in y por defecto está apagada. El cliente siempre escribe eventos locales bajo `~/.nanostack/` para que puedas inspeccionar tu propia actividad. Si activás el upload, los eventos se envían al Cloudflare Worker documentado en [`TELEMETRY.md`](TELEMETRY.md). El código del Worker, su schema, las invariantes de privacidad y los smoke tests adversarios viven en este repo.
+
+Niveles: `off` (default), `anonymous`, `community`. Las instalaciones desde v0.4 y anteriores quedan en `off` y no ven prompt. Las instalaciones nuevas reciben un prompt una sola vez en el primer skill run.
 
 ## Más documentación
 

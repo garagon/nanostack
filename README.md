@@ -6,10 +6,10 @@
 <br>
 
 <p align="center">
-  Turns your AI agent into a professional delivery team. Challenges scope, plans, reviews, tests, audits, and ships — in language anyone can read.
+  Turns your AI coding agent into a delivery team: scope, plan, build, review, test, audit, and ship in language anyone can read.
 </p>
 
-<p align="center"><strong>One sprint. Minutes, not weeks. For technical and non-technical users.</strong></p>
+<p align="center"><strong>Small sandbox sprints run in minutes. Real projects keep the same professional workflow.</strong></p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
@@ -30,13 +30,15 @@
 <br>
 
 
-Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). 13 skills. Zero dependencies. Zero build step.
+Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). 13 skills total. The default sprint uses seven core specialists. Zero dependencies. Zero build step.
 
 Works with Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp, and Cline.
 
 ## What is Nanostack?
 
-Your agent is already capable of writing code. What it lacks is structure. Nanostack is seven specialists the agent invokes in order, each one reading what came before. Scope gets challenged before planning. The plan gets named files and risks before building. The build gets reviewed, audited, and tested before shipping. Ship creates the PR, verifies CI, and writes the sprint journal.
+Your agent is already capable of writing code. What it lacks is delivery structure. Nanostack gives it a workflow: challenge the scope, plan the files, build the change, review the diff, test the behavior, audit security, and ship with a record of what happened.
+
+The default sprint uses seven core specialists. Each one reads the record the previous one wrote, so context does not vanish between steps.
 
 Every step reads the artifact the previous step wrote, so nothing falls through the cracks. On Claude Code the pipeline is enforced via PreToolUse hooks: `git commit` is blocked until `/review`, `/security`, and `/qa` produce fresh artifacts. On other agents the same workflow runs as guided instructions; see [What enforces on which agent](#what-enforces-on-which-agent) for the per-host capability table.
 
@@ -97,7 +99,7 @@ Thinks with you, pushes back when needed. Asks the questions that take an idea f
 <tr>
 <td align="center">
 <h3>🎯 Phase gate</h3>
-The sprint runs in order: think, plan, build, review, security, qa, ship. Trying to ship before reviewing is blocked.
+The sprint runs in order: think, plan, build, review, security, qa, ship. On hosts with hooks, skip attempts can be blocked. On other agents, the same order is guided and reported honestly.
 </td>
 <td align="center">
 <h3>🔐 Local first</h3>
@@ -140,7 +142,18 @@ One command. Detects your agents, installs everything, runs setup.
 
 Then run `/nano-run` in your agent to configure your project through a conversation. On your first sprint, `/think` shows the full pipeline so you know what comes next.
 
-Want to try it on a sandbox first? `examples/starter-todo/` is a tiny TODO app with three suggested features to learn the sprint flow without touching a real project. See [`examples/starter-todo/README.md`](examples/starter-todo/README.md).
+## Try it safely first
+
+The fastest way to understand Nanostack is to run it on a project that does not matter yet. Pick a sandbox from the Examples Library:
+
+| Example | Best for | Stack | Time |
+|---|---|---|---|
+| [`starter-todo`](examples/starter-todo/) | new and non-technical users | one HTML file | 5-10 min |
+| [`cli-notes`](examples/cli-notes/) | CLI workflows | Bash | 5-15 min |
+| [`api-healthcheck`](examples/api-healthcheck/) | backend flows | Node stdlib HTTP | 10-15 min |
+| [`static-landing`](examples/static-landing/) | founders and designers | static HTML/CSS | 10-15 min |
+
+Each example has a copy-paste prompt, expected sprint flow, success criteria, and reset steps. Full library: [`examples/`](examples/).
 
 ## See it work
 
@@ -360,7 +373,9 @@ Discuss the idea, approve the brief, walk away. The agent runs the full sprint:
 
 On Claude Code the phase gate enforces the pipeline at the hook layer: even if the agent judges a task as "simple" and tries to skip review or security, `git commit` is blocked until all phases have fresh artifacts. The hook stops the commit, no instructions involved. On agents that do not support pre-action hooks the same gate runs as a rule the agent reads; the gate is honest about the difference and `/nano-doctor` reports the actual level for your install.
 
-**Autopilot continues after a complete brief, not after blind guessing.** `/think --autopilot` always produces a brief first. If the brief has the required fields (`value_proposition`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`), `/think` continues to `/nano` without pausing. If any required field is missing, `/think` stops once and asks one focused question — it does not invent fields to keep moving.
+**Autopilot continues after a complete brief, not after blind guessing.** `/think --autopilot` always produces a brief first. If the brief has the required fields (`value_proposition`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`), `/think` continues to `/nano` without pausing. If any required field is missing, `/think` stops once and asks one focused question. It does not invent fields to keep moving.
+
+If the premise is not validated yet, that is allowed as long as the brief says so explicitly. Nanostack will steer the sprint toward a probe instead of pretending the idea is proven.
 
 Autopilot only stops if:
 - `/think` cannot fill the brief from context (asks one question, then continues)
@@ -777,9 +792,11 @@ Full guide: [`EXTENDING.md`](EXTENDING.md). Working starting point: [`examples/c
 
 ## Privacy
 
-Sprint data (briefs, plans, artifacts, journals) stays on your machine in `.nanostack/`. That has not changed.
+Sprint data (briefs, plans, artifacts, journals) stays on your machine in `.nanostack/`.
 
-v0.5 adds **opt-in telemetry** about skill usage. Three tiers: `off`, `anonymous`, `community`. Installs from v0.4 and earlier default to `off` and see no prompt. New installs see a one-time prompt on first skill run. Nothing is sent over the network in the initial v0.5 release; a remote endpoint lands in a later PR. Full disclosure of what is collected, what is never collected, and how to audit or opt out: [TELEMETRY.md](TELEMETRY.md).
+Telemetry is opt-in. Default is `off`. The client always writes local usage events to `~/.nanostack/` so you can inspect your own activity. If you opt into upload, events are sent to the Cloudflare Worker documented in [`TELEMETRY.md`](TELEMETRY.md). The Worker source, schema, privacy invariants, and adversarial smoke tests all live in this repo.
+
+Tiers: `off` (default), `anonymous`, `community`. Installs from v0.4 and earlier default to `off` and see no prompt. New installs see a one-time prompt on first skill run.
 
 Change your tier at any time:
 
