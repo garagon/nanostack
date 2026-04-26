@@ -821,6 +821,65 @@ jobs:
           echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
           exit $fail
 
+  think-autopilot-brief-gate:
+    name: /think autopilot brief gate
+    runs-on: ubuntu-latest
+    # /think vNext PR 3. Autopilot's promise is "discuss the idea,
+    # approve the brief, walk away". That is only honest when there
+    # is actually a brief to walk away from. /think must validate
+    # the structured artifact's required fields before advancing,
+    # and stop with one focused question when any field is missing
+    # or empty.
+    steps:
+      - uses: actions/checkout@v4
+      - name: think/SKILL.md declares the Brief Gate before Next Step
+        run: |
+          set -e
+          fail=0
+          if ! grep -qE '^### Phase 6\.6: Minimum Viable Brief Gate' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must define the Phase 6.6 Brief Gate"
+            fail=1
+          fi
+          # Phase 6.6 must come before Phase 7 (Next Step) so the gate
+          # runs before the autopilot continuation.
+          gate_line=$(grep -n '^### Phase 6\.6: Minimum Viable Brief Gate' think/SKILL.md | head -1 | cut -d: -f1)
+          next_line=$(grep -n '^### Phase 7: Next Step' think/SKILL.md | head -1 | cut -d: -f1)
+          if [ -z "$gate_line" ] || [ -z "$next_line" ] || [ "$gate_line" -ge "$next_line" ]; then
+            echo "FAIL: Phase 6.6 Brief Gate must appear before Phase 7 Next Step"
+            fail=1
+          fi
+          # Gate must check every required field by name.
+          for field in value_proposition target_user narrowest_wedge key_risk premise_validated; do
+            if ! grep -qE "summary\.$field" think/SKILL.md; then
+              echo "FAIL: Brief Gate must check .summary.$field"
+              fail=1
+            fi
+          done
+          # Phase 7 must explicitly handle the gate-failed branch
+          # (not advance to /nano).
+          if ! grep -qE 'Brief Gate (failed|passed)' think/SKILL.md; then
+            echo "FAIL: Phase 7 must reference Brief Gate passed/failed branches"
+            fail=1
+          fi
+          exit $fail
+
+      - name: README and README.es ship the autopilot wording
+        run: |
+          set -e
+          fail=0
+          # English: spec asks for the literal "autopilot continues
+          # after a complete brief, not after blind guessing".
+          if ! grep -q 'complete brief, not after blind guessing' README.md; then
+            echo "FAIL: README.md must include 'complete brief, not after blind guessing'"
+            fail=1
+          fi
+          # Spanish: parity wording naming the gate behavior.
+          if ! grep -qiE 'brief completo|adivinando' README.es.md; then
+            echo "FAIL: README.es.md must mirror the autopilot brief-gate wording"
+            fail=1
+          fi
+          exit $fail
+
   think-session-first:
     name: /think reads session state (profile/run_mode/autopilot)
     runs-on: ubuntu-latest

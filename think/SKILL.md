@@ -437,13 +437,44 @@ mkdir -p .nanostack/know-how/briefs
 
 Format and rules: see `think/references/brief-template.md`. Keep under 20 lines, skip sections that don't apply.
 
+### Phase 6.6: Minimum Viable Brief Gate
+
+Before continuing to `/nano` (whether under autopilot or as the final user-facing handoff), validate that the brief has the required fields per `reference/artifact-schema.md`. The autopilot promise is "discuss the idea, approve the brief, walk away" — that is only honest when there is actually a brief to walk away from.
+
+Read the artifact you just saved and check the required fields are populated and non-empty:
+
+```bash
+THINK_FILE=$("$REPO/bin/find-artifact.sh" think 1 2>/dev/null)
+GATE_OK=$(jq -r '
+  (.summary.value_proposition // "") != "" and
+  (.summary.target_user        // "") != "" and
+  (.summary.narrowest_wedge    // "") != "" and
+  (.summary.key_risk           // "") != "" and
+  (.summary.premise_validated // null) != null
+' "$THINK_FILE")
+```
+
+`GATE_OK == "true"`: the brief is complete. Continue.
+
+`GATE_OK == "false"`: stop and ask **exactly one** focused question. Do not invent fields, do not paper over with vague language. Pick the most load-bearing missing field and ask about it directly. Examples:
+
+- Missing `target_user` and `narrowest_wedge`: "No tengo suficiente para correr autopilot sin inventar. Necesito una sola cosa: ¿quién es el usuario específico y qué dolor querés resolver primero?"
+- Missing `key_risk`: "Antes de seguir, una sola cosa: ¿qué es lo más probable que haga fallar esto?"
+- Missing `premise_validated`: "Antes de avanzar: ¿la premisa de que esto es un problema real ya la validaste con alguien? Sí / no / no estoy seguro."
+
+After the user answers, re-save the artifact with the missing field populated, re-run the gate, and continue. The gate runs **once**: a second consecutive failure returns control to the user without trying a third question.
+
+When `RUN_MODE=report_only`, skip the gate entirely. The brief is saved as the report; do not pause and do not advance to `/nano`.
+
 ### Phase 7: Next Step
 
-**If `--autopilot` was used** (or the user said "autopilot", "run everything", "ship it end to end"):
+**If `--autopilot` was used** (or the user said "autopilot", "run everything", "ship it end to end") AND the Brief Gate passed:
 
 > Autopilot active. Proceeding with the full sprint: /nano, build, /review, /qa, /security, /ship. I'll only stop for blocking issues or product questions I can't answer.
 
 Then proceed directly to `/nano` without waiting. Set `AUTOPILOT=true` in your context and carry it through every subsequent skill.
+
+**If `--autopilot` was used but the Brief Gate failed:** Stop. Ask the one question from Phase 6.6. Do not advance to `/nano`. Do not "decide for the user".
 
 **Otherwise, check if this is an early sprint** (first or second for this project):
 

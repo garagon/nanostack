@@ -360,7 +360,10 @@ Discuss the idea, approve the brief, walk away. The agent runs the full sprint:
 
 On Claude Code the phase gate enforces the pipeline at the hook layer: even if the agent judges a task as "simple" and tries to skip review or security, `git commit` is blocked until all phases have fresh artifacts. The hook stops the commit, no instructions involved. On agents that do not support pre-action hooks the same gate runs as a rule the agent reads; the gate is honest about the difference and `/nano-doctor` reports the actual level for your install.
 
+**Autopilot continues after a complete brief, not after blind guessing.** `/think --autopilot` always produces a brief first. If the brief has the required fields (`value_proposition`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`), `/think` continues to `/nano` without pausing. If any required field is missing, `/think` stops once and asks one focused question — it does not invent fields to keep moving.
+
 Autopilot only stops if:
+- `/think` cannot fill the brief from context (asks one question, then continues)
 - `/review` finds blocking issues that need your decision
 - `/security` finds critical or high vulnerabilities
 - `/qa` tests fail
