@@ -206,6 +206,98 @@ Every artifact can include a `context_checkpoint` — a self-contained summary t
 }
 ```
 
+### /nano-run (setup)
+
+`/nano-run` writes a setup artifact after the onboarding flow detects, configures, and recommends. The artifact lives at `.nanostack/setup/<timestamp>.json` with a copy at `.nanostack/setup/latest.json` (no symlink, for portability). Support, doctor, and future skills read it to know what onboarding decided.
+
+```json
+{
+  "schema_version": "1",
+  "phase": "setup",
+  "timestamp": "2026-04-26T12:00:00Z",
+  "project": "/absolute/path",
+  "branch": "main|null",
+  "summary": {
+    "status": "ready|needs_repair|report_only|blocked|partial",
+    "profile": "guided|professional",
+    "host": "claude|codex|cursor|opencode|gemini|unknown",
+    "run_mode": "normal|report_only",
+    "project_mode": "git|local",
+    "detected_stack": {
+      "node": true,
+      "go": false,
+      "python": false,
+      "docker": false,
+      "framework": "Next.js|null",
+      "package_manager": "npm|pnpm|yarn|bun|null"
+    },
+    "capabilities": {
+      "bash_guard":  "enforced|reported|instructions_only|unsupported|unknown",
+      "write_guard": "enforced|reported|instructions_only|unsupported|unknown",
+      "phase_gate":  "enforced|reported|instructions_only|unsupported|unknown"
+    },
+    "configuration": {
+      "config_json":      "created|updated|exists|skipped_report_only|error",
+      "stack_json":       "created|updated|exists|skipped_report_only|error",
+      "project_settings": "created|updated|exists|needs_repair|skipped_report_only|not_applicable|error",
+      "gitignore":        "created|updated|exists|skipped_report_only|not_applicable|error"
+    },
+    "legacy": {
+      "detected": false,
+      "missing_hooks": [],
+      "broad_permissions": [],
+      "repair_available": false,
+      "migration_requires_confirmation": false
+    },
+    "recommended_first_run": {
+      "kind": "sandbox|existing_project|repair|report_only",
+      "command": "/think \"add due dates to tasks\"",
+      "path": "examples/starter-todo",
+      "reason": "Safe first run before touching a real product."
+    }
+  },
+  "context_checkpoint": {
+    "summary": "string",
+    "key_files": ["string"],
+    "decisions_made": ["string"],
+    "open_questions": ["string"]
+  }
+}
+```
+
+**Required fields** (the setup artifact writer rejects payloads without these):
+
+- `summary.status`
+- `summary.profile`
+- `summary.host`
+- `summary.run_mode`
+- `summary.project_mode`
+- `summary.capabilities` (all three sub-fields)
+- `summary.configuration` (all four sub-fields)
+- `summary.recommended_first_run.kind`
+- `summary.recommended_first_run.command`
+- `context_checkpoint.summary`
+
+**Optional but recommended:** `summary.detected_stack.framework`, `summary.detected_stack.package_manager`, `summary.legacy`.
+
+**Capability values** must come from `adapters/<host>.json`, not from prose. The five valid values map to L0-L3 honesty rule:
+
+| Value | Meaning | L-level |
+|---|---|---|
+| `enforced` | Blocked at host/tool layer. | L3 |
+| `reported` | Detected and reported, not blocked. | L2 |
+| `instructions_only` | Guides the agent, cannot hard-block. | L1 |
+| `unsupported` | Capability not provided on this host. | L0 |
+| `unknown` | Host not detected, or no adapter available. | (probe with `/nano-doctor`) |
+
+**Status values** (`summary.status`):
+
+- `ready`: onboarding succeeded, normal run. Setup artifact reflects fresh state.
+- `needs_repair`: host config (e.g. `.claude/settings.json`) is missing hooks or has legacy broad permissions. The artifact records what to repair; no silent narrowing.
+- `report_only`: onboarding ran in `run_mode == report_only`. No mutation. Artifact reflects what would change in normal mode.
+- `partial`: mutation started but failed midway. Artifact may be missing some `summary.configuration` fields; do not pretend setup completed.
+- `blocked`: onboarding could not run (missing dependency, no project root, etc.).
+
 ## Conflicts schema
 
 Present in review, security, and qa:
