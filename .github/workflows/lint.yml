@@ -821,6 +821,63 @@ jobs:
           echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
           exit $fail
 
+  think-session-first:
+    name: /think reads session state (profile/run_mode/autopilot)
+    runs-on: ubuntu-latest
+    # /think vNext PR 2. Every other Sprint phase routes through the
+    # session-state contract; /think used detect_git_mode as the only
+    # signal for "non-technical user". On Codex/Cursor/OpenCode the
+    # adapter declares instructions_only, so the user can be guided
+    # even with git. Trust profile from the session, not detect_git_mode
+    # alone.
+    steps:
+      - uses: actions/checkout@v4
+      - name: think/SKILL.md reads canonical session fields
+        run: |
+          set -e
+          fail=0
+          if ! grep -q 'reference/session-state-contract.md' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must reference reference/session-state-contract.md"
+            fail=1
+          fi
+          for var in PROFILE RUN_MODE AUTOPILOT PLAN_APPROVAL HOST; do
+            if ! grep -qE "$var=.*jq" think/SKILL.md; then
+              echo "FAIL: think/SKILL.md must read $var via jq from session.json"
+              fail=1
+            fi
+          done
+          # Profile selection must NOT be derived from detect_git_mode
+          # alone. The skill may still mention detect_git_mode as a
+          # secondary signal, but it must explicitly say so.
+          if grep -nE 'detect_git_mode.*(local).*(non-technical|guided)' think/SKILL.md \
+             | grep -v 'secondary signal'; then
+            echo "FAIL: think/SKILL.md couples guided/non-technical to detect_git_mode without naming it as secondary"
+            fail=1
+          fi
+          exit $fail
+
+      - name: profile resolution: Codex+git is guided
+        run: |
+          set -e
+          tmp=$(mktemp -d /tmp/think-profile.XXXXXX)
+          cd "$tmp"
+          git init -q
+          mkdir -p .nanostack
+          export NANOSTACK_STORE="$tmp/.nanostack"
+          ( export NANOSTACK_HOST=codex; $GITHUB_WORKSPACE/bin/session.sh init development >/dev/null )
+          profile=$(jq -r .profile .nanostack/session.json)
+          if [ "$profile" != "guided" ]; then
+            echo "FAIL: Codex+git resolved to '$profile' (expected 'guided' from instructions_only adapter)"
+            exit 1
+          fi
+          # And Claude+git stays professional.
+          ( export NANOSTACK_HOST=claude; $GITHUB_WORKSPACE/bin/session.sh init development >/dev/null )
+          profile=$(jq -r .profile .nanostack/session.json)
+          if [ "$profile" != "professional" ]; then
+            echo "FAIL: Claude+git resolved to '$profile' (expected 'professional')"
+            exit 1
+          fi
+
   think-structured-artifact:
     name: /think saves structured JSON artifact
     runs-on: ubuntu-latest
