@@ -1993,6 +1993,118 @@ jobs:
           done
           exit $fail
 
+  readme-narrative-locks:
+    name: README narrative claim locks
+    runs-on: ubuntu-latest
+    # Spec readme-product-narrative-refresh-2026-04-26. PR 1 of the
+    # round rewrote the README around "default sprint + framework
+    # for workflow stacks". This job locks the new claim surface so
+    # later edits do not silently drift back to the older wording or
+    # reintroduce the disallowed phrases the spec called out (Amp,
+    # Cline, Antigravity, "4 commands", "every workflow run", etc.).
+    # The existing readme-public-copy job above already locks an
+    # earlier round's required + stale set; this job is additive.
+    steps:
+      - uses: actions/checkout@v4
+      - name: New required tokens in README.md
+        run: |
+          set -e
+          fail=0
+          # Every name in the verified-adapter set must appear by
+          # itself (not just under a generic "Verified adapters"
+          # heading), so a future edit cannot drop Claude Code or
+          # Cursor from the public claim while keeping the rest.
+          # The opt-in E2E framing is locked here too so the claim
+          # cannot quietly degrade to "always-on" again.
+          for tok in \
+            'opt-in E2E workflow' \
+            'Verified adapters' \
+            'Claude Code' \
+            'Cursor' \
+            'OpenAI Codex' \
+            'OpenCode' \
+            'Gemini CLI'; do
+            if ! grep -qF "$tok" README.md; then
+              echo "FAIL: README.md missing required token: $tok"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Spanish README declares the same E2E opt-in framing
+        run: |
+          set -e
+          # Spec accepts either "E2E opt-in" or "workflow E2E opt-in"
+          # as long as the opt-in nature of the runtime harness is
+          # spelled out in Spanish too.
+          if ! grep -qE 'E2E opt-in|workflow E2E opt-in' README.es.md; then
+            echo "FAIL: README.es.md does not declare E2E opt-in framing"
+            exit 1
+          fi
+      - name: Forbidden phrases must NOT appear in README.md or README.es.md
+        run: |
+          set -e
+          fail=0
+          # Case-insensitive literal-substring sweep. Earlier draft
+          # used grep -F (case-sensitive) which would have let trivial
+          # variants slip through (Marketplace, GDPR Ready, Every
+          # workflow run, Full engineering team, etc.). For a public-
+          # narrative lock the casing should not matter; -iF locks
+          # the claim regardless of how it is capitalized.
+          # Spanish forms collapse with -i (cero/Cero, cuatro/Cuatro).
+          for bad in \
+            'npx create-nanostack install' \
+            'on every workflow run' \
+            'every workflow run' \
+            '4 commands' \
+            'cuatro comandos' \
+            'zero dependencies' \
+            'cero dependencias' \
+            'marketplace' \
+            'plugin ecosystem' \
+            'GDPR ready' \
+            'SOC2 ready' \
+            'compliance certified' \
+            'works in every agent identically' \
+            'full engineering team'; do
+            hits=$(grep -niF "$bad" README.md README.es.md 2>/dev/null || true)
+            if [ -n "$hits" ]; then
+              echo "FAIL: forbidden phrase '$bad' present (case-insensitive):"
+              echo "$hits"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Forbidden agent names (bare-word boundary) must NOT appear
+        run: |
+          set -e
+          fail=0
+          # Word-boundary regex so legitimate words like "amplifier",
+          # "decline", or "incline" do not trip the lock. Match is
+          # case-insensitive so trivial variants (AMP, amp, Cline,
+          # CLINE, ANTIGRAVITY) are caught the same way. Nanostack
+          # does not ship verified adapters for any of these hosts;
+          # the README must claim only the five verified ones.
+          for name in 'Amp' 'Cline' 'Antigravity'; do
+            hits=$(grep -niE "\\b${name}\\b" README.md README.es.md 2>/dev/null || true)
+            if [ -n "$hits" ]; then
+              echo "FAIL: forbidden agent name '$name' (bare word, case-insensitive) present:"
+              echo "$hits"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Sprint-order arrow MUST NOT show /qa before /security
+        run: |
+          set -e
+          # The canonical sprint order is /review -> /security -> /qa
+          # -> /ship. Any arrow form (-> or →) that shows /qa
+          # immediately before /security is a regression on the
+          # spec's "do not show /qa before /security" rule.
+          if grep -nE '/qa[[:space:]]*(->|→)[[:space:]]*/security' README.md README.es.md; then
+            echo "FAIL: README contains /qa -> /security arrow form (canonical order is /security -> /qa)"
+            exit 1
+          fi
+
   examples-library:
     name: Examples library contract
     runs-on: ubuntu-latest
