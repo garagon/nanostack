@@ -251,7 +251,7 @@ Lo que ese skill hereda automáticamente, todo cubierto por `ci/e2e-custom-stack
 
 ### Workflow stack
 
-Un stack es varios skills custom unidos por un `phase_graph` para que el conductor sepa el orden de dependencias. El ejemplo `compliance-release` lo prueba: tres fases custom (`/license-audit` + `/privacy-check` + `/release-readiness`) componen una decisión de release antes de `/ship`. `ci/e2e-custom-stack-examples.sh` recorre el journey completo del usuario nuevo: scaffold, validate, save, resolve, journal, analytics, discard, conductor scheduling. 15 celdas, 51 aserciones.
+Un stack es varios skills custom unidos por un `phase_graph` para que el conductor sepa el orden de dependencias. El ejemplo `compliance-release` lo prueba: tres fases custom (`/license-audit` + `/privacy-check` + `/release-readiness`) componen una decisión de release antes de `/ship`. `ci/e2e-custom-stack-examples.sh` recorre el journey completo del usuario nuevo en un proyecto `/tmp` real (scaffold, validate, save, resolve, journal, analytics, discard, conductor scheduling) y corre en el workflow E2E opt-in. 15 celdas, 51 aserciones.
 
 Copiá el starting point del stack:
 

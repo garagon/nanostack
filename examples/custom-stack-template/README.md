@@ -44,6 +44,6 @@ It validates the manifest schema, the README structure, the skill folder shape, 
 
 - **Manifest + structural lint**: every stack file shape and skill folder layout, validated by `ci/check-custom-stack-examples.sh` (49 checks).
 - **Skill behavior**: license audit (npm/pip/go classifier), privacy hygiene (collection signals + privacy-note resolution), release-readiness composer (5-upstream rollup with TAMPERED detection). Each skill has a `bin/smoke.sh` that exercises real cases on a `/tmp` project.
-- **Runtime install + journey**: scaffold the stack from `bin/create-skill.sh --from`, save artifacts, resolve, journal, analytics, discard, conductor scheduling — all proven by `ci/e2e-custom-stack-examples.sh`.
+- **Runtime install + journey**: scaffold the stack from `bin/create-skill.sh --from`, save artifacts, resolve, journal, analytics, discard, conductor scheduling. All proven by `ci/e2e-custom-stack-examples.sh` (the opt-in E2E workflow).
 
 Each stack documents its own status and install path on its README.

@@ -785,7 +785,7 @@ The framework guarantees that one skill inherits, all proven by `ci/e2e-custom-s
 
 ### Workflow stack
 
-A stack is multiple custom skills wired together with a `phase_graph` so the conductor knows the dependency order. The compliance-release example proves the framework: three custom phases (`/license-audit` + `/privacy-check` + `/release-readiness`) compose into a release decision before `/ship`. `ci/e2e-custom-stack-examples.sh` walks the full new-user journey for it on every workflow run: scaffold, validate, save, resolve, journal, analytics, discard, conductor scheduling. 15 cells, 51 assertions.
+A stack is multiple custom skills wired together with a `phase_graph` so the conductor knows the dependency order. The compliance-release example proves the framework: three custom phases (`/license-audit` + `/privacy-check` + `/release-readiness`) compose into a release decision before `/ship`. `ci/e2e-custom-stack-examples.sh` walks the full new-user journey on a real `/tmp` project (scaffold, validate, save, resolve, journal, analytics, discard, conductor scheduling) and runs in the opt-in E2E workflow. 15 cells, 51 assertions.
 
 Copy the stack starting point:
 

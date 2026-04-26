@@ -2,7 +2,7 @@
 
 A three-skill stack that gates `/ship` on license, privacy, and release-readiness evidence. Read-only by design: no commits, no PRs, no deploys, no network calls.
 
-> Status: end-to-end working. The static contract (`ci/check-custom-stack-examples.sh`, 49 checks) and the runtime harness (`ci/e2e-custom-stack-examples.sh`, 15 cells / 51 assertions) both pass on every workflow run. The install commands below are the same ones the harness exercises.
+> Status: end-to-end working. The static contract (`ci/check-custom-stack-examples.sh`, 49 checks) runs on every PR; the runtime harness (`ci/e2e-custom-stack-examples.sh`, 15 cells / 51 assertions) runs in the opt-in E2E workflow. The install commands below are the same ones the harness exercises.
 
 ## Who this stack is for
 
