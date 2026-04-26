@@ -268,14 +268,12 @@ flow_write_guard() {
     printf "    ${DIM}SKIP  write blocks: ~/.ssh/config (no ~/.ssh on this host)${NC}\n"
   fi
 
-  if realpath -m /tmp/foo/bar >/dev/null 2>&1; then
-    ln -sfn "/etc/passwd" "$proj/passwd-link"
-    assert_false "write blocks: leaf symlink to /etc/passwd (GNU realpath path)" \
-      "$guard" "$proj/passwd-link"
-  else
-    SKIP=$((SKIP+1))
-    printf "    ${DIM}SKIP  write blocks: leaf symlink (no GNU realpath; macOS BSD)${NC}\n"
-  fi
+  # Leaf-symlink case. After the macOS-fallback fix, this passes on
+  # both GNU realpath (-m) and BSD realpath (plain) and on the pure-bash
+  # readlink-based fallback when no realpath is usable.
+  ln -sfn "/etc/passwd" "$proj/passwd-link"
+  assert_false "write blocks: leaf symlink to /etc/passwd" \
+    "$guard" "$proj/passwd-link"
 
   # Allow list — paths the guard must NOT block.
   assert_true "write allows: .env.example" "$guard" "$proj/.env.example"

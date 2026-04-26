@@ -63,22 +63,55 @@ esac
 # target whose textual path does not match any denylist entry. The fix
 # is to evaluate the denylist against BOTH the original path and its
 # resolved form; if either matches, block. Falls back to a pure-bash
-# parent-realpath when the realpath binary is missing or refuses
-# missing leaves (Write to a not-yet-existing file).
+# resolver when the realpath binary is missing or refuses missing
+# leaves (Write to a not-yet-existing file).
+#
+# Three resolution paths:
+#   1. GNU realpath -m / --canonicalize-missing follows every symlink
+#      including the leaf. Best when available (Ubuntu, macOS+coreutils).
+#   2. macOS BSD realpath (no -m) accepts only existing paths. Try it
+#      anyway: leaf symlinks created in this test get resolved.
+#   3. Pure-bash fallback: resolve the parent via `cd && pwd -P`, then
+#      if the leaf itself is a symlink, follow it manually with
+#      readlink. Relative readlink targets resolve against the
+#      already-resolved parent. This closes the macOS-without-coreutils
+#      bypass where `ln -s /etc/passwd leaf-link` could reach the
+#      target unguarded.
 RESOLVED_PATH=""
 if command -v realpath >/dev/null 2>&1; then
   RESOLVED_PATH=$(realpath -m "$FILE_PATH" 2>/dev/null) \
     || RESOLVED_PATH=$(realpath --canonicalize-missing "$FILE_PATH" 2>/dev/null) \
+    || RESOLVED_PATH=$(realpath "$FILE_PATH" 2>/dev/null) \
     || RESOLVED_PATH=""
 fi
 if [ -z "$RESOLVED_PATH" ]; then
-  # Pure-bash fallback. cd into the parent (which IS a real dir even
-  # when the leaf is being created) and re-attach the basename. pwd -P
-  # follows symlinks at the parent level, which catches sshlink/...
   _parent=$(dirname "$FILE_PATH")
   _base=$(basename "$FILE_PATH")
   if RESOLVED_PARENT=$(cd "$_parent" 2>/dev/null && pwd -P); then
     RESOLVED_PATH="$RESOLVED_PARENT/$_base"
+    # If the leaf exists and is a symlink, follow it manually so the
+    # denylist sees the target. readlink without flags is portable
+    # across BSD and GNU; -f / -e are GNU-only.
+    if [ -L "$RESOLVED_PATH" ]; then
+      _target=$(readlink "$RESOLVED_PATH" 2>/dev/null)
+      if [ -n "$_target" ]; then
+        case "$_target" in
+          /*) RESOLVED_PATH="$_target" ;;
+          *)  RESOLVED_PATH="$RESOLVED_PARENT/$_target" ;;
+        esac
+        # Collapse a single layer of /a/../b that the manual splice
+        # may introduce. cd into the new parent and re-attach base if
+        # possible; if the directory does not exist (target points at
+        # a not-yet-created path) keep the textual form so the
+        # denylist still has something to match.
+        _new_parent=$(dirname "$RESOLVED_PATH")
+        _new_base=$(basename "$RESOLVED_PATH")
+        if _NEW_PARENT_REAL=$(cd "$_new_parent" 2>/dev/null && pwd -P); then
+          RESOLVED_PATH="$_NEW_PARENT_REAL/$_new_base"
+        fi
+        unset _target _new_parent _new_base _NEW_PARENT_REAL
+      fi
+    fi
   else
     RESOLVED_PATH="$FILE_PATH"
   fi
