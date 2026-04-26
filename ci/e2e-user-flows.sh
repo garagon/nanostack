@@ -476,6 +476,52 @@ flow_local_no_git() {
   unset NANOSTACK_STORE
 }
 
+# ─── Flow 8: phase registry ──────────────────────────────────────────
+# bin/lib/phases.sh is the single source of truth. Lifecycle scripts
+# read from it; this flow proves a registered custom phase saves and a
+# missing registration is rejected with the right message, end-to-end
+# from a real project directory.
+
+flow_phase_registry() {
+  local proj="$TMP_ROOT/phase-registry"
+  mkdir -p "$proj/.nanostack"
+  cd "$proj"
+  git init -q
+  export NANOSTACK_STORE="$proj/.nanostack"
+
+  # No custom phases yet: rejection path.
+  printf '%s' '{}' > .nanostack/config.json
+  assert_false "save-artifact rejects unregistered phase" \
+    "$REPO/bin/save-artifact.sh" audit-licenses \
+    '{"phase":"audit-licenses","summary":{"flagged":[]},"context_checkpoint":{"summary":"ok"}}'
+  local rej_out
+  rej_out=$( "$REPO/bin/save-artifact.sh" audit-licenses \
+    '{"phase":"audit-licenses","summary":{"flagged":[]},"context_checkpoint":{"summary":"ok"}}' 2>&1 || true )
+  assert_true "rejection message says 'invalid phase'" \
+    bash -c "echo '$rej_out' | grep -qF 'invalid phase'"
+
+  # After registration: save and read.
+  printf '%s' '{"custom_phases":["audit-licenses"]}' > .nanostack/config.json
+  "$REPO/bin/save-artifact.sh" audit-licenses \
+    '{"phase":"audit-licenses","summary":{"flagged":[],"counts":{"permissive":1}},"context_checkpoint":{"summary":"7 deps scanned","key_files":["package.json"]}}' \
+    >/dev/null
+  assert_true "registered custom phase artifact exists" \
+    bash -c "ls $proj/.nanostack/audit-licenses/*.json 2>/dev/null | head -1"
+
+  local found
+  found=$( "$REPO/bin/find-artifact.sh" audit-licenses 30 2>/dev/null )
+  assert_true "find-artifact returns the saved path" test -f "$found"
+
+  # Library smoke from a real project: nano_all_phases includes the
+  # registered custom phase; nano_phase_kind classifies it correctly.
+  local kind
+  kind=$( source "$REPO/bin/lib/phases.sh" && nano_phase_kind audit-licenses )
+  assert_eq "nano_phase_kind == custom for registered phase" "custom" "$kind"
+
+  cd "$REPO"
+  unset NANOSTACK_STORE
+}
+
 # ─── Run ──────────────────────────────────────────────────────────────
 
 echo "Nanostack E2E user flows"
@@ -489,6 +535,7 @@ flow write_guard
 flow sprint_phase_gate
 flow legacy_repair
 flow local_no_git
+flow phase_registry
 
 echo ""
 echo "========================"
