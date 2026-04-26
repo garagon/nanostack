@@ -821,6 +821,80 @@ jobs:
           echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
           exit $fail
 
+  think-structured-artifact:
+    name: /think saves structured JSON artifact
+    runs-on: ubuntu-latest
+    # /think vNext PR 1. The artifact is the contract /nano,
+    # sprint-journal, and resolve.sh consume. Refusing to advance to
+    # /nano without a value_proposition / narrowest_wedge / key_risk
+    # is only honest when those fields actually live as named JSON
+    # keys, not as a prose blob inside summary.value.
+    steps:
+      - uses: actions/checkout@v4
+      - name: think/SKILL.md does not save via --from-session
+        run: |
+          set -e
+          fail=0
+          if grep -nE 'save-artifact\.sh[[:space:]]+--from-session[[:space:]]+think' think/SKILL.md; then
+            echo "FAIL: /think must save structured JSON, not the --from-session prose form"
+            fail=1
+          fi
+          # Must have the structured-save block: jq -n with the named
+          # fields the spec requires. Loose grep on the field names
+          # avoids brittleness to formatting changes.
+          for field in value_proposition scope_mode target_user narrowest_wedge key_risk premise_validated; do
+            if ! grep -q "$field" think/SKILL.md; then
+              echo "FAIL: think/SKILL.md must mention required field '$field'"
+              fail=1
+            fi
+          done
+          # Save call site must reference the canonical schema doc.
+          if ! grep -q 'reference/artifact-schema.md' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must point at reference/artifact-schema.md"
+            fail=1
+          fi
+          exit $fail
+
+      - name: artifact-schema.md declares the extended /think shape
+        run: |
+          set -e
+          fail=0
+          # The schema doc must include the new optional fields too,
+          # so future skills can rely on their names without each
+          # adding their own ad-hoc convention.
+          for field in out_of_scope manual_delivery_test search_summary context_checkpoint; do
+            if ! grep -q "$field" reference/artifact-schema.md; then
+              echo "FAIL: reference/artifact-schema.md missing field '$field' in /think schema"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: structured artifact roundtrip (jq queries from spec pass)
+        run: |
+          set -e
+          fail=0
+          tmp=$(mktemp -d /tmp/think-ci.XXXXXX)
+          cd "$tmp"
+          git init -q
+          mkdir -p .nanostack
+          export NANOSTACK_STORE="$tmp/.nanostack"
+          $GITHUB_WORKSPACE/bin/session.sh init development >/dev/null
+          THINK_JSON=$(jq -n '{
+            phase:"think",
+            summary:{value_proposition:"VP", scope_mode:"reduce", target_user:"TU", narrowest_wedge:"NW", key_risk:"KR", premise_validated:true, out_of_scope:["x"]},
+            context_checkpoint:{summary:"x"}
+          }')
+          $GITHUB_WORKSPACE/bin/save-artifact.sh think "$THINK_JSON" >/dev/null
+          # The three jq queries the spec names as acceptance must succeed.
+          jq -e '.summary.value_proposition' .nanostack/think/*.json >/dev/null || { echo "FAIL: value_proposition not retrievable"; fail=1; }
+          jq -e '.summary.narrowest_wedge'   .nanostack/think/*.json >/dev/null || { echo "FAIL: narrowest_wedge not retrievable"; fail=1; }
+          jq -e '.summary.key_risk'          .nanostack/think/*.json >/dev/null || { echo "FAIL: key_risk not retrievable"; fail=1; }
+          # sprint-journal.sh consumes those exact fields; smoke-check it
+          # does not crash.
+          $GITHUB_WORKSPACE/bin/sprint-journal.sh >/dev/null 2>&1 || { echo "FAIL: sprint-journal crashed on structured think artifact"; fail=1; }
+          exit $fail
+
   guided-skeleton-single-source:
     name: Guided skeleton has a single source of truth
     runs-on: ubuntu-latest

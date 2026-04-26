@@ -353,13 +353,47 @@ Produce a clear brief for the next phase:
 - {{optional second, cap at three}}
 ```
 
-Immediately after writing the Think Summary — before anything else, before presenting next steps — save the artifact:
+Immediately after writing the Think Summary — before anything else, before presenting next steps — save the artifact as **structured JSON** that matches the canonical schema in `reference/artifact-schema.md`. Downstream skills (`/nano`, `bin/sprint-journal.sh`, `bin/resolve.sh`) read the named fields, so the prose-blob form (`--from-session`) is no longer acceptable for `/think`.
+
+Build the JSON inline and pass it to `save-artifact.sh`. Required fields (the autopilot brief gate refuses to advance without them): `value_proposition`, `scope_mode`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`. Optional but encouraged: `out_of_scope`, `manual_delivery_test`, `search_summary`, `context_checkpoint`.
+
+Use `jq -n` so the output is real JSON, not a string with embedded quotes:
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh --from-session think 'Value prop: X. Scope: Y. Starting point: Z. Risk: W. Premise: validated/not.'
+THINK_JSON=$(jq -n \
+  --arg value_proposition "..."   \
+  --arg scope_mode        "..."   \
+  --arg target_user       "..."   \
+  --arg narrowest_wedge   "..."   \
+  --arg key_risk          "..."   \
+  --argjson premise_validated true \
+  --argjson out_of_scope          '[]' \
+  --argjson manual_delivery_test  '{"possible": false, "steps": []}' \
+  --argjson search_summary        '{"mode": "local_only", "result": "", "existing_solution": "none"}' \
+  --argjson context_checkpoint    '{"summary":"", "key_files":[], "decisions_made":[], "open_questions":[]}' \
+  '{
+     phase: "think",
+     summary: {
+       value_proposition: $value_proposition,
+       scope_mode:        $scope_mode,
+       target_user:       $target_user,
+       narrowest_wedge:   $narrowest_wedge,
+       key_risk:          $key_risk,
+       premise_validated: $premise_validated,
+       out_of_scope:      $out_of_scope,
+       manual_delivery_test: $manual_delivery_test,
+       search_summary:    $search_summary
+     },
+     context_checkpoint: $context_checkpoint
+   }')
+
+~/.claude/skills/nanostack/bin/save-artifact.sh think "$THINK_JSON"
 ```
 
-This is the first thing you do after the summary. Not optional. Not "Step 2". The summary and the save are one action.
+This is the first thing you do after the summary. Not optional. Not "Step 2". The summary and the save are one action. After this:
+
+- `bin/sprint-journal.sh` reads `.summary.value_proposition / .scope_mode / .narrowest_wedge / .key_risk` directly.
+- `bin/resolve.sh plan` returns the structured `summary` object so `/nano` can pre-populate its plan with `narrowest_wedge` as the scope constraint and `out_of_scope` as the do-not-touch list.
 
 ### Phase 6.5: Think Brief (shareable)
 
