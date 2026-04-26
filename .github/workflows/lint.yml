@@ -2418,6 +2418,50 @@ jobs:
             fi
           done
           exit $fail
+      - name: Default phase_graph mirrors conductor's canonical topology
+        run: |
+          set -e
+          # PR 5 will land a conductor that consumes nano_phase_graph_json.
+          # The default graph must match the conductor today (think -> plan
+          # -> build -> review/qa/security -> ship), otherwise PR 5 ships
+          # review/qa/security before build runs.
+          out=$(bash -c 'source bin/lib/phases.sh && nano_phase_graph_json')
+          echo "$out" | jq -e '. | length == 7' >/dev/null
+          echo "$out" | jq -e 'any(.name == "build")' >/dev/null
+          echo "$out" | jq -e '.[] | select(.name == "build") | .depends_on == ["plan"]' >/dev/null
+          for p in review qa security; do
+            echo "$out" | jq -e ".[] | select(.name == \"$p\") | .depends_on == [\"build\"]" >/dev/null
+          done
+          echo "$out" | jq -e '.[] | select(.name == "ship") | .depends_on | sort == ["qa","review","security"]' >/dev/null
+          # Cross-check: conductor's runtime graph still names build between
+          # plan and review. If the conductor changes its topology the lint
+          # is not the right place to update — this lock is a tripwire that
+          # forces the change to happen in both files together.
+          if ! grep -qE '"name":"build","depends_on":\["plan"\]' conductor/bin/sprint.sh; then
+            echo "FAIL: conductor/bin/sprint.sh DEFAULT_PHASES no longer routes build between plan and review"
+            exit 1
+          fi
+      - name: Library validates phase_graph entries before returning them
+        run: |
+          set -e
+          # Invalid graphs must fall back to the default so downstream
+          # consumers (PR 5 conductor) never see an invalid topology.
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          mkdir -p "$tmp/.nanostack"
+          export NANOSTACK_STORE="$tmp/.nanostack"
+          # Case 1: name not in core/custom and not the build stage.
+          printf '%s' '{"phase_graph":[{"name":"think","depends_on":[]},{"name":"NOT_REGISTERED","depends_on":["think"]}]}' > "$tmp/.nanostack/config.json"
+          out=$(bash -c 'source bin/lib/phases.sh && nano_phase_graph_json' 2>/dev/null)
+          echo "$out" | jq -e '. | length == 7' >/dev/null
+          # Case 2: depends_on points at a name that is not in the graph.
+          printf '%s' '{"phase_graph":[{"name":"think","depends_on":["plan"]}]}' > "$tmp/.nanostack/config.json"
+          out=$(bash -c 'source bin/lib/phases.sh && nano_phase_graph_json' 2>/dev/null)
+          echo "$out" | jq -e '. | length == 7' >/dev/null
+          # Case 3: name fails the phase regex.
+          printf '%s' '{"phase_graph":[{"name":"BAD_NAME","depends_on":[]}]}' > "$tmp/.nanostack/config.json"
+          out=$(bash -c 'source bin/lib/phases.sh && nano_phase_graph_json' 2>/dev/null)
+          echo "$out" | jq -e '. | length == 7' >/dev/null
 
   guard-rule-ids-unique:
     name: Guard rule ids are unique

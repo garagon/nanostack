@@ -112,22 +112,88 @@ nano_phase_kind() {
   return 1
 }
 
+# Internal: graph nodes accept core phases plus the conductor's "build"
+# stage (which produces no artifact and is not in nano_core_phases).
+_NANO_GRAPH_BUILTIN_NODES="$NANO_CORE_PHASES_LIST build"
+
+_nano_graph_node_known() {
+  local name="$1" config="${2:-}"
+  case " $_NANO_GRAPH_BUILTIN_NODES " in
+    *" $name "*) return 0 ;;
+  esac
+  local custom
+  custom=$(nano_custom_phases "$config")
+  case " $custom " in
+    *" $name "*) return 0 ;;
+  esac
+  return 1
+}
+
+# Validates a phase_graph JSON array. Each entry must have a string
+# .name matching the phase regex AND known to the registry (core,
+# custom, or the conductor's "build" stage). Every .depends_on[] entry
+# must reference a name that appears elsewhere in the same graph.
+# Returns 0 on success, 1 on failure (silently — caller emits the user
+# warning).
+_nano_phase_graph_is_valid() {
+  local graph="$1" config="${2:-}"
+  command -v jq >/dev/null 2>&1 || return 1
+  echo "$graph" | jq -e '
+    type == "array"
+    and length > 0
+    and all(
+      .[];
+      (.name | type == "string")
+      and (.depends_on | type == "array")
+      and (.depends_on | all(type == "string"))
+    )
+  ' >/dev/null 2>&1 || return 1
+  local names dep_targets
+  names=$(echo "$graph" | jq -r '.[].name')
+  dep_targets=$(echo "$graph" | jq -r '[.[].name] | join("\n")')
+  while IFS= read -r name; do
+    [ -z "$name" ] && continue
+    if ! printf '%s' "$name" | grep -qE "$NANO_PHASE_NAME_RE"; then
+      return 1
+    fi
+    if ! _nano_graph_node_known "$name" "$config"; then
+      return 1
+    fi
+  done <<< "$names"
+  local deps
+  deps=$(echo "$graph" | jq -r '.[].depends_on[]?')
+  while IFS= read -r dep; do
+    [ -z "$dep" ] && continue
+    if ! echo "$dep_targets" | grep -qFx "$dep"; then
+      return 1
+    fi
+  done <<< "$deps"
+  return 0
+}
+
 # Returns the phase_graph as a JSON array of {name, depends_on}. If
-# config is missing or has no phase_graph, returns the canonical core
-# graph. Conductor's PR will consume this; for now lifecycle scripts
-# ignore it.
+# config has a valid phase_graph, returns it. Otherwise returns the
+# canonical default graph that mirrors conductor/bin/sprint.sh:
+# think -> plan -> build -> review/qa/security (parallel) -> ship.
+# An invalid phase_graph in config falls back to the default and emits
+# a stderr warning so a malformed config never produces an invalid
+# topology downstream.
 nano_phase_graph_json() {
   local config
   config=$(_nano_phases_resolve_config "${1:-}") || true
+  local default_graph='[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"review","depends_on":["build"]},{"name":"qa","depends_on":["build"]},{"name":"security","depends_on":["build"]},{"name":"ship","depends_on":["review","qa","security"]}]'
   if [ -n "$config" ] && command -v jq >/dev/null 2>&1; then
     local graph
     graph=$(jq -c '.phase_graph // empty' "$config" 2>/dev/null)
     if [ -n "$graph" ] && [ "$graph" != "null" ]; then
-      printf '%s\n' "$graph"
-      return 0
+      if _nano_phase_graph_is_valid "$graph" "$config"; then
+        printf '%s\n' "$graph"
+        return 0
+      fi
+      printf 'phases: rejecting invalid phase_graph in config; using default graph\n' >&2
     fi
   fi
-  printf '%s\n' '[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"review","depends_on":["plan"]},{"name":"qa","depends_on":["plan"]},{"name":"security","depends_on":["plan"]},{"name":"ship","depends_on":["review","qa","security"]}]'
+  printf '%s\n' "$default_graph"
 }
 
 # Best-effort skill-path resolution. Core phases live one directory
