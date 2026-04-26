@@ -7,17 +7,18 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
+. "$SCRIPT_DIR/lib/phases.sh"
 
 PROJECT="$(pwd)"
 MAX_AGE=30
-PHASES="think plan review qa security ship"
+PHASES_OVERRIDE=""
 JSON_OUTPUT=false
 TOKEN_BUDGET=0  # 0 = no budget, load full artifacts
 
 # Parse arguments
 while [ $# -gt 0 ]; do
   case "$1" in
-    --phases) PHASES="$2"; shift 2 ;;
+    --phases) PHASES_OVERRIDE="$2"; shift 2 ;;
     --max-age-days) MAX_AGE="$2"; shift 2 ;;
     --json) JSON_OUTPUT=true; shift ;;
     --budget) TOKEN_BUDGET="$2"; shift 2 ;;
@@ -25,11 +26,12 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Load custom phases from config
-CONFIG="$NANOSTACK_STORE/config.json"
-if [ -f "$CONFIG" ]; then
-  CUSTOM=$(jq -r '.custom_phases // [] | join(" ")' "$CONFIG" 2>/dev/null || echo "")
-  [ -n "$CUSTOM" ] && PHASES="$PHASES $CUSTOM"
+# Phases come from the registry (core + registered custom). An explicit
+# --phases flag overrides the registry for advanced callers.
+if [ -n "$PHASES_OVERRIDE" ]; then
+  PHASES="$PHASES_OVERRIDE"
+else
+  PHASES=$(nano_all_phases)
 fi
 
 # If budget is set, estimate total upstream size and decide mode

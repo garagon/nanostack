@@ -2369,6 +2369,56 @@ jobs:
             exit 1
           fi
 
+  phase-registry-contract:
+    name: Phase registry library exposes the public API
+    runs-on: ubuntu-latest
+    # bin/lib/phases.sh is the single source of truth for which phases
+    # exist for a project. Lifecycle scripts (save, restore, discard,
+    # journal, analytics, conductor) all read from it. The unit suite
+    # already exercises the runtime; this lint locks the API surface so
+    # future edits cannot rename or remove a function the consumers
+    # depend on.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Library file exists and is sourceable
+        run: |
+          set -e
+          test -f bin/lib/phases.sh
+          bash -n bin/lib/phases.sh
+      - name: Required public functions are defined
+        run: |
+          set -e
+          fail=0
+          for fn in nano_core_phases nano_custom_phases nano_all_phases nano_phase_exists nano_phase_kind nano_phase_graph_json nano_phase_skill_path; do
+            if ! grep -qE "^${fn}\(\)" bin/lib/phases.sh; then
+              echo "FAIL: bin/lib/phases.sh is missing function $fn"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Lifecycle scripts that take a phase argument source the registry
+        run: |
+          set -e
+          fail=0
+          for f in bin/save-artifact.sh bin/restore-context.sh bin/discard-sprint.sh; do
+            if ! grep -qE 'lib/phases\.sh' "$f"; then
+              echo "FAIL: $f does not source bin/lib/phases.sh"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Hardcoded core-phase strings are gone from the migrated scripts
+        run: |
+          set -e
+          fail=0
+          for f in bin/save-artifact.sh bin/restore-context.sh bin/discard-sprint.sh; do
+            if grep -nE 'PHASES?="think plan review qa security ship"' "$f"; then
+              echo "FAIL: $f still hardcodes the core phase list (use nano_all_phases)"
+              fail=1
+            fi
+          done
+          exit $fail
+
   guard-rule-ids-unique:
     name: Guard rule ids are unique
     runs-on: ubuntu-latest

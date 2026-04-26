@@ -58,22 +58,15 @@ fi
 PHASE="${1:?Usage: save-artifact.sh <phase> <json>}"
 JSON="${2:?Missing JSON argument}"
 STORE="$NANOSTACK_STORE/$PHASE"
-CORE_PHASES="think plan review qa security ship"
 
-# Load custom phases from config if exists
-CUSTOM_PHASES=""
-CONFIG="$NANOSTACK_STORE/config.json"
-if [ -f "$CONFIG" ]; then
-  CUSTOM_PHASES=$(jq -r '.custom_phases // [] | join(" ")' "$CONFIG" 2>/dev/null || echo "")
+# Phase registry is the single source of truth for which phases exist.
+# Core phases are always valid; custom phases come from
+# .nanostack/config.json (.custom_phases).
+. "$SCRIPT_DIR/lib/phases.sh"
+if ! nano_phase_exists "$PHASE"; then
+  echo "error: invalid phase '$PHASE'. Must be one of: $(nano_all_phases)" >&2
+  exit 1
 fi
-
-VALID_PHASES="$CORE_PHASES $CUSTOM_PHASES"
-
-# Validate phase name
-case " $VALID_PHASES " in
-  *" $PHASE "*) ;;
-  *) echo "error: invalid phase '$PHASE'. Must be one of: $VALID_PHASES" >&2; exit 1 ;;
-esac
 
 # Validate JSON is parseable
 if ! echo "$JSON" | jq '.' >/dev/null 2>&1; then

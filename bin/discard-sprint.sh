@@ -9,6 +9,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
+. "$SCRIPT_DIR/lib/phases.sh"
 
 STORE="$NANOSTACK_STORE"
 KNOW_HOW="$STORE/know-how"
@@ -17,7 +18,9 @@ PROJECT_NAME=$(basename "$PROJECT")
 DATE=$(date -u +"%Y-%m-%d")
 PHASE=""
 DRY_RUN=false
-PHASES="think plan review qa security ship"
+# Default to every registered phase (core + custom). The explicit
+# --phase flag below narrows to a single phase when given.
+PHASES=$(nano_all_phases)
 
 # Parse args
 while [ $# -gt 0 ]; do
