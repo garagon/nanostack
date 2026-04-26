@@ -105,7 +105,7 @@ A detailed per-host matrix (Bash guard, Write/Edit guard, phase gate) lives furt
 
 ## Try it safely first
 
-Not sure yet? Start with a disposable example. It gives you a real sprint without risking your product.
+Not sure yet? Start with a disposable sandbox from the Examples Library. It gives you a real sprint without risking your product.
 
 | Example | Best for | Stack | Time |
 |---|---|---|---|
@@ -114,7 +114,7 @@ Not sure yet? Start with a disposable example. It gives you a real sprint withou
 | [`api-healthcheck`](examples/api-healthcheck/) | backend flows | Node stdlib HTTP | 10-15 min |
 | [`static-landing`](examples/static-landing/) | founders and designers | static HTML/CSS | 10-15 min |
 
-Each example has a copy-paste prompt, expected sprint flow, success criteria, and reset steps. Full library: [`examples/`](examples/).
+Each example has a copy-paste prompt, expected sprint flow, success criteria, and reset steps. Full Examples Library: [`examples/`](examples/).
 
 ## Quick start
 
