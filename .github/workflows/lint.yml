@@ -752,6 +752,36 @@ jobs:
           run_case 0 'envsubst < template'
           run_case 0 'jq . package.json'
           run_case 0 'awk NR==1 file.csv'
+          # G-035 covers JSON credential basenames (Codex retest 2026-04-26).
+          # The previous .env-extension rule allowed credentials.json,
+          # secrets.json, service-account.json, etc.
+          run_case 1 'cat credentials.json'
+          run_case 1 'jq . secrets.json'
+          run_case 1 'cat service-account.json'
+          run_case 1 'cat firebase-adminsdk.json'
+          run_case 1 'rg token client_secret.json'
+          run_case 1 'cat client-secrets.json'
+          run_case 1 'cat aws-credentials.json'
+          run_case 1 'cat google-credentials.json'
+          # Same retest: env templates were blocked even though they are the
+          # safe onboarding surface. They must read.
+          run_case 0 'cat .env.example'
+          run_case 0 'cat .env.sample'
+          run_case 0 'cat .env.template'
+          run_case 0 'head .env.example'
+          run_case 0 'rg API_KEY .env.example'
+          # Real env files (no template suffix) keep blocking.
+          run_case 1 'cat .env.local'
+          run_case 1 'cat .env.production'
+          run_case 1 'cat .env.staging'
+          run_case 1 'cat .env.dev'
+          run_case 1 'cat .env.development'
+          run_case 1 'cat .env.test'
+          # Project config JSON must keep passing; the JSON credential rule
+          # is keyed on credential-flavored basenames, not on .json itself.
+          run_case 0 'jq . tsconfig.json'
+          run_case 0 'cat firebase.json'
+          run_case 0 'cat wrangler.json'
           exit $fail
 
   write-guard-regression:
@@ -2338,3 +2368,98 @@ jobs:
             echo "FAIL: archetypes.md no longer maps api_backend to Builder; update this lint or the spec"
             exit 1
           fi
+
+  guard-rule-ids-unique:
+    name: Guard rule ids are unique
+    runs-on: ubuntu-latest
+    # G-031 was assigned to two different block rules (env/printenv and
+    # sudo destructive) until the 2026-04-26 retest. Audit log entries
+    # and user-facing block output need every rule id to map to exactly
+    # one rule, so this lock blocks the regression.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Block rule ids must be unique
+        run: |
+          set -e
+          dupes=$(jq -r '.tiers.block.rules[].id' guard/rules.json | sort | uniq -d)
+          if [ -n "$dupes" ]; then
+            echo "FAIL: duplicate block rule id(s):"
+            echo "$dupes"
+            exit 1
+          fi
+      - name: Warn rule ids must be unique (within tier)
+        run: |
+          set -e
+          dupes=$(jq -r '.tiers.warn.rules[].id // empty' guard/rules.json | sort | uniq -d)
+          if [ -n "$dupes" ]; then
+            echo "FAIL: duplicate warn rule id(s):"
+            echo "$dupes"
+            exit 1
+          fi
+
+  guard-secret-file-patterns:
+    name: Guard blocks secret JSON and allows env templates
+    runs-on: ubuntu-latest
+    # Functional lock for the 2026-04-26 secrets retest:
+    # - JSON credential basenames (credentials.json, secrets.json,
+    #   service-account.json, firebase-adminsdk.json, client_secret.json)
+    #   must block; the previous extension-only rule missed them and
+    #   allowed credential reads to land in the agent transcript.
+    # - Env templates (.env.example, .env.sample, .env.template) must
+    #   read; first-run setup needs them and blocking creates a
+    #   "Nanostack is fighting me" moment for non-technical users.
+    # - Real env files (.env, .env.local, .env.production, .env.staging,
+    #   .env.dev, .env.development, .env.test) must keep blocking.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run secret-file matrix
+        run: |
+          set +e
+          set -u
+          script=guard/bin/check-dangerous.sh
+          export NANOSTACK_STORE="$RUNNER_TEMP/store"
+          mkdir -p "$NANOSTACK_STORE"
+          fail=0
+          run_case() {
+            local expected="$1" cmd="$2"
+            (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/$script" "$cmd" >/dev/null 2>&1)
+            local got=$?
+            if [ "$got" != "$expected" ]; then
+              echo "FAIL: '$cmd' expected exit $expected, got $got"
+              fail=1
+            else
+              printf '  ok   exit=%s  %s\n' "$got" "$cmd"
+            fi
+          }
+          # JSON credential basenames must block.
+          run_case 1 'cat credentials.json'
+          run_case 1 'jq . secrets.json'
+          run_case 1 'cat service-account.json'
+          run_case 1 'cat firebase-adminsdk.json'
+          run_case 1 'rg token client_secret.json'
+          run_case 1 'cat client-secrets.json'
+          run_case 1 'cat google-credentials.json'
+          run_case 1 'cat gcp-credentials.json'
+          run_case 1 'cat aws-credentials.json'
+          run_case 1 'cat supabase-service-role.json'
+          # Env templates must read.
+          run_case 0 'cat .env.example'
+          run_case 0 'cat .env.sample'
+          run_case 0 'cat .env.template'
+          # Real env files must keep blocking.
+          run_case 1 'cat .env'
+          run_case 1 'cat .env.local'
+          run_case 1 'cat .env.production'
+          run_case 1 'cat .env.staging'
+          run_case 1 'cat .env.dev'
+          run_case 1 'cat .env.development'
+          run_case 1 'cat .env.test'
+          # Project config JSON keeps passing; the credential rule is
+          # keyed on credential-flavored basenames, not on .json itself.
+          run_case 0 'jq . tsconfig.json'
+          run_case 0 'cat firebase.json'
+          run_case 0 'cat wrangler.json'
+          run_case 0 'jq . package.json'
+          exit $fail
