@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Crumb: quick notes for people who think out loud</title>
+  <style>
+    :root {
+      --ink: #1a1a1a;
+      --muted: #555;
+      --bg: #fafafa;
+      --accent: #2c5fff;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.5;
+    }
+    main { max-width: 720px; margin: 0 auto; padding: 64px 24px; }
+    h1 { font-size: 2.4rem; line-height: 1.15; margin: 0 0 16px; }
+    .lede { font-size: 1.15rem; color: var(--muted); margin: 0 0 32px; }
+    .cta {
+      display: inline-block;
+      padding: 12px 20px;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+    .cta:hover { filter: brightness(0.95); }
+    section { margin-top: 56px; }
+    h2 { font-size: 1.4rem; margin: 0 0 16px; }
+    .features { display: grid; gap: 16px; padding: 0; list-style: none; }
+    .features li {
+      padding: 16px;
+      background: #fff;
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+    }
+    .features strong { display: block; margin-bottom: 4px; }
+    footer {
+      margin-top: 80px;
+      padding-top: 24px;
+      border-top: 1px solid #e8e8e8;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Quick notes for people who think out loud.</h1>
+    <p class="lede">Crumb saves what you mumble while you work, then surfaces it back to you the next morning. No syncing, no folders, no projects.</p>
+    <a class="cta" href="#waitlist">Join the waitlist</a>
+
+    <section>
+      <h2>Why Crumb</h2>
+      <ul class="features">
+        <li><strong>One keystroke.</strong> Hit your hotkey, talk for ten seconds, get back to what you were doing.</li>
+        <li><strong>Quiet capture.</strong> Nothing pops up. Nothing pings. The note is there when you ask for it.</li>
+        <li><strong>Morning replay.</strong> Yesterday's crumbs show up at 8am as a single email you can scan in 30 seconds.</li>
+      </ul>
+    </section>
+
+    <section id="waitlist">
+      <h2>Join the waitlist</h2>
+      <p>We're picking the first 50 testers from the waitlist. No payment yet, we want to know if it works for you before we ask for anything.</p>
+      <a class="cta" href="mailto:hello@example.com?subject=Crumb%20waitlist">Send me an invite</a>
+    </section>
+
+    <footer>
+      <p>© 2026 Crumb. Built as a nanostack examples sandbox.</p>
+    </footer>
+  </main>
+</body>
+</html>
