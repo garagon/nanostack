@@ -38,12 +38,19 @@ SKILL_DIR="${SKILL_DIR:-$HOME/.claude/skills/release-readiness}"
 "$SKILL_DIR/bin/summarize.sh"
 ```
 
-The helper reads each upstream artifact (where present), maps each to a `check` entry, and computes a rolled-up status:
+The helper reads each upstream artifact through `bin/find-artifact.sh --verify` and maps each to a `check` entry. Per-check status:
 
 - **`MISSING`** for any upstream whose artifact is absent.
-- **`BLOCKED`** for the rollup if any upstream is `BLOCKED`.
-- **`WARN`** for the rollup if any upstream is `WARN` (and none is `BLOCKED`).
-- **`OK`** only when all five upstreams are present and none is `WARN` or `BLOCKED`.
+- **`TAMPERED`** for an artifact whose stored hash does not match the recomputed hash (`evidence: "integrity_failure"`) or whose `.integrity` field is absent (`evidence: "missing_integrity"`). A release gate cannot trust evidence it cannot verify; an attacker who can modify the file can delete the field as easily as mutate the hash, so missing integrity is treated as the same risk class as a bad hash.
+- **`BLOCKED`** when the upstream's `summary.status` is `BLOCKED`.
+- **`WARN`** when the upstream's `summary.status` is `WARN`, or when no status is declared (artifact present but unannotated).
+- **`OK`** when the upstream's `summary.status` is `OK` and integrity verifies.
+
+Rollup is monotonic worst-case:
+
+- Any `BLOCKED`, `TAMPERED`, or `MISSING` per-check entry forces the rollup to **`BLOCKED`**.
+- Otherwise, any `WARN` per-check entry rolls up to **`WARN`**.
+- Otherwise, **`OK`**.
 
 ### 3. Save the artifact
 
@@ -64,6 +71,7 @@ Prefix the status (`OK`, `WARN`, `BLOCKED`) and surface the most actionable next
 ## Gotchas
 
 - This skill **never runs `/ship`**, never opens a PR, never commits, never deploys. It only composes evidence into a decision.
-- Missing upstreams are explicit. If `qa` has no artifact, the rollup is `BLOCKED` for "QA evidence missing" — not `OK` with a quiet gap. The whole point of the gate is to surface that exactly.
-- The status rollup is monotonic: once any upstream is `BLOCKED`, the composer cannot soften the rollup to `WARN`. The user must explicitly resolve the blocker.
+- Missing upstreams are explicit. If `qa` has no artifact, the rollup is `BLOCKED` for "QA evidence missing" (not `OK` with a quiet gap). The whole point of the gate is to surface that exactly.
+- Tampered upstreams are explicit. An artifact whose stored hash does not match the recomputed content, or whose `.integrity` field is absent, becomes `TAMPERED` (not `OK`). A release gate cannot afford to trust evidence it cannot verify.
+- The status rollup is monotonic: once any upstream is `BLOCKED`, `TAMPERED`, or `MISSING`, the composer cannot soften the rollup to `WARN`. The user must explicitly resolve the failure.
 - `WARN` rollups still allow `/ship` (the composer does not auto-block), but the artifact records the warning and the next-action so the team has a paper trail.
