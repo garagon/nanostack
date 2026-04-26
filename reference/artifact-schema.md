@@ -69,6 +69,15 @@ Every artifact can include a `context_checkpoint` — a self-contained summary t
       "mode": "local_only|private|public",
       "result": "string",
       "existing_solution": "none|partial|covers_80_percent"
+    },
+    "archetype": "founder_validation|cli_tooling|api_backend|landing_experience|unknown",
+    "archetype_confidence": "high|medium|low|user_selected",
+    "archetype_source": "explicit_flag|user_answer|detected_from_prompt|detected_from_files|session|fallback",
+    "archetype_reason": "string",
+    "example_reference": {
+      "name": "starter-todo|cli-notes|api-healthcheck|static-landing|null",
+      "path": "examples/starter-todo|null",
+      "why_relevant": "string"
     }
   },
   "context_checkpoint": {
@@ -83,6 +92,7 @@ Every artifact can include a `context_checkpoint` — a self-contained summary t
 **Required vs optional in `summary`:**
 - Required: `value_proposition`, `scope_mode`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`. The autopilot brief gate (`/think --autopilot`) refuses to advance to `/nano` when any of these are missing or empty.
 - Optional: `out_of_scope`, `manual_delivery_test`, `search_summary`. Skills downstream of `/think` consume them when present, fall back to safe defaults when absent.
+- Optional Guided Archetypes v1: `archetype`, `archetype_confidence`, `archetype_source`, `archetype_reason`, `example_reference`. The brief gate does NOT require these. Skills that opt into archetype-aware behavior read them when present and fall back to canonical neutrality when absent. The full archetype contract lives in [`think/references/archetypes.md`](../think/references/archetypes.md).
 
 ### /nano
 

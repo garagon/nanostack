@@ -33,6 +33,7 @@ If the session file does not exist, default to `professional` / `normal` / `fals
 | `run_mode` | `normal` \| `report_only` | When `report_only`, the skill must NOT edit files, fix issues, commit, push, or call any `--fix` mode. It only reports. |
 | `autopilot` | `true` \| `false` | When `true`, do not pause between phases. Show one status line and continue. |
 | `plan_approval` | `manual` \| `auto` \| `not_required` | Used by `/nano` to decide whether to wait for plan approval. Other skills usually mirror autopilot. |
+| `archetype` (optional, Guided Archetypes v1) | `founder_validation` \| `cli_tooling` \| `api_backend` \| `landing_experience` \| `unknown` \| absent | When set, `/think` may use it as one of the detection signals (priority below explicit flag and below current path). Absence is the default; `/think` then runs its own deterministic detection. The full archetype contract lives in [`think/references/archetypes.md`](../think/references/archetypes.md). |
 
 ## Guided final-output blocks
 
