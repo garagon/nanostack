@@ -98,9 +98,25 @@ Check the user's invocation for a `--preset` flag. Six presets exist today:
 
 Parsing rules:
 
-- `/think --preset=eng "idea"` or `/think --preset eng "idea"` → preset is `eng`.
-- `/think "idea"` (no flag) → preset is `default`.
+- `/think --preset=eng "idea"` or `/think --preset eng "idea"` → preset is `eng`. **Explicit `--preset` always wins**, regardless of archetype.
+- `/think "idea"` (no `--preset`) → the preset is selected by the archetype's internal lens (Guided Archetypes v1, see below). Falls back to `default` only when archetype is `unknown`.
 - Unknown value → tell the user `Unknown preset '<name>'. Valid: default, yc, garry, eng, design, devex. Running with default.` and proceed with `default`.
+
+Archetype → internal lens map when no `--preset` was provided:
+
+| Archetype | Internal lens |
+|---|---|
+| `founder_validation` | `yc` (Professional) or `garry` (also Professional). In Guided profile, soften further: keep the narrowest-wedge / target-user emphasis but drop the YC delivery edge. |
+| `cli_tooling` | `devex` |
+| `api_backend` | `eng` |
+| `landing_experience` | `design` |
+| `unknown` | `default` |
+
+Worked examples:
+
+- `/think --preset=eng "rewrite the hero copy"` with `archetype=landing_experience` → preset stays `eng`. The explicit flag wins over the archetype's design lens.
+- `/think "add a /version endpoint"` with detected `archetype=api_backend` → preset becomes `eng` automatically. The user did not specify a preset; the archetype provides the internal lens.
+- `/think "validate this idea"` with detected `archetype=founder_validation` and `PROFILE=guided` → preset is the YC lens softened by Guided wording. The first screen does not contain `preset`, `archetype`, or `mode`; it just says `Voy a empezar preguntando quien necesita esto hoy.`
 
 Load the preset internally and show the user only a short headline — the kind of message they actually need ("Preset: eng. I'll pressure-test architecture, failure modes, rollback and tests."). Do NOT dump the preset file to the conversation. The preset markdown is internal voice instruction, not user-facing content; printing it floods the first screen with rules the user did not ask for.
 
