@@ -46,14 +46,20 @@ trap 'rm -rf "$tmp"' EXIT
 fail=0
 
 # Helper: write a phase artifact directly to disk so the smoke test
-# does not depend on save-artifact.sh's project-scoping rules.
+# does not depend on save-artifact.sh's project-scoping rules. The
+# artifact includes a real .integrity hash computed the same way
+# bin/save-artifact.sh computes it (sha256 of the canonical JSON
+# form before adding the integrity field). release-readiness's
+# verify path requires .integrity to be present, so writing a
+# realistic hash here keeps the OK/WARN/BLOCKED cases honest.
 write_artifact() {
   local store="$1" phase="$2" status="$3"
   local dir="$store/$phase"
   mkdir -p "$dir"
   local ts
   ts=$(date -u +"%Y%m%d-%H%M%S")
-  jq -n \
+  local body
+  body=$(jq -n \
     --arg phase "$phase" \
     --arg status "$status" \
     --arg ts "$ts" \
@@ -65,7 +71,10 @@ write_artifact() {
       timestamp: ($ts | gsub("(?<a>[0-9]{4})(?<b>[0-9]{2})(?<c>[0-9]{2})-(?<d>[0-9]{2})(?<e>[0-9]{2})(?<f>[0-9]{2})"; "\(.a)-\(.b)-\(.c)T\(.d):\(.e):\(.f)Z")),
       summary: { status: $status, headline: "smoke artifact" },
       context_checkpoint: { summary: "smoke" }
-    }' > "$dir/$ts.json"
+    }')
+  local hash
+  hash=$(printf '%s' "$body" | jq -Sc '.' | shasum -a 256 | cut -d' ' -f1)
+  printf '%s' "$body" | jq --arg cs "$hash" '. + {integrity: $cs}' > "$dir/$ts.json"
 }
 
 run_case() {
@@ -164,7 +173,43 @@ else
   fail=1
 fi
 
+# Case 7: artifact present but .integrity field stripped. An attacker
+# who can write the file can delete the field as easily as mutate the
+# hash. find-artifact.sh --verify silently accepts a missing
+# .integrity (it only fails on hash MISMATCH). The release gate must
+# reject unverifiable evidence: per-check TAMPERED with
+# evidence=missing_integrity, rollup BLOCKED.
+proj="$tmp/missing-integrity"
+mkdir -p "$proj"
+cd "$proj"
+git init -q 2>/dev/null || true
+store="$proj/.nanostack"
+mkdir -p "$store"
+write_artifact "$store" review OK
+write_artifact "$store" qa OK
+write_artifact "$store" license-audit OK
+write_artifact "$store" "privacy-check" OK
+write_artifact "$store" security OK
+sec_path=$(ls "$store/security"/*.json 2>/dev/null | head -1)
+jq 'del(.integrity)' "$sec_path" > "$sec_path.tmp" && mv "$sec_path.tmp" "$sec_path"
+out=$(
+  NANOSTACK_ROOT="$REPO_ROOT" \
+  NANOSTACK_STORE="$store" \
+  "$SUMMARIZE" 2>&1
+)
+cd "$tmp"
+got=$( echo "$out" | jq -r '.rollup_status' 2>/dev/null )
+sec_status=$( echo "$out" | jq -r '.checks[] | select(.phase == "security") | .status' 2>/dev/null )
+sec_evidence=$( echo "$out" | jq -r '.checks[] | select(.phase == "security") | .evidence' 2>/dev/null )
+if [ "$got" = "BLOCKED" ] && [ "$sec_status" = "TAMPERED" ] && [ "$sec_evidence" = "missing_integrity" ]; then
+  echo "  ok    missing-integrity: per-check TAMPERED with evidence=missing_integrity, rollup BLOCKED"
+else
+  echo "FAIL: missing-integrity case wrong (rollup=$got, security=$sec_status, evidence=$sec_evidence)"
+  echo "$out"
+  fail=1
+fi
+
 if [ "$fail" -eq 0 ]; then
-  echo "OK: release-readiness smoke passed (6 cases)"
+  echo "OK: release-readiness smoke passed (7 cases)"
 fi
 exit $fail

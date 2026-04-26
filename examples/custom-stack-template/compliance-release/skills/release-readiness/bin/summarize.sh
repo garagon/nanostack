@@ -9,6 +9,11 @@
 # Per-upstream status:
 #   - artifact missing                              -> MISSING
 #   - artifact present but integrity hash mismatch  -> TAMPERED
+#   - artifact present but .integrity field absent  -> TAMPERED
+#     (a release gate rejects unverifiable evidence; an attacker who
+#     can write the file can remove the integrity field as easily as
+#     mutate it, so missing integrity is the same risk class as a
+#     bad hash)
 #   - artifact present + verified, status=OK        -> OK
 #   - artifact present + verified, status=WARN      -> WARN
 #   - artifact present + verified, status=BLOCKED   -> BLOCKED
@@ -20,6 +25,9 @@
 # the gate up to OK. The tampered case is recorded as TAMPERED in
 # the per-check entry and forces the rollup to BLOCKED, separately
 # from "artifact never saved" which records as MISSING.
+#
+# save-artifact.sh always writes the .integrity field, so a
+# legitimate artifact never trips the missing-integrity check.
 #
 # Rollup (monotonic, worst case wins):
 #   - any check is BLOCKED, TAMPERED, or MISSING -> BLOCKED
@@ -69,13 +77,24 @@ for phase in $UPSTREAMS; do
       status="TAMPERED"
       evidence="integrity_failure"
     else
-      raw_status=$( jq -r '.summary.status // ""' "$verified" 2>/dev/null )
-      case "$raw_status" in
-        OK|WARN|BLOCKED) status="$raw_status" ;;
-        "") status="WARN" ;;
-        *)  status="WARN" ;;
-      esac
-      evidence="artifact"
+      # find-artifact.sh --verify silently accepts artifacts whose
+      # .integrity field is missing — it only fails on a hash
+      # MISMATCH, not on absence. A release gate cannot afford that:
+      # an attacker who can write the file can delete the field as
+      # easily as mutate the hash. Require .integrity to be present.
+      stored_integrity=$( jq -r '.integrity // ""' "$verified" 2>/dev/null )
+      if [ -z "$stored_integrity" ]; then
+        status="TAMPERED"
+        evidence="missing_integrity"
+      else
+        raw_status=$( jq -r '.summary.status // ""' "$verified" 2>/dev/null )
+        case "$raw_status" in
+          OK|WARN|BLOCKED) status="$raw_status" ;;
+          "") status="WARN" ;;
+          *)  status="WARN" ;;
+        esac
+        evidence="artifact"
+      fi
     fi
   fi
 
