@@ -238,6 +238,34 @@ The goal propagates through the resolver to every phase. Use it to frame scope d
 
 Then run `session.sh phase-start think`.
 
+## Session state
+
+After `session.sh init`, read the canonical session fields per `reference/session-state-contract.md`. `/think` shapes its own UX from these fields the same way every other Sprint phase does — no skill should infer profile, autopilot, or run_mode from prose context alone.
+
+```bash
+SESSION=$NANOSTACK_STORE/session.json
+[ -f "$SESSION" ] || SESSION="$HOME/.nanostack/session.json"
+
+PROFILE=$(jq -r '.profile // "professional"' "$SESSION" 2>/dev/null || echo "professional")
+RUN_MODE=$(jq -r '.run_mode // "normal"' "$SESSION" 2>/dev/null || echo "normal")
+AUTOPILOT=$(jq -r '.autopilot // false' "$SESSION" 2>/dev/null || echo "false")
+PLAN_APPROVAL=$(jq -r '.plan_approval // (if .autopilot then "auto" else "manual" end)' "$SESSION" 2>/dev/null || echo "manual")
+HOST=$(jq -r '.host // "unknown"' "$SESSION" 2>/dev/null || echo "unknown")
+```
+
+How `/think` uses each field:
+
+| Field | Effect on `/think` |
+|---|---|
+| `PROFILE=guided` | Shorter conversation (max 3 opening questions). No internal labels (no "Founder mode", "Phase 1.5", "Startup mode"). Output follows `reference/plain-language-contract.md`. The Spanish four-block skeleton applies on local mode. |
+| `PROFILE=professional` | Keep the full Founder/Startup/Builder mode framework, the diagnostic, the staff-engineer scorecard. |
+| `RUN_MODE=report_only` | Brief produced and saved as artifact, but `/think` does NOT advance to `/nano` (no autopilot continuation, no plan_approval=auto). |
+| `AUTOPILOT=true` and brief is complete | Continue to `/nano` without pausing for approval (per session contract). The Minimum Viable Brief Gate decides "complete". |
+| `AUTOPILOT=true` and brief is incomplete | Pause once with a single focused question — see Phase 5 (Brief gate). Do not invent fields. |
+| `HOST=codex/cursor/opencode/gemini` | Even with a git repo, profile may already be `guided` because the host adapter declared `instructions_only`. Trust `PROFILE`, do not re-derive guided/professional from `detect_git_mode` alone. |
+
+`bin/lib/git-context.sh` `detect_git_mode` is still useful as a SECONDARY signal for downstream wording (e.g. "tu computadora" vs "este repo"), but it is not the source of truth for profile selection. The session is.
+
 ## Process
 
 ### Phase 1: Context Gathering
@@ -257,7 +285,11 @@ Determine the mode from the user's description:
 
 **How to detect the mode:** If the user describes a personal pain ("I have this problem," "I need to..."), default to Startup or Builder. If the user pitches an idea for others ("I want to build X for Y market"), default to Startup. Only use Founder mode when the user asks for it or the context is clearly a high-stakes venture decision.
 
-**Local mode language:** Run `source bin/lib/git-context.sh && detect_git_mode`. If the result is `local` (no git repo), the user is likely non-technical. Adapt your language throughout the entire sprint: replace jargon with plain language. "Starting point" → "¿Cuál es lo mínimo que necesitás que funcione?" / "Status quo" → "¿Cómo lo estás resolviendo ahora?" / "Premise validated" → "Tiene sentido, avancemos." Same rigor, simpler words. Never mention git, branches, PRs, or diffs. Do NOT expose internal labels like "Phase 1", "Phase 1.5", "Startup mode", or "Builder mode" — these are your internal process, not something the user needs to see. Just do the work naturally.
+**Guided UX rules (when `PROFILE=guided`):** The session decides this; do not re-derive from `detect_git_mode` alone. A Codex / Cursor / OpenCode / Gemini repo can be guided even with git, because the host adapter declared `instructions_only`.
+
+When `PROFILE=guided`, adapt your conversation throughout the entire sprint: replace jargon with plain language. "Starting point" → "¿Cuál es lo mínimo que necesitás que funcione?" / "Status quo" → "¿Cómo lo estás resolviendo ahora?" / "Premise validated" → "Tiene sentido, avancemos." Same rigor, simpler words. Never mention git, branches, PRs, or diffs. Do NOT expose internal labels like "Phase 1", "Phase 1.5", "Startup mode", or "Builder mode" — these are your internal process, not something the user needs to see. Just do the work naturally.
+
+`detect_git_mode` is still useful as a secondary signal: when it returns `local`, the user is on a non-git path and the local-mode wording (paths instead of branches, "tu carpeta" instead of "el repo") applies on top of guided.
 
 **Plain-language contract.** When `profile == "guided"` (or local mode, which implies guided), the user-facing summary at the end of `/think` follows `reference/plain-language-contract.md`. Use the four-block skeleton (Result / How to try / What was checked / What remains) and avoid the banned terms in the contract's table. Example:
 
