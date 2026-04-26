@@ -25,6 +25,10 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NANOSTACK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Resolve NANOSTACK_STORE the same way lifecycle scripts do, so a
+# skill scaffolded from a git subdirectory or a no-git project lands
+# where save-artifact / resolve / conductor will look for it.
+. "$SCRIPT_DIR/lib/store-path.sh"
 . "$SCRIPT_DIR/lib/phases.sh"
 
 NAME="${1:-}"
@@ -88,9 +92,11 @@ if [ ! -f "$TEMPLATE/SKILL.md" ]; then
   exit 2
 fi
 
-# Project-local skills root. Conductor's nano_phase_skill_path walks
-# this first, so a skill written here is picked up automatically.
-DEST_ROOT=".nanostack/skills"
+# Skills root inside the resolved store. Conductor's
+# nano_phase_skill_path walks <store>/skills first, so a skill written
+# here is picked up automatically by the same scripts that read it
+# (save-artifact, resolve, conductor) regardless of cwd.
+DEST_ROOT="$NANOSTACK_STORE/skills"
 DEST="$DEST_ROOT/$NAME"
 if [ -e "$DEST" ]; then
   echo "ERROR: $DEST already exists; remove it or pick a different name" >&2
@@ -126,21 +132,24 @@ if [ -n "$DEPS" ]; then
     && mv "$DEST/SKILL.md.tmp" "$DEST/SKILL.md"
 fi
 
-# Registration in .nanostack/config.json (idempotent).
+# Registration in <store>/config.json (idempotent). Same path
+# lifecycle scripts read from, so a registration here is visible to
+# every consumer (save-artifact, resolve, analytics, conductor).
+CONFIG="$NANOSTACK_STORE/config.json"
 if [ "$REGISTER" = true ]; then
-  mkdir -p .nanostack
-  if [ -f .nanostack/config.json ]; then
+  mkdir -p "$NANOSTACK_STORE"
+  if [ -f "$CONFIG" ]; then
     jq --arg n "$NAME" '.custom_phases = ((.custom_phases // []) + [$n] | unique)' \
-      .nanostack/config.json > .nanostack/config.json.tmp \
-      && mv .nanostack/config.json.tmp .nanostack/config.json
+      "$CONFIG" > "$CONFIG.tmp" \
+      && mv "$CONFIG.tmp" "$CONFIG"
   else
-    jq -n --arg n "$NAME" '{custom_phases: [$n]}' > .nanostack/config.json
+    jq -n --arg n "$NAME" '{custom_phases: [$n]}' > "$CONFIG"
   fi
 fi
 
 echo "Created skill at $DEST"
 if [ "$REGISTER" = true ]; then
-  echo "Registered phase '$NAME' in .nanostack/config.json"
+  echo "Registered phase '$NAME' in $CONFIG"
 fi
 echo
 echo "Next:"

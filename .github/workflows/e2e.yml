@@ -117,10 +117,9 @@ jobs:
     # this harness proves they compose into one workflow.
     steps:
       - uses: actions/checkout@v4
-      - name: jq + python3 + node available
+      - name: jq + node available
         run: |
           jq --version
-          python3 --version
           node --version
       - name: Run custom-stack E2E
         run: |

@@ -63,8 +63,18 @@ else
   report OK "SKILL.md exists"
   # Extract frontmatter region (between first two --- markers).
   fm=$(awk '/^---[[:space:]]*$/{f++; next} f==1' "$SKILL_MD")
-  if echo "$fm" | grep -qE '^name:[[:space:]]'; then
+  fm_name=$(echo "$fm" | grep -E '^name:[[:space:]]' | head -1 | sed 's/^name:[[:space:]]*//')
+  if [ -n "$fm_name" ]; then
     report OK "frontmatter has 'name:'"
+    # The name an agent reads as the slash command must equal the
+    # directory basename. A copied template that still says
+    # `name: audit-licenses` inside .nanostack/skills/license-audit/
+    # would expose /audit-licenses to the agent, not /license-audit.
+    if [ "$fm_name" = "$NAME" ]; then
+      report OK "frontmatter name matches directory ($fm_name)"
+    else
+      report FAIL "frontmatter name '$fm_name' does not match directory '$NAME'"
+    fi
   else
     report FAIL "frontmatter has 'name:'"
   fi
@@ -84,14 +94,36 @@ else
   esac
 fi
 
-# 2. agents/openai.yaml exists and parses
+# 2. agents/openai.yaml exists, has the required keys, and does not
+#    embed an old template name. Avoid PyYAML — it is not in the
+#    Python stdlib and the install footprint pushes against the
+#    "low-friction tooling" claim. The narrow checks below are
+#    sufficient for the keys nanostack actually consumes.
 OPENAI_YAML="$SKILL_DIR/agents/openai.yaml"
 if [ ! -f "$OPENAI_YAML" ]; then
   report FAIL "agents/openai.yaml exists"
-elif ! python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "$OPENAI_YAML" 2>/dev/null; then
-  report FAIL "agents/openai.yaml parses as YAML"
 else
-  report OK "agents/openai.yaml exists and parses"
+  report OK "agents/openai.yaml exists"
+  oy_fail=0
+  for key in display_name short_description default_prompt; do
+    if ! grep -qE "^[[:space:]]+${key}:" "$OPENAI_YAML"; then
+      report FAIL "agents/openai.yaml has '$key' under interface"
+      oy_fail=1
+    fi
+  done
+  [ "$oy_fail" -eq 0 ] && report OK "agents/openai.yaml has display_name + short_description + default_prompt"
+  # display_name is the discovery surface for the slash command. It
+  # must reference the new skill name; a copied skill that still says
+  # display_name: "audit-licenses" inside license-audit/ would expose
+  # the wrong command to OpenAI-compatible agents.
+  display_name=$(grep -E '^[[:space:]]+display_name:' "$OPENAI_YAML" | head -1 | sed -E 's/^[[:space:]]+display_name:[[:space:]]*"?([^"]*)"?[[:space:]]*$/\1/')
+  if [ -n "$display_name" ]; then
+    if [ "$display_name" = "$NAME" ] || printf '%s' "$display_name" | grep -qF "$NAME"; then
+      report OK "openai.yaml display_name references '$NAME'"
+    else
+      report FAIL "openai.yaml display_name '$display_name' does not reference '$NAME'"
+    fi
+  fi
 fi
 
 # 3. bin/*.sh passes bash -n

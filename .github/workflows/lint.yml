@@ -2672,13 +2672,15 @@ jobs:
             echo "      Add a sentence about fresh-shell tool execution near step 0."
             exit 1
           fi
-      - name: agents/openai.yaml exists and parses
+      - name: agents/openai.yaml exists with the three discovery keys
         run: |
           set -e
+          # Narrow grep instead of PyYAML — the user-facing
+          # bin/check-custom-skill.sh dropped the PyYAML dependency
+          # in PR 6, and the lint should validate against the same
+          # surface the tool actually checks.
           f=examples/custom-skill-template/audit-licenses/agents/openai.yaml
           test -f "$f" || { echo "FAIL: $f missing"; exit 1; }
-          python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "$f"
-          # Minimum surface (matches the built-in skill convention)
           for k in display_name short_description default_prompt; do
             if ! grep -qE "^[[:space:]]+${k}:" "$f"; then
               echo "FAIL: $f missing key '$k'"

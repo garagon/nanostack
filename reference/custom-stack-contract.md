@@ -187,10 +187,11 @@ bin/create-skill.sh license-audit --concurrency read --depends-on build
 What it does:
 
 - Validates the skill name against the registry's regex (`^[a-z][a-z0-9-]*$`) and rejects any name that collides with a core phase.
-- Copies the bundled template (`examples/custom-skill-template/audit-licenses` by default; override with `--from <dir>`) into `.nanostack/skills/<name>/`.
+- Resolves the store path the same way every lifecycle script does (via `bin/lib/store-path.sh`): `$NANOSTACK_STORE` if set, otherwise the git repo root's `.nanostack/`, otherwise `$HOME/.nanostack/`. The skill lands at `<store>/skills/<name>/` and the registration is written to `<store>/config.json`. Same path that `save-artifact`, `resolve`, `analytics`, and `conductor` read from. A user invoking the tool from a git subdirectory writes to the repo root (not the subdir); a user without git writes to `$HOME/.nanostack/` (not the cwd).
+- Copies the bundled template (`examples/custom-skill-template/audit-licenses` by default; override with `--from <dir>`).
 - Substitutes the source skill name with `<name>` in `SKILL.md`, `agents/openai.yaml`, and `README.md`.
 - Optionally rewrites the frontmatter `concurrency:` field (`--concurrency read|write|exclusive`) and `depends_on:` field (`--depends-on <phase>`, repeatable).
-- Adds `<name>` to `.custom_phases` in `.nanostack/config.json`. Idempotent — already-present names are not duplicated. `--no-register` skips this step.
+- Adds `<name>` to `.custom_phases` in `<store>/config.json`. Idempotent — already-present names are not duplicated. `--no-register` skips this step.
 
 `bin/check-custom-skill.sh` validates a copied or scaffolded skill against the framework contract.
 
@@ -200,11 +201,13 @@ bin/check-custom-skill.sh .nanostack/skills/license-audit
 
 What it checks:
 
-- `SKILL.md` exists with a `name:`, `description:`, and `concurrency:` frontmatter (`concurrency` must be `read`, `write`, or `exclusive`).
-- `agents/openai.yaml` exists and parses as YAML.
+- `SKILL.md` exists with `name:`, `description:`, and `concurrency:` frontmatter (`concurrency` must be `read`, `write`, or `exclusive`).
+- The frontmatter `name:` matches the directory basename. A copied template that still says `name: audit-licenses` inside `license-audit/` would expose `/audit-licenses` to the agent — not what the user intended.
+- `agents/openai.yaml` exists and contains `display_name`, `short_description`, `default_prompt` under `interface:`. The validator uses narrow grep checks instead of a YAML library so it stays portable on any machine with bash + jq + standard tools (no PyYAML or external runtime needed).
+- The `display_name` references the new skill name, catching the same kind of drift in the OpenAI-discovery surface.
 - Every `bin/*.sh` passes `bash -n`.
 - The skill directory name matches the phase regex.
-- The phase is registered in `.nanostack/config.json:custom_phases` so `save-artifact.sh` and `resolve.sh` accept it.
+- The phase is registered in `<store>/config.json:custom_phases` so `save-artifact.sh` and `resolve.sh` accept it. `<store>` is resolved via `bin/lib/store-path.sh` — same path the scaffolder writes to.
 - `SKILL.md` does not embed `./examples/custom-skill-template/...` paths (would break after copy).
 - `save-artifact.sh` round-trips a smoke artifact and `find-artifact.sh` reads it back. The smoke artifact is removed after the check.
 

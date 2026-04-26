@@ -43,6 +43,18 @@ assert_true() {
   fi
 }
 
+assert_false() {
+  local name="$1"; shift
+  if ! "$@" >/dev/null 2>&1; then
+    PASS=$((PASS+1))
+    printf "    ${GREEN}OK${NC}    %s\n" "$name"
+  else
+    FAIL=$((FAIL+1))
+    printf "    ${RED}FAIL${NC}  %s\n" "$name"
+    printf "          ${DIM}cmd unexpectedly succeeded: %s${NC}\n" "$*"
+  fi
+}
+
 assert_eq() {
   local name="$1" expected="$2" actual="$3"
   if [ "$expected" = "$actual" ]; then
@@ -144,17 +156,82 @@ batch_out=$( "$REPO/conductor/bin/sprint.sh" batch 2>&1 )
 assert_true "license-audit appears in a type=read batch" \
   bash -c "echo '$batch_out' | grep -qE '\"phases\":\\[[^]]*\"license-audit\"[^]]*\\].*\"type\":\"read\"|\"type\":\"read\".*\"phases\":\\[[^]]*\"license-audit\"'"
 
-# Cell 11: agents/openai.yaml is present and parses.
-echo "[11] agents/openai.yaml present and parses"
+# Cell 11: agents/openai.yaml is present with the three discovery keys.
+# Narrow grep beats PyYAML here — keep the harness portable on any
+# machine with bash + jq + node.
+echo "[11] agents/openai.yaml present with required keys"
+SKILLS_ROOT_FOR_CHECK="${NANOSTACK_STORE:-$PROJ/.nanostack}/skills"
+[ -d "$SKILLS_ROOT_FOR_CHECK/license-audit/agents" ] || \
+  SKILLS_ROOT_FOR_CHECK="$PROJ/.nanostack/skills"
 assert_true "openai.yaml exists" \
-  test -f ".nanostack/skills/license-audit/agents/openai.yaml"
-assert_true "openai.yaml parses as YAML" \
-  python3 -c "import yaml; yaml.safe_load(open('.nanostack/skills/license-audit/agents/openai.yaml'))"
+  test -f "$SKILLS_ROOT_FOR_CHECK/license-audit/agents/openai.yaml"
+assert_true "openai.yaml has display_name + short_description + default_prompt" \
+  bash -c "grep -qE '^[[:space:]]+display_name:' '$SKILLS_ROOT_FOR_CHECK/license-audit/agents/openai.yaml' && grep -qE '^[[:space:]]+short_description:' '$SKILLS_ROOT_FOR_CHECK/license-audit/agents/openai.yaml' && grep -qE '^[[:space:]]+default_prompt:' '$SKILLS_ROOT_FOR_CHECK/license-audit/agents/openai.yaml'"
 
 # Cell 12: copied skill has no repo-relative example paths.
 echo "[12] copied skill has no repo-relative example paths"
 assert_true "SKILL.md has no ./examples/custom-skill-template/ leak" \
   bash -c "! grep -qE '\\./examples/custom-skill-template/' .nanostack/skills/license-audit/SKILL.md"
+
+# Cell 13: scaffolding from a git subdirectory must land in the repo
+# root's .nanostack, not the subdir's. Codex caught a regression here:
+# create-skill.sh used cwd-relative paths so a user invoking the tool
+# from src/ wrote .nanostack/ inside src/, then check-custom-skill.sh
+# (which resolves the store via store-path.sh -> repo root) failed
+# the registration check.
+echo "[13] create-skill resolves the store from a subdirectory"
+SUB_PROJ="$TMP_ROOT/subdir-project"
+mkdir -p "$SUB_PROJ/src/feature"
+cd "$SUB_PROJ"
+git init -q
+cd "$SUB_PROJ/src/feature"
+"$REPO/bin/create-skill.sh" subdir-skill --concurrency read >/dev/null
+assert_true "skill landed in repo root, not in src/feature" \
+  test -f "$SUB_PROJ/.nanostack/skills/subdir-skill/SKILL.md"
+assert_true "no rogue .nanostack inside src/feature" \
+  bash -c "! test -d '$SUB_PROJ/src/feature/.nanostack'"
+out=$( "$REPO/bin/check-custom-skill.sh" "$SUB_PROJ/.nanostack/skills/subdir-skill" 2>&1 )
+assert_true "check-custom-skill passes from a subdir scaffold" \
+  bash -c "echo '$out' | tail -1 | grep -qE '^OK:'"
+
+# Cell 14: scaffolding outside any git repo. lib/store-path.sh falls
+# back to $HOME/.nanostack, so create-skill must too. Use a fake HOME
+# inside TMP_ROOT so the test does not touch the real ~/.nanostack.
+echo "[14] create-skill resolves the store outside git (fake HOME)"
+NOGIT_HOME="$TMP_ROOT/nogit-home"
+NOGIT_PROJ="$TMP_ROOT/nogit-project"
+mkdir -p "$NOGIT_HOME" "$NOGIT_PROJ"
+cd "$NOGIT_PROJ"
+HOME="$NOGIT_HOME" "$REPO/bin/create-skill.sh" nogit-skill >/dev/null
+assert_true "skill landed in fake-HOME store, not cwd" \
+  test -f "$NOGIT_HOME/.nanostack/skills/nogit-skill/SKILL.md"
+assert_true "no rogue .nanostack inside the cwd" \
+  bash -c "! test -d '$NOGIT_PROJ/.nanostack'"
+out=$( HOME="$NOGIT_HOME" "$REPO/bin/check-custom-skill.sh" "$NOGIT_HOME/.nanostack/skills/nogit-skill" 2>&1 )
+assert_true "check-custom-skill passes outside git" \
+  bash -c "echo '$out' | tail -1 | grep -qE '^OK:'"
+
+# Cell 15: validator catches a frontmatter name that does not match
+# the directory basename. Codex hit a false-positive OK after a
+# manual copy that left `name: audit-licenses` inside a
+# license-audit/ folder; the agent would have exposed the wrong
+# slash command.
+echo "[15] validator rejects mismatched frontmatter name"
+DRIFT_HOME="$TMP_ROOT/drift-home"
+DRIFT_PROJ="$TMP_ROOT/drift-project"
+mkdir -p "$DRIFT_HOME" "$DRIFT_PROJ"
+cd "$DRIFT_PROJ"
+HOME="$DRIFT_HOME" "$REPO/bin/create-skill.sh" license-audit >/dev/null
+# Sabotage the SKILL.md so the frontmatter still says the source
+# template name. This is the "user copied by hand and forgot to
+# rename" path.
+DRIFT_SKILL="$DRIFT_HOME/.nanostack/skills/license-audit"
+sed 's/^name:.*/name: audit-licenses/' "$DRIFT_SKILL/SKILL.md" > "$DRIFT_SKILL/SKILL.md.tmp"
+mv "$DRIFT_SKILL/SKILL.md.tmp" "$DRIFT_SKILL/SKILL.md"
+assert_false "check-custom-skill rejects mismatched frontmatter name" \
+  bash -c "HOME='$DRIFT_HOME' '$REPO/bin/check-custom-skill.sh' '$DRIFT_SKILL'"
+
+cd "$PROJ"
 
 echo
 echo "============================="
