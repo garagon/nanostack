@@ -1993,6 +1993,112 @@ jobs:
           done
           exit $fail
 
+  readme-narrative-locks:
+    name: README narrative claim locks
+    runs-on: ubuntu-latest
+    # Spec readme-product-narrative-refresh-2026-04-26. PR 1 of the
+    # round rewrote the README around "default sprint + framework
+    # for workflow stacks". This job locks the new claim surface so
+    # later edits do not silently drift back to the older wording or
+    # reintroduce the disallowed phrases the spec called out (Amp,
+    # Cline, Antigravity, "4 commands", "every workflow run", etc.).
+    # The existing readme-public-copy job above already locks an
+    # earlier round's required + stale set; this job is additive.
+    steps:
+      - uses: actions/checkout@v4
+      - name: New required tokens in README.md
+        run: |
+          set -e
+          fail=0
+          # Five-adapter set + opt-in E2E framing must appear by name
+          # so the public claim cannot quietly degrade to "and more"
+          # or "always-on" again.
+          for tok in \
+            'opt-in E2E workflow' \
+            'Verified adapters' \
+            'OpenAI Codex' \
+            'OpenCode' \
+            'Gemini CLI'; do
+            if ! grep -qF "$tok" README.md; then
+              echo "FAIL: README.md missing required token: $tok"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Spanish README declares the same E2E opt-in framing
+        run: |
+          set -e
+          # Spec accepts either "E2E opt-in" or "workflow E2E opt-in"
+          # as long as the opt-in nature of the runtime harness is
+          # spelled out in Spanish too.
+          if ! grep -qE 'E2E opt-in|workflow E2E opt-in' README.es.md; then
+            echo "FAIL: README.es.md does not declare E2E opt-in framing"
+            exit 1
+          fi
+      - name: Forbidden phrases must NOT appear in README.md or README.es.md
+        run: |
+          set -e
+          fail=0
+          # Literal substrings handled with grep -F. Includes both
+          # Spanish and English variants and tightens the existing
+          # stale-strings list with phrases that have been seen in
+          # drafts but did not yet have a hard lock.
+          for bad in \
+            'npx create-nanostack install' \
+            'on every workflow run' \
+            'every workflow run' \
+            '4 commands' \
+            'Cuatro comandos' \
+            'zero dependencies' \
+            'Zero dependencies' \
+            'cero dependencias' \
+            'Cero dependencias' \
+            'marketplace' \
+            'plugin ecosystem' \
+            'GDPR ready' \
+            'SOC2 ready' \
+            'compliance certified' \
+            'works in every agent identically' \
+            'full engineering team'; do
+            hits=$(grep -nF "$bad" README.md README.es.md 2>/dev/null || true)
+            if [ -n "$hits" ]; then
+              echo "FAIL: forbidden phrase '$bad' present:"
+              echo "$hits"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Forbidden agent names (bare-word boundary) must NOT appear
+        run: |
+          set -e
+          fail=0
+          # Use word boundaries so legitimate uses like "amplifier",
+          # "decline", or "incline" do not trip the lock. The spec
+          # set blocks bare references to Amp, Cline, and Antigravity
+          # because Nanostack does not have verified adapters for
+          # them today; the README must claim only the five verified
+          # hosts.
+          for name in 'Amp' 'Cline' 'Antigravity'; do
+            hits=$(grep -nE "\\b${name}\\b" README.md README.es.md 2>/dev/null || true)
+            if [ -n "$hits" ]; then
+              echo "FAIL: forbidden agent name '$name' (bare word) present:"
+              echo "$hits"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Sprint-order arrow MUST NOT show /qa before /security
+        run: |
+          set -e
+          # The canonical sprint order is /review -> /security -> /qa
+          # -> /ship. Any arrow form (-> or →) that shows /qa
+          # immediately before /security is a regression on the
+          # spec's "do not show /qa before /security" rule.
+          if grep -nE '/qa[[:space:]]*(->|→)[[:space:]]*/security' README.md README.es.md; then
+            echo "FAIL: README contains /qa -> /security arrow form (canonical order is /security -> /qa)"
+            exit 1
+          fi
+
   examples-library:
     name: Examples library contract
     runs-on: ubuntu-latest
