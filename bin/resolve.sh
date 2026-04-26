@@ -19,6 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
 [ -f "$SCRIPT_DIR/lib/preflight.sh" ] && { source "$SCRIPT_DIR/lib/preflight.sh"; nanostack_require jq; }
 [ -f "$SCRIPT_DIR/lib/cache.sh" ] && source "$SCRIPT_DIR/lib/cache.sh"
+. "$SCRIPT_DIR/lib/phases.sh"
 
 # Portable timeout wrapper: gtimeout (coreutils on macOS) → timeout (Linux) → run as-is.
 # Used to bound expensive solution lookups so resolve.sh never hangs the sprint.
@@ -65,6 +66,7 @@ LOAD_SOLUTIONS=false
 SOLUTION_STRATEGY=""  # keywords, files, both
 LOAD_PRECEDENTS=false
 LOAD_DIARIZATIONS=false
+PHASE_KIND="core"
 
 case "$PHASE" in
   plan)
@@ -102,8 +104,72 @@ case "$PHASE" in
     SOLUTION_STRATEGY="keywords"
     ;;
   *)
-    echo "{\"error\": \"unknown phase: $PHASE\"}" >&2
-    exit 1
+    # Custom-phase fallback. A phase that's registered in
+    # .nanostack/config.json (custom_phases) returns minimal context:
+    # upstream artifacts driven by phase_graph or skill frontmatter,
+    # everything else empty. An unregistered phase still exits 1 so
+    # set -e callers fail closed.
+    if [ "$(nano_phase_kind "$PHASE" 2>/dev/null)" = "custom" ]; then
+      PHASE_KIND="custom"
+      DEPS=""
+      # First source: phase_graph from config (already validated by
+      # bin/lib/phases.sh; invalid graphs already fell back to default).
+      GRAPH=$(nano_phase_graph_json 2>/dev/null || echo "")
+      if [ -n "$GRAPH" ]; then
+        DEPS=$(echo "$GRAPH" | jq -r --arg p "$PHASE" '.[] | select(.name == $p) | .depends_on[]?' 2>/dev/null | tr '\n' ' ')
+      fi
+      # Second source: SKILL.md frontmatter `depends_on` field, only if
+      # phase_graph did not list the phase. Supports the inline list
+      # form `depends_on: [build, ship]`. Block-list form is parsed too:
+      # subsequent lines starting with "  - <name>" are picked up.
+      if [ -z "$DEPS" ]; then
+        SKILL_DIR=$(nano_phase_skill_path "$PHASE" 2>/dev/null) || SKILL_DIR=""
+        if [ -n "$SKILL_DIR" ] && [ -f "$SKILL_DIR/SKILL.md" ]; then
+          DEPS=$(awk '
+            /^---[[:space:]]*$/ { f=!f; next }
+            f && /^depends_on:/ {
+              # Strip "depends_on:" prefix.
+              sub(/^depends_on:[[:space:]]*/, "")
+              # Inline list: [a, b, c]
+              if ($0 ~ /^\[/) {
+                gsub(/[][,]/, " ")
+                print
+                next
+              }
+              # Empty value: block list follows or no deps at all.
+              if (length($0) == 0) {
+                block_mode = 1
+                next
+              }
+            }
+            f && block_mode && /^[[:space:]]*-[[:space:]]*/ {
+              sub(/^[[:space:]]*-[[:space:]]*/, "")
+              print
+              next
+            }
+            f && block_mode && /^[^[:space:]-]/ { block_mode = 0 }
+          ' "$SKILL_DIR/SKILL.md" | tr '\n' ' ')
+        fi
+      fi
+      # Build UPSTREAM list. Skip the conductor's "build" stage — it has
+      # no artifact directory, so we keep the dep visible to graph
+      # consumers but never look up a file for it. Default age 30 days
+      # (custom phases are typically less time-sensitive than core).
+      for d in $DEPS; do
+        d=$(printf '%s' "$d" | tr -d '[:space:]')
+        [ -z "$d" ] && continue
+        if [ "$d" = "build" ]; then
+          # Recorded so the output keeps the dep, but find-artifact
+          # below will never produce a hit for build.
+          UPSTREAM="${UPSTREAM:+$UPSTREAM }build:0"
+          continue
+        fi
+        UPSTREAM="${UPSTREAM:+$UPSTREAM }$d:30"
+      done
+    else
+      echo "{\"error\": \"unknown phase: $PHASE\"}" >&2
+      exit 1
+    fi
     ;;
 esac
 
@@ -132,6 +198,15 @@ for entry in $UPSTREAM; do
   if [ -n "$RESULT" ]; then
     $FIRST || ARTIFACTS_JSON="$ARTIFACTS_JSON,"
     ARTIFACTS_JSON="$ARTIFACTS_JSON\"$phase\":\"$RESULT\""
+    FIRST=false
+  elif [ "$PHASE_KIND" = "custom" ]; then
+    # Custom phases keep declared-but-missing deps in the output as
+    # `null` so consumers can tell "we asked for this and found
+    # nothing" apart from "this was never a dep". Core phases keep the
+    # historical "omit if missing" behavior to avoid changing the JSON
+    # shape for downstream skills.
+    $FIRST || ARTIFACTS_JSON="$ARTIFACTS_JSON,"
+    ARTIFACTS_JSON="$ARTIFACTS_JSON\"$phase\":null"
     FIRST=false
   fi
 done
@@ -287,6 +362,7 @@ fi
 
 jq -n \
   --arg phase "$PHASE" \
+  --arg phase_kind "$PHASE_KIND" \
   --argjson artifacts "$ARTIFACTS_JSON" \
   --argjson solutions "$SOLUTIONS_JSON" \
   --argjson precedents "$PRECEDENTS_JSON" \
@@ -296,6 +372,7 @@ jq -n \
   --argjson metrics "$METRICS_JSON" \
   '{
     phase: $phase,
+    phase_kind: $phase_kind,
     upstream_artifacts: $artifacts,
     solutions: $solutions,
     conflict_precedents: $precedents,

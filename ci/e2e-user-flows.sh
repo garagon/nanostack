@@ -518,6 +518,24 @@ flow_phase_registry() {
   kind=$( source "$REPO/bin/lib/phases.sh" && nano_phase_kind audit-licenses )
   assert_eq "nano_phase_kind == custom for registered phase" "custom" "$kind"
 
+  # Resolver returns the custom-phase shape per the contract.
+  local resolved
+  resolved=$( "$REPO/bin/resolve.sh" audit-licenses 2>/dev/null )
+  local resolved_kind
+  resolved_kind=$( echo "$resolved" | jq -r '.phase_kind' )
+  assert_eq "resolve.sh emits phase_kind=custom" "custom" "$resolved_kind"
+
+  # Add a phase_graph so the resolver populates upstream_artifacts;
+  # build appears as null (no artifact dir), plan appears as a path.
+  printf '%s' '{"custom_phases":["audit-licenses"],"phase_graph":[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"audit-licenses","depends_on":["build","plan"]},{"name":"ship","depends_on":["audit-licenses"]}]}' > .nanostack/config.json
+  "$REPO/bin/save-artifact.sh" plan \
+    '{"phase":"plan","summary":{"goal":"x"},"context_checkpoint":{"summary":"y"}}' >/dev/null
+  resolved=$( "$REPO/bin/resolve.sh" audit-licenses 2>/dev/null )
+  assert_true "resolver: build dep renders as null" \
+    bash -c "echo '$resolved' | jq -e '.upstream_artifacts.build == null' >/dev/null"
+  assert_true "resolver: plan dep renders as a path" \
+    bash -c "echo '$resolved' | jq -e '.upstream_artifacts.plan | type == \"string\"' >/dev/null"
+
   cd "$REPO"
   unset NANOSTACK_STORE
 }

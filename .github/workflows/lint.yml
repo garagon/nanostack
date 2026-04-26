@@ -2463,6 +2463,92 @@ jobs:
           out=$(bash -c 'source bin/lib/phases.sh && nano_phase_graph_json' 2>/dev/null)
           echo "$out" | jq -e '. | length == 7' >/dev/null
 
+  resolver-custom-phase-contract:
+    name: resolve.sh handles registered custom phases
+    runs-on: ubuntu-latest
+    # PR 2 of the Custom Stack Framework v1 round. resolve.sh used to
+    # exit 1 on any phase that wasn't in its hardcoded routing table,
+    # which broke custom skills running under set -e. Lock the
+    # contract from reference/custom-stack-contract.md: a registered
+    # custom phase exits 0 with phase_kind=custom; an unregistered
+    # phase still exits 1; phase_graph drives upstream_artifacts;
+    # missing deps render as null for custom phases only.
+    steps:
+      - uses: actions/checkout@v4
+      - name: resolve.sh sources the phase registry
+        run: |
+          set -e
+          if ! grep -qE 'lib/phases\.sh' bin/resolve.sh; then
+            echo "FAIL: bin/resolve.sh does not source bin/lib/phases.sh"
+            exit 1
+          fi
+      - name: Custom phase contract round-trip
+        run: |
+          set -e
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          cd "$tmp"
+          git init -q
+          mkdir -p .nanostack
+          export NANOSTACK_STORE="$tmp/.nanostack"
+
+          # Unregistered phase exits 1 with the legacy error message.
+          echo '{}' > .nanostack/config.json
+          out=$("$GITHUB_WORKSPACE/bin/resolve.sh" performance 2>&1) && {
+            echo "FAIL: resolve.sh accepted unregistered phase"
+            exit 1
+          }
+          echo "$out" | grep -qF 'unknown phase' || {
+            echo "FAIL: rejection message does not say 'unknown phase'"
+            exit 1
+          }
+
+          # Core phase still works and now carries phase_kind=core.
+          out=$("$GITHUB_WORKSPACE/bin/resolve.sh" review 2>/dev/null)
+          echo "$out" | jq -e '.phase_kind == "core"' >/dev/null
+
+          # Registered custom phase: exits 0, phase_kind=custom, empty
+          # solutions/diarizations, no upstreams declared yet.
+          printf '%s' '{"custom_phases":["audit-licenses"]}' > .nanostack/config.json
+          out=$("$GITHUB_WORKSPACE/bin/resolve.sh" audit-licenses 2>/dev/null)
+          echo "$out" | jq -e '.phase_kind == "custom"' >/dev/null
+          echo "$out" | jq -e '.solutions == []' >/dev/null
+          echo "$out" | jq -e '.diarizations == []' >/dev/null
+          echo "$out" | jq -e '.upstream_artifacts == {}' >/dev/null
+
+          # phase_graph drives upstream_artifacts. plan present, build
+          # always null (no artifact dir), ship missing renders null.
+          printf '%s' '{"custom_phases":["audit-licenses"],"phase_graph":[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"audit-licenses","depends_on":["build","plan","ship"]},{"name":"ship","depends_on":["audit-licenses"]}]}' > .nanostack/config.json
+          "$GITHUB_WORKSPACE/bin/save-artifact.sh" plan '{"phase":"plan","summary":{"goal":"x"},"context_checkpoint":{"summary":"y"}}' >/dev/null
+          out=$("$GITHUB_WORKSPACE/bin/resolve.sh" audit-licenses 2>/dev/null)
+          echo "$out" | jq -e '.upstream_artifacts.build == null' >/dev/null
+          echo "$out" | jq -e '.upstream_artifacts.plan | type == "string"' >/dev/null
+          echo "$out" | jq -e '.upstream_artifacts.ship == null' >/dev/null
+
+          # Core phases still omit missing upstreams (back-compat for
+          # downstream skills). Reset config and try a core phase that
+          # has no upstream artifacts saved.
+          rm -rf .nanostack/plan
+          echo '{}' > .nanostack/config.json
+          out=$("$GITHUB_WORKSPACE/bin/resolve.sh" review 2>/dev/null)
+          # plan was a declared upstream but not present: core phase
+          # should leave the key OUT, not render it as null.
+          if echo "$out" | jq -e '.upstream_artifacts | has("plan")' >/dev/null; then
+            echo "FAIL: core phase resolver should omit missing upstreams"
+            exit 1
+          fi
+      - name: Contract doc lists the custom-phase output shape
+        run: |
+          set -e
+          fail=0
+          for token in 'phase_kind' '"custom"' 'phase_graph' 'depends_on' 'unregistered' 'unknown phase'; do
+            if ! grep -qF "$token" reference/custom-stack-contract.md; then
+              echo "FAIL: reference/custom-stack-contract.md missing token: $token"
+              fail=1
+            fi
+          done
+          exit $fail
+
   guard-rule-ids-unique:
     name: Guard rule ids are unique
     runs-on: ubuntu-latest
