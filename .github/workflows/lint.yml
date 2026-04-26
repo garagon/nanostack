@@ -1949,9 +1949,16 @@ jobs:
         run: |
           set -e
           fail=0
+          # Updated 2026-04-26 for the README narrative refresh:
+          # framework story is now first-class, so the required set
+          # locks the new pillar phrases ("13 built-in skills",
+          # "seven-phase default sprint", "build your own workflow
+          # stack") plus the long-standing pillars (Examples Library,
+          # delivery workflow, "No Nanostack cloud").
           for required in \
-            '13 skills total' \
-            'default sprint uses seven' \
+            '13 built-in skills' \
+            'seven-phase default sprint' \
+            'build your own workflow stack' \
             'Examples Library' \
             'starter-todo' \
             'cli-notes' \

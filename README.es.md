@@ -1,7 +1,8 @@
 <h1 align="center">Nanostack</h1>
 <p align="center">
-  Nanostack convierte tu agente de AI coding en un flujo de delivery: clarifica alcance, planifica el cambio, construye, revisa, prueba, audita y deja registro de lo ocurrido.<br>
-  <strong>Sprints en sandbox que corren en minutos. Los proyectos reales mantienen el mismo workflow profesional.</strong>
+  Convertí tu agente de AI coding en un flujo de delivery local.<br>
+  Nanostack ayuda al agente a cuestionar el alcance, planificar el cambio, construir, revisar, auditar, probar y entregar con un registro de lo ocurrido. Usá el sprint por defecto, o construí tu propio workflow stack arriba.<br>
+  <strong>Skills en texto plano. Artefactos locales. Sin Nanostack cloud. Sin paso de build.</strong>
 </p>
 
 <br>
@@ -28,9 +29,9 @@
 
 > **Nota:** la versión en inglés ([README.md](README.md)) es la canónica. Si encontrás divergencias o algo desactualizado en este documento, por favor abrí un issue.
 
-Inspirado en [gstack](https://github.com/garrytan/gstack) de [Garry Tan](https://x.com/garrytan). 13 skills en total. El sprint principal usa siete especialistas. Cero dependencias. Cero paso de build.
+Inspirado en [gstack](https://github.com/garrytan/gstack) de [Garry Tan](https://x.com/garrytan). Nanostack trae 13 skills built-in, un sprint default de siete fases, y un framework para sumar tus propios skills o workflow stacks. Sin Nanostack cloud. Sin paso de build.
 
-Funciona hoy con adapters verificados en **Claude Code, Cursor, OpenAI Codex, OpenCode y Gemini CLI**. Los skill files son texto plano, así que otros agentes podrían cargarlos, pero solo esos cinco tienen un adapter verificado y declaración de capabilities en [`adapters/`](adapters/).
+Adapters verificados hoy: **Claude Code, Cursor, OpenAI Codex, OpenCode y Gemini CLI**. Los skill files son texto plano, así que otros agentes podrían cargarlos, pero solo esos cinco tienen un adapter verificado y declaración de capabilities en [`adapters/`](adapters/).
 
 ## Instalación
 
@@ -66,8 +67,11 @@ La forma más rápida de entender Nanostack es correrlo en un proyecto que no im
 | [`cli-notes`](examples/cli-notes/) | workflows CLI | Bash | 5-15 min |
 | [`api-healthcheck`](examples/api-healthcheck/) | flujos backend | Node HTTP sin dependencias | 10-15 min |
 | [`static-landing`](examples/static-landing/) | founders y diseño | HTML/CSS estático | 10-15 min |
+| [`compliance-release`](examples/custom-stack-template/compliance-release/) | equipos armando un workflow stack custom | license + privacy + release gate | 15-30 min |
 
 Cada ejemplo trae prompt para pegar, flujo esperado, criterios de éxito y pasos de reset. Library completa: [`examples/`](examples/).
+
+`compliance-release` es avanzado. No es una starter app y no es una certificación de compliance. Muestra cómo varios skills custom pueden componerse en un solo workflow de release.
 
 ### Requisitos
 
@@ -125,18 +129,25 @@ Vos:    [construye]
 Vos:    /review
         Review: 2 hallazgos (1 auto-arreglado, 1 detalle menor).
 
+Vos:    /security
+        Sin secretos, cambios de auth o flujos de datos inseguros. Grade A.
+
+Vos:    /qa
+        Abrí la app, posteé una respuesta, refresqué, confirmé que el
+        puntito aparece y se limpia. 4 chequeos OK.
+
 Vos:    /ship
         Ship: PR creado. Tests pasaron.
 ```
 
-Vos dijiste "notificaciones". El agente dijo "tus usuarios tienen un problema de visibilidad" y encontró una solución que sale en una tarde en lugar de tres semanas. Cuatro comandos. Eso no es un copilot. Es un compañero que piensa.
+Vos dijiste "notificaciones". El agente dijo "tus usuarios tienen un problema de visibilidad" y encontró una solución que sale en una tarde en lugar de tres semanas. El loop de delivery completo, no solo generación de código.
 
 ## El sprint
 
 Nanostack es un proceso, no una colección de herramientas. Las skills corren en el orden de un sprint:
 
 ```
-/think → /nano → build → /review → /qa → /security → /ship
+/think → /nano → build → /review → /security → /qa → /ship
 ```
 
 | Skill | Tu especialista | Qué hace |
