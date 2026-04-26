@@ -193,6 +193,18 @@ assert_true "no rogue .nanostack inside src/feature" \
 out=$( "$REPO/bin/check-custom-skill.sh" "$SUB_PROJ/.nanostack/skills/subdir-skill" 2>&1 )
 assert_true "check-custom-skill passes from a subdir scaffold" \
   bash -c "echo '$out' | tail -1 | grep -qE '^OK:'"
+# Conductor invoked from the subdir must still read the scaffolded
+# SKILL.md from the resolved store. Without the lookup-roots fix, batch
+# silently defaults to concurrency=write because nano_phase_skill_path
+# only searched .nanostack/skills relative to cwd.
+"$REPO/conductor/bin/sprint.sh" start \
+  --phases '[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"subdir-skill","depends_on":["build"]},{"name":"ship","depends_on":["subdir-skill"]}]' \
+  >/dev/null
+sub_batch=$( "$REPO/conductor/bin/sprint.sh" batch 2>&1 )
+assert_true "subdir conductor reads SKILL.md (no 'no SKILL.md' warning)" \
+  bash -c "! echo '$sub_batch' | grep -qF 'no SKILL.md found'"
+assert_true "subdir conductor schedules subdir-skill as type=read" \
+  bash -c "echo '$sub_batch' | grep -qE '\"phases\":\\[[^]]*\"subdir-skill\"[^]]*\\].*\"type\":\"read\"|\"type\":\"read\".*\"phases\":\\[[^]]*\"subdir-skill\"'"
 
 # Cell 14: scaffolding outside any git repo. lib/store-path.sh falls
 # back to $HOME/.nanostack, so create-skill must too. Use a fake HOME
@@ -202,7 +214,7 @@ NOGIT_HOME="$TMP_ROOT/nogit-home"
 NOGIT_PROJ="$TMP_ROOT/nogit-project"
 mkdir -p "$NOGIT_HOME" "$NOGIT_PROJ"
 cd "$NOGIT_PROJ"
-HOME="$NOGIT_HOME" "$REPO/bin/create-skill.sh" nogit-skill >/dev/null
+HOME="$NOGIT_HOME" "$REPO/bin/create-skill.sh" nogit-skill --concurrency read >/dev/null
 assert_true "skill landed in fake-HOME store, not cwd" \
   test -f "$NOGIT_HOME/.nanostack/skills/nogit-skill/SKILL.md"
 assert_true "no rogue .nanostack inside the cwd" \
@@ -210,6 +222,17 @@ assert_true "no rogue .nanostack inside the cwd" \
 out=$( HOME="$NOGIT_HOME" "$REPO/bin/check-custom-skill.sh" "$NOGIT_HOME/.nanostack/skills/nogit-skill" 2>&1 )
 assert_true "check-custom-skill passes outside git" \
   bash -c "echo '$out' | tail -1 | grep -qE '^OK:'"
+# Conductor outside git must read the scaffolded SKILL.md from
+# $HOME/.nanostack/skills, not fall through to ~/.claude/skills or
+# the cwd-relative legacy root.
+HOME="$NOGIT_HOME" "$REPO/conductor/bin/sprint.sh" start \
+  --phases '[{"name":"think","depends_on":[]},{"name":"build","depends_on":["think"]},{"name":"nogit-skill","depends_on":["build"]},{"name":"ship","depends_on":["nogit-skill"]}]' \
+  >/dev/null
+nogit_batch=$( HOME="$NOGIT_HOME" "$REPO/conductor/bin/sprint.sh" batch 2>&1 )
+assert_true "no-git conductor reads SKILL.md (no 'no SKILL.md' warning)" \
+  bash -c "! echo '$nogit_batch' | grep -qF 'no SKILL.md found'"
+assert_true "no-git conductor schedules nogit-skill as type=read" \
+  bash -c "echo '$nogit_batch' | grep -qE '\"phases\":\\[[^]]*\"nogit-skill\"[^]]*\\].*\"type\":\"read\"|\"type\":\"read\".*\"phases\":\\[[^]]*\"nogit-skill\"'"
 
 # Cell 15: validator catches a frontmatter name that does not match
 # the directory basename. Codex hit a false-positive OK after a

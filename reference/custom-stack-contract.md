@@ -168,7 +168,7 @@ A failed validation aborts with exit `2` and the message `ERROR: invalid phase g
 `cmd_batch`'s `get_concurrency` reads the `concurrency:` frontmatter field from a phase's `SKILL.md`. Lookup order:
 
 1. Built-in core skill at `<nanostack_root>/<phase>/SKILL.md`.
-2. Custom skill resolved via `nano_phase_skill_path` — walks `.nanostack/skills/`, `~/.claude/skills/`, `~/.agents/skills/`, plus any `skill_roots` configured in `.nanostack/config.json`.
+2. Custom skill resolved via `nano_phase_skill_path`. Search order, most-specific to least: configured `skill_roots` from `.nanostack/config.json`, then `<store>/skills/` (where `<store>` comes from `bin/lib/store-path.sh` — the same path `bin/create-skill.sh` writes to), then `<config-dir>/skills/` (covers a global config under `$HOME/.nanostack/`), then the legacy cwd-relative `.nanostack/skills/`, then `$HOME/.claude/skills/` and `$HOME/.agents/skills/` for skills installed outside `.nanostack/`. The store-path-relative entries are the load-bearing ones: a scaffold from a git subdirectory or a no-git project lives in the resolved store, not under cwd.
 3. Conductor-only `build` stage returns `write` (no SKILL.md).
 4. Unknown phase falls back to `write` and emits a stderr warning. The conservative default avoids accidentally scheduling a custom write-phase as parallel-read.
 
@@ -215,7 +215,7 @@ Output is one `OK` or `FAIL` line per check, ending in `OK: <name> passed N chec
 
 ## End-to-end coverage
 
-`ci/e2e-custom-stack-flows.sh` runs the full new-user journey on a real `/tmp` project: scaffold → check → run helper → save → find → resolve → journal → analytics → discard → conductor start → conductor batch → openai.yaml present → no example-path leak. Twelve cells, nineteen assertions. The `e2e-custom-stack` GitHub Actions job runs it on every PR (`workflow_dispatch` for full e2e suite). When the harness is green, the framework claims in `README.md` and `EXTENDING.md` are grounded in working code.
+`ci/e2e-custom-stack-flows.sh` runs the full new-user journey on a real `/tmp` project: scaffold → check → run helper → save → find → resolve → journal → analytics → discard → conductor start → conductor batch → openai.yaml present → no example-path leak → subdirectory scaffold → no-git scaffold → frontmatter-name drift rejected. Fifteen cells, thirty assertions. The `e2e-custom-stack` GitHub Actions job runs it on `workflow_dispatch`. When the harness is green, the framework claims in `README.md` and `EXTENDING.md` are grounded in working code.
 
 ## Stability
 

@@ -9,9 +9,9 @@ Add your own skills that plug into nanostack's workflow. Your skills save artifa
 > bin/check-custom-skill.sh .nanostack/skills/license-audit
 > ```
 >
-> The first command scaffolds a working skill from the bundled template, registers it as a custom phase in `.nanostack/config.json`, and rewrites every helper path to be self-contained. The second runs an 11-point check: frontmatter shape, `agents/openai.yaml` parses, `bash -n` on helpers, registration in config, save-and-read smoke through the artifact store. Restart your agent and `/license-audit` is live.
+> The first command scaffolds a working skill from the bundled template, registers it as a custom phase, and rewrites every helper path to be self-contained. It writes to the same store path the lifecycle scripts read from (your repo root's `.nanostack/`, or `$HOME/.nanostack/` outside git), so the skill is visible whether you invoke the tool from the project root or a subdirectory. The second runs a check that covers SKILL.md frontmatter shape, the frontmatter `name:` matches the directory, `agents/openai.yaml` has the required discovery keys, the `display_name` is consistent with the skill, `bash -n` on helpers, registration in config, no leaked example paths, and a `save-artifact` + `find-artifact` round-trip. Restart your agent and `/license-audit` is live.
 >
-> The contract those tools enforce lives in [`reference/custom-stack-contract.md`](reference/custom-stack-contract.md). The 12-cell end-to-end harness that proves the journey works is at [`ci/e2e-custom-stack-flows.sh`](ci/e2e-custom-stack-flows.sh).
+> The contract those tools enforce lives in [`reference/custom-stack-contract.md`](reference/custom-stack-contract.md). The 15-cell end-to-end harness that proves the journey works (including subdir-scaffold and no-git scaffold paths) is at [`ci/e2e-custom-stack-flows.sh`](ci/e2e-custom-stack-flows.sh).
 >
 > Prefer copying by hand? The template still lives at `examples/custom-skill-template/audit-licenses/` and its README walks through the structure.
 
