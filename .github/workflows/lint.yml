@@ -2623,6 +2623,50 @@ jobs:
             echo "      Use \"\$NANOSTACK_ROOT/bin/...\" so non-Claude agents can substitute the path."
             exit 1
           fi
+      - name: Each executable snippet redefines the env vars it uses (fresh-shell safety)
+        run: |
+          set -e
+          # Some agents (Claude Code in particular) execute each Bash
+          # tool call in a fresh process. An export in step 0 does not
+          # survive into step 2's snippet. Every ```bash block that
+          # invokes a helper using $NANOSTACK_ROOT or $SKILL_DIR must
+          # redefine the variable locally so the block is copy-paste
+          # runnable on its own.
+          awk '
+            BEGIN { in_block=0; block_num=0; uses_root=0; uses_skill=0; defines_root=0; defines_skill=0; has_inv=0; fail=0 }
+            /^```bash$/ { in_block=1; block_num++; uses_root=0; uses_skill=0; defines_root=0; defines_skill=0; has_inv=0; next }
+            /^```$/ && in_block {
+              if (has_inv && uses_root && !defines_root) {
+                printf "FAIL: snippet #%d invokes a helper with $NANOSTACK_ROOT but does not redefine it\n", block_num
+                printf "      Add: NANOSTACK_ROOT=\"${NANOSTACK_ROOT:-$HOME/.claude/skills/nanostack}\"\n"
+                fail=1
+              }
+              if (has_inv && uses_skill && !defines_skill) {
+                printf "FAIL: snippet #%d invokes a helper with $SKILL_DIR but does not redefine it\n", block_num
+                printf "      Add: SKILL_DIR=\"${SKILL_DIR:-$HOME/.claude/skills/audit-licenses}\"\n"
+                fail=1
+              }
+              in_block=0; next
+            }
+            in_block && /\$NANOSTACK_ROOT/ { uses_root=1 }
+            in_block && /\$SKILL_DIR/ { uses_skill=1 }
+            in_block && /^[[:space:]]*NANOSTACK_ROOT=.*HOME/ { defines_root=1 }
+            in_block && /^[[:space:]]*SKILL_DIR=.*HOME/ { defines_skill=1 }
+            in_block && /\/bin\/(resolve|save-artifact|find-artifact|audit)\.sh/ { has_inv=1 }
+            END { exit fail }
+          ' examples/custom-skill-template/audit-licenses/SKILL.md
+      - name: Step 0 documents fresh-shell behavior
+        run: |
+          set -e
+          # The "why" is load-bearing for future maintainers: when this
+          # rule looks redundant, the next person needs to know it
+          # exists for a reason.
+          if ! grep -qiE 'fresh (bash )?process|fresh shell' \
+            examples/custom-skill-template/audit-licenses/SKILL.md; then
+            echo "FAIL: SKILL.md does not explain why each snippet redefines the env vars"
+            echo "      Add a sentence about fresh-shell tool execution near step 0."
+            exit 1
+          fi
       - name: agents/openai.yaml exists and parses
         run: |
           set -e

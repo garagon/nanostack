@@ -624,6 +624,32 @@ flow_custom_skill_template_copy() {
   assert_true "saved artifact has the expected phase field" \
     bash -c "jq -e '.phase == \"audit-licenses\"' '$found' >/dev/null"
 
+  # Fresh-shell simulation: extract each ```bash snippet from SKILL.md
+  # and run it in its own bash -c (no inherited env, no exported vars
+  # from a previous step). This reproduces what Claude Code does on
+  # every Bash tool call. Each helper-invoking snippet must succeed
+  # without relying on state from earlier blocks.
+  local skill_md="$skills_root/audit-licenses/SKILL.md"
+  local resolve_snippet
+  resolve_snippet=$( awk '
+    /^```bash$/ { capture=1; buf=""; next }
+    /^```$/ && capture { if (buf ~ /resolve\.sh/) { print buf; capture=0; exit } capture=0; next }
+    capture { buf = buf $0 "\n" }
+  ' "$skill_md" )
+  assert_true "fresh-shell snippet for /resolve runs (NANOSTACK_ROOT survives without prior export)" \
+    env -i HOME="$HOME" PATH="$PATH" \
+    bash -c "cd '$proj' && export NANOSTACK_STORE='$proj/.nanostack' && NANOSTACK_ROOT='$REPO' && $resolve_snippet >/dev/null 2>&1"
+
+  local audit_snippet
+  audit_snippet=$( awk '
+    /^```bash$/ { capture=1; buf=""; next }
+    /^```$/ && capture { if (buf ~ /audit\.sh/) { print buf; capture=0; exit } capture=0; next }
+    capture { buf = buf $0 "\n" }
+  ' "$skill_md" )
+  assert_true "fresh-shell snippet for /audit runs (SKILL_DIR survives without prior export)" \
+    env -i HOME="$HOME" PATH="$PATH" \
+    bash -c "cd '$proj' && SKILL_DIR='$skills_root/audit-licenses' && $audit_snippet >/dev/null 2>&1"
+
   cd "$REPO"
   unset NANOSTACK_STORE
 }
