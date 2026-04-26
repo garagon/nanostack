@@ -25,6 +25,41 @@ _P="$HOME/.claude/skills/nanostack/bin/lib/skill-preamble.sh"
 unset _P
 ```
 
+## Session state
+
+Read `profile`, `run_mode`, `autopilot`, and `plan_approval` per `reference/session-state-contract.md` BEFORE doing any pre-flight or pipeline work. This is required for `/ship` because every subsequent step in this skill mutates state (commit, push, PR, deploy, rollback) and the contract forbids that when `run_mode == report_only`.
+
+```bash
+SESSION=$NANOSTACK_STORE/session.json
+[ -f "$SESSION" ] || SESSION="$HOME/.nanostack/session.json"
+PROFILE=$(jq -r '.profile // (if (.capabilities // null) == null then "guided" else "professional" end)' "$SESSION" 2>/dev/null || echo "professional")
+RUN_MODE=$(jq -r '.run_mode // "normal"' "$SESSION" 2>/dev/null || echo "normal")
+AUTOPILOT=$(jq -r '.autopilot // false' "$SESSION" 2>/dev/null || echo "false")
+PLAN_APPROVAL=$(jq -r '.plan_approval // (if .autopilot then "auto" else "manual" end)' "$SESSION" 2>/dev/null || echo "manual")
+```
+
+## Report-only mode
+
+When `RUN_MODE == "report_only"`, `/ship` enters **Shipping report** mode and MUST NOT mutate anything. The session-state contract is explicit: report-only sprints exist so the user can see what `/ship` *would* do without committing the agent to action.
+
+**Allowed in report-only:**
+
+- Read session state, artifacts, git status, branch info.
+- Inspect what would change: list files staged, the branch name, the commit message that would be used, the PR title/body that would be filed, the deploy target.
+- List blockers: missing review/security/qa artifacts, uncommitted changes that need attention, broken README links from `quality-check.sh`.
+- Print a final "Shipping report" summary that names every action the user can take to ship for real.
+
+**Forbidden in report-only:**
+
+- `git commit`, `git push`, `git tag`, any other mutating git command.
+- `gh pr create`, `gh pr merge`, any other GitHub mutation.
+- Deploy commands (`fly deploy`, `vercel deploy`, `wrangler deploy`, etc.).
+- Rollback commands.
+- `bin/init-project.sh --fix`, `bin/nano-doctor.sh --fix`, any other repair flag.
+- File writes outside `.nanostack/` (read-only inspection only). `save-artifact.sh ship` is skipped by default; treat artifact persistence as a future opt-in (`--save-report`).
+
+If `RUN_MODE == "report_only"`, jump straight from this section to the **Report output** section at the end of this skill, then stop. Do not run pre-flight, do not run quality-check (it reads only and is fine), do not enter the PR / CI / deploy flow below.
+
 ## Local Mode
 
 Run `source bin/lib/git-context.sh && detect_git_mode`.
@@ -260,6 +295,29 @@ Pendiente:
 Detect project type, recommend ONE provider (Next.js→Vercel, Node→Railway, Static→Cloudflare Pages, Python→Railway, Go→Fly.io). Walk through: account, connect repo, env vars, push. Mention domain (~$10/yr), SSL (automatic), monitoring (Sentry free + UptimeRobot free). Show monthly cost.
 
 **If Done (option 3):** Skip to next features.
+
+## Report output (report-only mode only)
+
+When `RUN_MODE == "report_only"`, this is the only section that runs. It produces a summary the user can read and act on; the agent itself does not commit to any action.
+
+The report has four blocks:
+
+1. **What would ship.** Branch name (or "no git remote"), staged files, commit message that would be used, PR title and body that would be filed.
+2. **What is verified.** Read fresh artifacts from `.nanostack/`. List which of review / security / qa are present and pass. Use `bin/find-artifact.sh <phase> 1` to confirm freshness. If any are missing or stale, name them.
+3. **What is not verified.** Anything the report could not check: deploy target, post-deploy canary, dependencies, integration with downstream services. State this honestly; do not hide gaps.
+4. **What the user can do next.** Exactly the commands needed to ship for real, in order. Example:
+   ```
+   To ship for real:
+     /review     # missing
+     /security   # missing
+     /qa         # missing
+     session.sh init development --run-mode normal
+     /ship
+   ```
+
+Use the wording in `reference/plain-language-contract.md` when `PROFILE == "guided"` (Resultado / Como verlo / Que revise / Pendiente). Professional output may keep technical terms (PR, CI, branch).
+
+Stop after printing the report. Do not call telemetry-finalize with `success`; pass `report_only` so the event reflects what actually happened.
 
 ## Output Format
 

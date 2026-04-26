@@ -821,6 +821,50 @@ jobs:
           echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
           exit $fail
 
+  ship-report-only:
+    name: /ship respects run_mode=report_only
+    runs-on: ubuntu-latest
+    # Retest follow-up P1. Every other phase already routes through the
+    # session-state contract; ship/SKILL.md must declare the same
+    # contract before the pipeline section so a future edit cannot
+    # silently bypass report-only and start mutating state.
+    steps:
+      - uses: actions/checkout@v4
+      - name: ship/SKILL.md reads run_mode
+        run: |
+          set -e
+          fail=0
+          if ! grep -qE 'run_mode|RUN_MODE' ship/SKILL.md; then
+            echo "FAIL: ship/SKILL.md must read run_mode from session"
+            fail=1
+          fi
+          if ! grep -qE 'report_only' ship/SKILL.md; then
+            echo "FAIL: ship/SKILL.md must reference report_only mode"
+            fail=1
+          fi
+          if ! grep -q 'reference/session-state-contract.md' ship/SKILL.md; then
+            echo "FAIL: ship/SKILL.md must point at the session-state contract"
+            fail=1
+          fi
+          # Forbidden mutations must be explicitly named as forbidden in
+          # the report-only section. The grep is loose by design — any
+          # phrasing is fine as long as the words appear.
+          for term in 'git commit' 'gh pr create' 'deploy' 'rollback'; do
+            if ! grep -q "$term" ship/SKILL.md; then
+              echo "FAIL: ship/SKILL.md must name '$term' as forbidden in report-only"
+              fail=1
+            fi
+          done
+          # The Report-only section must come before the Process section
+          # (early-exit before any mutation).
+          ro_line=$(grep -n '^## Report-only mode' ship/SKILL.md | head -1 | cut -d: -f1)
+          proc_line=$(grep -n '^## Process' ship/SKILL.md | head -1 | cut -d: -f1)
+          if [ -z "$ro_line" ] || [ -z "$proc_line" ] || [ "$ro_line" -ge "$proc_line" ]; then
+            echo "FAIL: '## Report-only mode' must appear before '## Process' (early exit)"
+            fail=1
+          fi
+          exit $fail
+
   v1-release-framing:
     name: v1.0 release framing (Guided/Professional in READMEs)
     runs-on: ubuntu-latest
