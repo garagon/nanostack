@@ -58,6 +58,31 @@ jobs:
           chmod +x ci/e2e-think-flows.sh
           ci/e2e-think-flows.sh
 
+  e2e-examples:
+    name: E2E Examples Library (per-archetype sprint roundtrip)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Examples Library PR 6. check-examples.sh validates the README
+    # contract and executable syntax statically; this harness exercises
+    # each archetype as a real first-time user would: copy to /tmp,
+    # confirm the starting state runs (HTML loads, server replies,
+    # script accepts input), run a full sprint of fake-but-valid
+    # artifacts, verify resolve.sh + sprint-journal.sh roundtrip.
+    # Workflow_dispatch keeps it opt-in; the cells start a real Node
+    # HTTP server on a random port and that is heavier than every
+    # PR needs.
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq + node + curl available
+        run: |
+          jq --version
+          node --version
+          curl --version | head -1
+      - name: Run examples library E2E
+        run: |
+          chmod +x ci/e2e-examples.sh
+          ci/e2e-examples.sh
+
   e2e-onboarding-flows:
     name: E2E /nano-run vNext flows (9 cells)
     runs-on: ubuntu-latest
