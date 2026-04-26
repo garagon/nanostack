@@ -104,6 +104,31 @@ jobs:
           chmod +x ci/e2e-think-archetypes.sh
           ci/e2e-think-archetypes.sh
 
+  e2e-custom-stack-examples:
+    name: E2E Custom Stack Examples v1 (compliance-release runtime)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Custom Stack Examples v1 PR 3. Walks the full new-user journey
+    # for the compliance-release stack on a real /tmp project: scaffold
+    # via bin/create-skill.sh --from, validate via
+    # bin/check-custom-skill.sh, save fake core artifacts, run each
+    # custom skill's helper, save its artifact, resolve via
+    # bin/resolve.sh release-readiness (assert all five upstream
+    # keys), compose via release-readiness/bin/summarize.sh, generate
+    # journal + analytics + discard, run conductor with the stack's
+    # phase_graph, exercise subdir + no-git scaffold paths.
+    # 15 cells, 51 assertions.
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq + node available
+        run: |
+          jq --version
+          node --version
+      - name: Run custom-stack-examples runtime E2E
+        run: |
+          chmod +x ci/e2e-custom-stack-examples.sh
+          ci/e2e-custom-stack-examples.sh
+
   e2e-custom-stack:
     name: E2E Custom Stack Framework v1 (15-cell journey)
     runs-on: ubuntu-latest
