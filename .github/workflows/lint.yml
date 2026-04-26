@@ -2537,12 +2537,34 @@ jobs:
             echo "FAIL: core phase resolver should omit missing upstreams"
             exit 1
           fi
+
+          # phase_graph with depends_on:[] for the phase WINS over
+          # SKILL.md depends_on. The two cases (phase not in graph)
+          # versus (phase in graph but declares no deps) must stay
+          # distinct, otherwise SKILL.md silently re-introduces deps
+          # the user explicitly removed in their graph.
+          mkdir -p .nanostack/skills/audit-licenses
+          # printf instead of heredoc: a heredoc body containing
+          # `---` at column 0 would be parsed as a second YAML
+          # document by github-actions YAML loaders.
+          printf '%s\n' '---' 'name: audit-licenses' 'depends_on: [plan, ship]' '---' \
+            > .nanostack/skills/audit-licenses/SKILL.md
+          printf '%s' '{"custom_phases":["audit-licenses"],"phase_graph":[{"name":"think","depends_on":[]},{"name":"audit-licenses","depends_on":[]}]}' > .nanostack/config.json
+          out=$("$GITHUB_WORKSPACE/bin/resolve.sh" audit-licenses 2>/dev/null)
+          if ! echo "$out" | jq -e '.upstream_artifacts == {}' >/dev/null; then
+            echo "FAIL: phase_graph with depends_on:[] must override SKILL.md depends_on"
+            echo "$out" | jq .upstream_artifacts
+            exit 1
+          fi
       - name: Contract doc lists the custom-phase output shape
         run: |
           set -e
           fail=0
+          # Token presence check is case-insensitive: the doc uses
+          # heading case ("Unregistered phase") and prose case
+          # ("unregistered"); both should satisfy the lock.
           for token in 'phase_kind' '"custom"' 'phase_graph' 'depends_on' 'unregistered' 'unknown phase'; do
-            if ! grep -qF "$token" reference/custom-stack-contract.md; then
+            if ! grep -qiF "$token" reference/custom-stack-contract.md; then
               echo "FAIL: reference/custom-stack-contract.md missing token: $token"
               fail=1
             fi

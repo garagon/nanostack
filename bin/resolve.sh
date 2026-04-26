@@ -112,17 +112,23 @@ case "$PHASE" in
     if [ "$(nano_phase_kind "$PHASE" 2>/dev/null)" = "custom" ]; then
       PHASE_KIND="custom"
       DEPS=""
+      GRAPH_LISTED_PHASE=false
       # First source: phase_graph from config (already validated by
       # bin/lib/phases.sh; invalid graphs already fell back to default).
+      # An entry with depends_on=[] is a deliberate "no dependencies"
+      # declaration, distinct from the phase not being in the graph at
+      # all — so we track presence separately and only fall back to
+      # SKILL.md when the phase is absent from the graph.
       GRAPH=$(nano_phase_graph_json 2>/dev/null || echo "")
-      if [ -n "$GRAPH" ]; then
+      if [ -n "$GRAPH" ] && echo "$GRAPH" | jq -e --arg p "$PHASE" 'any(.[]; .name == $p)' >/dev/null 2>&1; then
+        GRAPH_LISTED_PHASE=true
         DEPS=$(echo "$GRAPH" | jq -r --arg p "$PHASE" '.[] | select(.name == $p) | .depends_on[]?' 2>/dev/null | tr '\n' ' ')
       fi
       # Second source: SKILL.md frontmatter `depends_on` field, only if
-      # phase_graph did not list the phase. Supports the inline list
-      # form `depends_on: [build, ship]`. Block-list form is parsed too:
-      # subsequent lines starting with "  - <name>" are picked up.
-      if [ -z "$DEPS" ]; then
+      # the phase is absent from phase_graph. Supports inline list form
+      # `depends_on: [build, ship]` and block list form
+      # (`depends_on:\n  - build`).
+      if [ "$GRAPH_LISTED_PHASE" = false ]; then
         SKILL_DIR=$(nano_phase_skill_path "$PHASE" 2>/dev/null) || SKILL_DIR=""
         if [ -n "$SKILL_DIR" ] && [ -f "$SKILL_DIR/SKILL.md" ]; then
           DEPS=$(awk '
