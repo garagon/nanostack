@@ -395,12 +395,16 @@ cmd_phase_complete() {
     compound) next="" ;;
   esac
 
-  # Calculate duration from stored epoch
+  # Calculate duration from stored epoch. save-artifact.sh auto-calls
+  # phase-complete after writing the artifact, so this function must be
+  # idempotent: if no in_progress entry remains, the jq filter returns
+  # an empty string and the integer comparison would fail. Default to
+  # 0 so a second phase-complete is a clean no-op for duration.
   local duration=0
   local start_epoch
   start_epoch=$(jq -r --arg phase "$phase" \
     '.phase_log[] | select(.phase == $phase and .status == "in_progress") | .started_epoch // 0' "$SESSION_FILE" 2>/dev/null)
-  if [ "$start_epoch" -gt 0 ]; then
+  if [ "${start_epoch:-0}" -gt 0 ] 2>/dev/null; then
     local end_epoch
     end_epoch=$(date +%s)
     duration=$((end_epoch - start_epoch))
@@ -414,6 +418,7 @@ cmd_phase_complete() {
     --argjson duration "$duration" \
     '(.phase_log[] | select(.phase == $phase and .status == "in_progress")) |=
        (.status = "completed" | .completed_at = $date | .duration_seconds = $duration | .artifact = (if $artifact != "" then $artifact else null end)) |
+     .current_phase = ([.phase_log[] | select(.status == "in_progress") | .phase] | last // null) |
      .next_phase = (if $next != "" then $next else null end) |
      .last_updated = $date' "$SESSION_FILE" > "${SESSION_FILE}.tmp"
   mv "${SESSION_FILE}.tmp" "$SESSION_FILE"

@@ -1,0 +1,24 @@
+name: e2e
+
+# Runs ci/e2e-user-flows.sh: real install + sprint + phase gate + legacy
+# repair + local mode flows in isolated tmp HOMEs. Slower than the
+# unit lint matrix, so it is opt-in (workflow_dispatch). Maintainers
+# trigger it before tagging a release or after touching session.sh,
+# guard rules, or init-project.sh repair logic.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  e2e-user-flows:
+    name: E2E user flows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq is present (smoke check)
+        run: jq --version
+      - name: Run end-to-end harness
+        run: |
+          chmod +x ci/e2e-user-flows.sh
+          ci/e2e-user-flows.sh
