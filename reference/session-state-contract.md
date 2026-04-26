@@ -29,21 +29,16 @@ If the session file does not exist, default to `professional` / `normal` / `fals
 
 | Field | Values | What the skill must do |
 |---|---|---|
-| `profile` | `guided` \| `professional` | Shapes the final output. Guided uses the four-block format below; Professional preserves findings/evidence style. |
+| `profile` | `guided` \| `professional` | Shapes the final output. Guided uses the four-block format defined in `reference/plain-language-contract.md`; Professional preserves findings/evidence style. |
 | `run_mode` | `normal` \| `report_only` | When `report_only`, the skill must NOT edit files, fix issues, commit, push, or call any `--fix` mode. It only reports. |
 | `autopilot` | `true` \| `false` | When `true`, do not pause between phases. Show one status line and continue. |
 | `plan_approval` | `manual` \| `auto` \| `not_required` | Used by `/nano` to decide whether to wait for plan approval. Other skills usually mirror autopilot. |
 
 ## Guided final-output blocks
 
-When `PROFILE == "guided"`, the final user-facing output of every Sprint phase (review, security, qa, ship, doctor) must include these four blocks in order:
+When `PROFILE == "guided"`, the final user-facing output of every Sprint phase (review, security, qa, ship, doctor) follows the four-block skeleton defined in `reference/plain-language-contract.md` (Result / How to try / What was checked / What remains). The plain-language contract is authoritative; this file does not redefine the structure. "Whether it is safe to try" lives inside the Result block, not as a separate block.
 
-1. **What was checked** — one or two sentences naming what the skill actually inspected.
-2. **Whether it is safe to try** — yes / not yet, with a short reason.
-3. **One next action** — exactly one. Use `bin/next-step.sh --json | jq -r .user_message` for the wording.
-4. **What remains unverified** — list things the skill could not check (e.g. "No probé el flujo en producción", "No revisé seguridad de dependencias").
-
-Skills MAY include short technical details after these four blocks if useful, but the four blocks come first.
+The next-action prose comes from `bin/next-step.sh --json | jq -r .user_message`. The script reads `profile` from the session and shapes wording accordingly, so skills do not have to.
 
 ## Professional final-output
 

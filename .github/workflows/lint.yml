@@ -821,6 +821,69 @@ jobs:
           echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
           exit $fail
 
+  guided-skeleton-single-source:
+    name: Guided skeleton has a single source of truth
+    runs-on: ubuntu-latest
+    # Retest follow-up P2. Two divergent four-block lists existed: the
+    # plain-language contract (Result/How to try/What was checked/
+    # What remains) and the session-state contract (What was checked/
+    # Safe to try/One next action/What remains). Skills could "comply"
+    # with one and violate the other. This job pins
+    # plain-language-contract.md as canonical and refuses any reintro
+    # of a numbered skeleton in session-state-contract.md.
+    steps:
+      - uses: actions/checkout@v4
+      - name: plain-language-contract.md owns the four-block list
+        run: |
+          set -e
+          # Canonical list must define the four blocks in this exact
+          # order (the skill greps and the plain-language CI lock onto
+          # these names).
+          fail=0
+          for block in 'Result' 'How to try' 'What was checked' 'What remains'; do
+            if ! grep -qE "\*\*${block}\*\*|\*\*${block}\.\*\*" reference/plain-language-contract.md; then
+              echo "FAIL: plain-language-contract.md missing canonical block: $block"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: session-state-contract.md does not redefine the skeleton
+        run: |
+          set -e
+          fail=0
+          # Must reference the plain-language contract for the skeleton.
+          if ! grep -q 'reference/plain-language-contract.md' reference/session-state-contract.md; then
+            echo "FAIL: session-state-contract.md must point at plain-language-contract.md for the Guided skeleton"
+            fail=1
+          fi
+          # Must NOT contain a numbered list of four bold-headed blocks
+          # in the Guided section. We scan the "Guided final-output"
+          # block specifically, between its heading and the next H2.
+          guided=$(awk '/^## Guided final-output/{flag=1; next} /^## /{flag=0} flag' reference/session-state-contract.md)
+          numbered_bold=$(echo "$guided" | grep -cE '^[1-4]\. \*\*' || true)
+          if [ "$numbered_bold" -ge 4 ]; then
+            echo "FAIL: session-state-contract.md redefines a four-block skeleton (must reference plain-language-contract.md instead)"
+            echo "$guided"
+            fail=1
+          fi
+          exit $fail
+
+      - name: SKILL.md files reference the canonical skeleton (not the old session-state list)
+        run: |
+          set -e
+          fail=0
+          # If a skill mentions "four blocks from reference/session-state-contract.md"
+          # that points at the old (now removed) list and is a regression.
+          # The canonical pointer phrase is "four-block skeleton in reference/plain-language-contract.md".
+          for skill in review/SKILL.md security/SKILL.md qa/SKILL.md; do
+            if grep -q "four blocks from .reference/session-state-contract.md" "$skill"; then
+              echo "FAIL: $skill points at the removed four-block list in session-state-contract.md"
+              fail=1
+            fi
+          done
+          exit $fail
+
   ship-report-only:
     name: /ship respects run_mode=report_only
     runs-on: ubuntu-latest

@@ -189,7 +189,7 @@ Use `.user_message` for the prose to show the user (it is profile-aware). Use `.
 
 The legacy positional form (`next-step.sh review`) still works and emits a space-separated list of pending phases for the autopilot logging line below; prefer `--json` for everything else.
 
-When `profile == "guided"`, also include the four blocks from `reference/session-state-contract.md` (what was checked, safe to try, one next action, what remains unverified) at the top of the user-facing output.
+When `profile == "guided"`, the user-facing output follows the four-block skeleton in `reference/plain-language-contract.md` (Result / How to try / What was checked / What remains). Whether it is safe to try goes inside Result; do not add a separate block.
 
 ## Final Headline
 

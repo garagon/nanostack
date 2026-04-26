@@ -27,9 +27,11 @@ The list is intentionally short. Anything not on the list is allowed; the goal i
 
 ## Guided output skeleton
 
-Every Guided phase output (think, plan, qa, ship, doctor) must include these four blocks in order, before any optional technical detail:
+This file is the **single source of truth** for Guided output structure. `reference/session-state-contract.md` references this skeleton; if you find a second numbered list of Guided blocks anywhere else in the repo, that is a regression.
 
-1. **Result.** One sentence: what the skill found or did.
+Every Guided phase output (think, plan, qa, ship, doctor, review, security) must include these four blocks in order, before any optional technical detail:
+
+1. **Result.** One sentence: what the skill found or did, and whether it is safe to try. (When safety needs more than one sentence — e.g. "safe to try with these caveats" — split it onto a second short line, but keep it inside the Result block.)
 2. **How to try.** The exact command or URL to see the result. One action.
 3. **What was checked.** Two or three short bullets. Use plain verbs ("I tested", "I reviewed").
 4. **What remains.** What this skill could not check. Use a plain bullet list. Examples: "I did not deploy this to the internet", "No probé el flujo de pago real".
