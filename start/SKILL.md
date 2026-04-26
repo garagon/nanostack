@@ -149,7 +149,13 @@ Save the preference in `.nanostack/config.json` under `preferences.workflow_mode
 
 ## Step 3: Write the setup record
 
-After mutation succeeded (or after detect-only in report mode), write a setup artifact at `.nanostack/setup/<timestamp>.json` with a `latest.json` copy. Schema is in [`reference/artifact-schema.md`](../reference/artifact-schema.md). PR 3 of the vNext spec ships `bin/save-setup-artifact.sh`; until then, write a minimally valid JSON in line per the required-fields list.
+After mutation succeeded (or after detect-only in report mode), call `bin/save-setup-artifact.sh` with the structured JSON payload. The writer validates required fields, enum values, and the report-only honesty invariant before anything reaches disk:
+
+```bash
+~/.claude/skills/nanostack/bin/save-setup-artifact.sh "$SETUP_JSON"
+```
+
+It writes `.nanostack/setup/<timestamp>.json` and copies it to `.nanostack/setup/latest.json` (no symlinks, for portability). Schema is in [`reference/artifact-schema.md`](../reference/artifact-schema.md).
 
 Required fields the writer rejects without:
 
@@ -159,6 +165,8 @@ Required fields the writer rejects without:
 - `summary.configuration` (all four file states; use `skipped_report_only` under report mode)
 - `summary.recommended_first_run.kind` and `.command`
 - `context_checkpoint.summary`
+
+The writer also enforces enums (`bash_guard` must be one of `enforced` / `reported` / `instructions_only` / `unsupported` / `unknown`) and the report-only honesty invariant (a `report_only` payload cannot claim `configuration.<file> = "created"` or `"updated"`; it must say `skipped_report_only`).
 
 If a mutation step failed midway, write `summary.status = "partial"`. Do not pretend setup completed.
 

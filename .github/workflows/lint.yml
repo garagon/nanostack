@@ -6,6 +6,87 @@ on:
     branches: [main]
 
 jobs:
+  setup-artifact-schema:
+    name: Setup artifact writer enforces schema
+    runs-on: ubuntu-latest
+    # /nano-run vNext PR 3. The writer is the only thing that can
+    # reject a malformed setup payload before it reaches disk; if a
+    # required field gets dropped or an enum widens silently, the
+    # downstream contract for /nano-doctor and support breaks. This
+    # job exercises the writer with one valid payload, three invalid
+    # payloads, and the report_only invariant.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Writer roundtrip and rejection paths
+        run: |
+          set -e
+          fail=0
+          tmp=$(mktemp -d /tmp/setup-ci.XXXXXX)
+          cd "$tmp"
+          git init -q
+          mkdir -p .nanostack
+          export NANOSTACK_STORE="$tmp/.nanostack"
+          SCRIPT=$GITHUB_WORKSPACE/bin/save-setup-artifact.sh
+
+          # 1. Valid payload writes both files and the spec acceptance jq passes.
+          PAYLOAD=$(jq -n '{
+            phase:"setup",
+            summary:{
+              status:"ready", profile:"guided", host:"codex",
+              run_mode:"normal", project_mode:"local",
+              capabilities:{bash_guard:"instructions_only", write_guard:"instructions_only", phase_gate:"instructions_only"},
+              configuration:{config_json:"created", stack_json:"created", project_settings:"not_applicable", gitignore:"not_applicable"},
+              recommended_first_run:{kind:"sandbox", command:"/think x", path:"examples/starter-todo", reason:"safe first run"}
+            },
+            context_checkpoint:{summary:"setup ok"}
+          }')
+          "$SCRIPT" "$PAYLOAD" >/dev/null
+          if ! jq -e '.phase=="setup" and .summary.status and .summary.profile and .summary.capabilities and .summary.recommended_first_run.command' .nanostack/setup/latest.json >/dev/null; then
+            echo "FAIL: spec acceptance jq did not pass on writer output"
+            fail=1
+          fi
+          if [ ! -f .nanostack/setup/latest.json ]; then
+            echo "FAIL: latest.json was not written"
+            fail=1
+          fi
+
+          # 2. Missing required field is rejected.
+          if "$SCRIPT" '{"phase":"setup","summary":{"status":"ready"},"context_checkpoint":{"summary":"x"}}' >/dev/null 2>&1; then
+            echo "FAIL: writer accepted a payload missing required fields"
+            fail=1
+          fi
+
+          # 3. Bad capability enum is rejected.
+          BAD=$(jq -n '{phase:"setup", summary:{status:"ready", profile:"guided", host:"codex", run_mode:"normal", project_mode:"local", capabilities:{bash_guard:"hooked", write_guard:"unknown", phase_gate:"unknown"}, configuration:{config_json:"exists", stack_json:"exists", project_settings:"exists", gitignore:"exists"}, recommended_first_run:{kind:"sandbox", command:"x"}}, context_checkpoint:{summary:"x"}}')
+          if "$SCRIPT" "$BAD" >/dev/null 2>&1; then
+            echo "FAIL: writer accepted a payload with capability='hooked' (not in enum)"
+            fail=1
+          fi
+
+          # 4. report_only with claimed file creation is rejected.
+          REPORT_LIE=$(jq -n '{phase:"setup", summary:{status:"report_only", profile:"guided", host:"codex", run_mode:"report_only", project_mode:"local", capabilities:{bash_guard:"unknown", write_guard:"unknown", phase_gate:"unknown"}, configuration:{config_json:"created", stack_json:"skipped_report_only", project_settings:"skipped_report_only", gitignore:"skipped_report_only"}, recommended_first_run:{kind:"report_only", command:"re-run"}}, context_checkpoint:{summary:"x"}}')
+          if "$SCRIPT" "$REPORT_LIE" >/dev/null 2>&1; then
+            echo "FAIL: writer accepted a report_only payload claiming a file was created"
+            fail=1
+          fi
+
+          # 5. report_only with honest skipped_report_only is accepted.
+          REPORT_OK=$(jq -n '{phase:"setup", summary:{status:"report_only", profile:"guided", host:"codex", run_mode:"report_only", project_mode:"local", capabilities:{bash_guard:"unknown", write_guard:"unknown", phase_gate:"unknown"}, configuration:{config_json:"skipped_report_only", stack_json:"skipped_report_only", project_settings:"skipped_report_only", gitignore:"skipped_report_only"}, recommended_first_run:{kind:"report_only", command:"re-run"}}, context_checkpoint:{summary:"x"}}')
+          if ! "$SCRIPT" --validate "$REPORT_OK" >/dev/null 2>&1; then
+            echo "FAIL: writer rejected a valid report_only payload"
+            fail=1
+          fi
+
+          exit $fail
+
+      - name: start/SKILL.md mentions the writer
+        run: |
+          set -e
+          if ! grep -qE 'save-setup-artifact\.sh|setup artifact' start/SKILL.md; then
+            echo "FAIL: start/SKILL.md must reference save-setup-artifact.sh or 'setup artifact'"
+            exit 1
+          fi
+
   nano-run-session-first:
     name: /nano-run reads session state
     runs-on: ubuntu-latest
