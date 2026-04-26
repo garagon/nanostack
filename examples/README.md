@@ -9,7 +9,7 @@ The goal is not perfect apps. It is showing the full workflow end to end: idea, 
 | Example | Who it is for | Stack | Time | First command |
 |---|---|---|---|---|
 | [starter-todo](starter-todo/) | New users, non-technical | One HTML file, zero dependencies | 5 to 10 minutes | `/nano-run` then `/think` |
-| cli-notes (coming) | Technical users learning the CLI archetype | Bash script | 5 to 10 minutes | `/feature` |
+| [cli-notes](cli-notes/) | Technical users learning the CLI archetype | Bash script, plain text storage | 5 to 15 minutes | `/feature` or `/think` |
 | api-healthcheck (coming) | Backend developers | Node HTTP server | 10 to 15 minutes | `/feature` |
 | static-landing (coming) | Founders and designers validating a visual demo | Static HTML | 5 to 15 minutes | `/think` |
 
