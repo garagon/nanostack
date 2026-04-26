@@ -6,14 +6,14 @@
 <br>
 
 <p align="center">
-  Turn your AI coding agent into a delivery workflow.
+  Turn your AI coding agent into a local delivery workflow.
 </p>
 
 <p align="center">
-  Nanostack helps an agent challenge scope, plan the change, build, review, test, audit, and ship with a record of what happened.
+  Nanostack helps an agent challenge scope, plan the change, build, review, audit, test, and ship with a record of what happened. Use the default sprint, or build your own workflow stack on top.
 </p>
 
-<p align="center"><strong>Plain text skills. No build step. No Nanostack cloud.</strong></p>
+<p align="center"><strong>Plain text skills. Local artifacts. No Nanostack cloud. No build step.</strong></p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
@@ -34,17 +34,19 @@
 <br>
 
 
-Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). 13 skills total. The default sprint uses seven core specialists. No build step. No Nanostack cloud.
+Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). Nanostack ships 13 built-in skills, a seven-phase default sprint, and a framework for adding your own skills or workflow stacks. No Nanostack cloud. No build step.
 
-Works with verified adapters today on **Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI**. The skill files are plain text, so other agents may load them, but only those five have a verified adapter and capability declaration in [`adapters/`](adapters/).
+Verified adapters today: **Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI**. The skill files are plain text, so other agents may load them, but only those five have a verified adapter and capability declaration in [`adapters/`](adapters/).
 
 ## What is Nanostack?
 
-Your agent is already capable of writing code. What it lacks is delivery structure. Nanostack gives it a workflow: challenge the scope, plan the files, build the change, review the diff, test the behavior, audit security, and ship with a record of what happened.
+Your agent can already write code. Nanostack gives it delivery structure.
 
-The default sprint uses seven core specialists. Each one reads the record the previous one wrote, so context does not vanish between steps.
+The default sprint turns a vague request into a scoped, reviewed, audited, tested change with a PR and a sprint journal. Each phase reads the artifact the previous phase wrote, so context does not vanish between steps. On Claude Code the pipeline is enforced via PreToolUse hooks: `git commit` is blocked until `/review`, `/security`, and `/qa` produce fresh artifacts. On other agents the same workflow runs as guided instructions; see [What enforces on which agent](#what-enforces-on-which-agent) for the per-host capability table.
 
-Every step reads the artifact the previous step wrote, so nothing falls through the cracks. On Claude Code the pipeline is enforced via PreToolUse hooks: `git commit` is blocked until `/review`, `/security`, and `/qa` produce fresh artifacts. On other agents the same workflow runs as guided instructions; see [What enforces on which agent](#what-enforces-on-which-agent) for the per-host capability table.
+The framework layer lets you add your own phases. Custom skills write artifacts, read upstream context, appear in journals and analytics, and can be scheduled by the conductor. See [Build on Nanostack](#build-on-nanostack).
+
+The built-in sprint is the default stack:
 
 |        | Step              | What the specialist does                                                |
 | ------ | ----------------- | ----------------------------------------------------------------------- |
@@ -100,8 +102,17 @@ A detailed per-host matrix (Bash guard, Write/Edit guard, phase gate) lives furt
 - ✅ You want reviews that catch scope drift, not just typos
 - ✅ You want a security audit before every ship, not once a quarter
 - ✅ You want PR descriptions that explain the WHY, not just list files
-- ✅ You want a process that works across Claude, Cursor, Codex, Gemini, and more
+- ✅ You want a process that works across Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI
 - ✅ You want the skills on disk, inspectable, not locked in a SaaS
+
+## Choose your path
+
+| If you are... | Start here |
+|---|---|
+| New to agent workflows | Try [`starter-todo`](examples/starter-todo/), then run `/nano-run` |
+| Already shipping with AI agents | Install Nanostack, then start with `/think` or `/feature` |
+| Evaluating safety | Read [Guard](#guard) and the [host enforcement matrix](#what-enforces-on-which-agent) |
+| Building your own workflow | Start with [`EXTENDING.md`](EXTENDING.md) and [`compliance-release`](examples/custom-stack-template/compliance-release/) |
 
 ## Try it safely first
 
@@ -113,8 +124,11 @@ Not sure yet? Start with a disposable sandbox from the Examples Library. It give
 | [`cli-notes`](examples/cli-notes/) | CLI workflows | Bash | 5-15 min |
 | [`api-healthcheck`](examples/api-healthcheck/) | backend flows | Node stdlib HTTP | 10-15 min |
 | [`static-landing`](examples/static-landing/) | founders and designers | static HTML/CSS | 10-15 min |
+| [`compliance-release`](examples/custom-stack-template/compliance-release/) | teams building a custom workflow stack | license + privacy + release gate | 15-30 min |
 
 Each example has a copy-paste prompt, expected sprint flow, success criteria, and reset steps. Full Examples Library: [`examples/`](examples/).
+
+`compliance-release` is advanced. It is not a starter app and it is not a compliance certification. It shows how several custom skills can compose into one release workflow.
 
 ## Quick start
 
@@ -125,6 +139,8 @@ npx create-nanostack
 One command. Detects your agents, installs everything, runs setup.
 
 Then run `/nano-run` in your agent to configure your project through a conversation. On your first sprint, `/think` shows the full pipeline so you know what comes next.
+
+If you want to see the workflow before installing into a real repo, use one of the sandbox examples above.
 
 ## See it work
 
@@ -191,7 +207,7 @@ Each skill feeds into the next. `/nano` writes an artifact that `/review` reads 
 
 | Skill | Your specialist | What they do |
 |-------|----------------|--------------|
-| `/think` | **CEO / Founder** | Three intensity modes: Founder (full pushback), Startup (challenges scope, respects pain) and Builder (minimal pushback). Six forcing questions including manual delivery test. Auto-detects non-technical users and adapts language. `--autopilot` runs the full sprint after approval. `--retro` reflects on what shipped. Saves a shareable markdown brief. New users get a sprint guide showing the full pipeline. |
+| `/think` | **Product discovery** | Challenges scope before planning. Produces a structured brief with value proposition, target user, smallest wedge, key risk, and premise state. Supports guided archetypes, search privacy modes (`local_only`, `private`, `public`), `--retro` for sprint reflection, and `--autopilot` after the brief is complete. |
 | `/nano` | **Eng Manager** | Auto-generates product specs (Medium scope) or product + technical specs (Large scope) before implementation steps. Product standards for web (shadcn/ui), CLI/TUI (Bubble Tea, Rich, Ink, Ratatui). Stack defaults with CLI preference for beginners. |
 | `/review` | **Staff Engineer** | Two-pass code review: structural then adversarial. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan. Cross-references `/security` with 10 conflict precedents. |
 | `/qa` | **QA Lead** | Functional testing + Visual QA. Takes screenshots and analyzes UI against product standards. Browser, API, CLI and debug modes. WTF heuristic stops before fixes cause regressions. |
@@ -203,10 +219,10 @@ Each skill feeds into the next. `/nano` writes an artifact that `/review` reads 
 | Skill | What it does |
 |-------|-------------|
 | `/compound` | **Knowledge** | Documents solved problems after each sprint. Three types: bug, pattern, decision. Solutions evolve across sprints: validated and applied_count track which solutions actually work. `/nano` and `/review` search past solutions automatically, ranked by proven value. Checks if any solutions are ready to graduate into skill files. |
-| `/guard` | **Safety** | Six-tier safety: allowlist, in-project bypass, phase-aware concurrency (blocks writes during read-only phases), phase gate (blocks commit/push until review+security+qa pass), budget gate (blocks all commands when sprint cost exceeds the limit), and pattern matching with 33 block rules. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
+| `/guard` | **Safety** | Six-tier safety: block rules first, allowlist after block rules, in-project checks, phase-aware concurrency (blocks writes during read-only phases), phase gate (blocks commit/push until review+security+qa pass), and budget gate. Write/Edit hooks deny protected secret and system paths after resolving symlinks. Blocked commands get a safer alternative. `/freeze` locks edits to one directory. Rules in `guard/rules.json`. |
 | `/conductor` | **Orchestrator** | Parallel agent sessions with auto-batching. `sprint.sh batch` reads skill concurrency metadata and groups parallel-safe phases. Session resume on crash. Dependency validation before each phase. No daemon, just atomic file ops. |
 | `/feature` | **Builder** | Add functionality to an existing project. Skips /think, goes straight to plan, build, review, audit, test, ship. |
-| `/nano-run` | **Onboarding** | First-time setup. Configures stack, permissions, and work preferences through a conversation. Auto-detects your project and guides your first sprint. |
+| `/nano-run` | **Onboarding** | First-time setup. Reads session profile and host capabilities, writes a setup artifact, detects legacy installs, and refuses silent permission repair. Configures stack, permissions, and work preferences through a conversation. |
 | `/nano-help` | **Reference** | Quick reference for all nanostack commands and how to use them. |
 
 ### Intensity modes
@@ -806,6 +822,8 @@ Nanostack itself has no cloud service.
 By default, sprint artifacts, plans, journals, and know-how are written locally under `.nanostack/`.
 
 Nanostack itself stores sprint state, artifacts, and know-how locally. It does not send your code, prompts, project names, or file paths to a Nanostack server. Your AI agent provider may still process the context you give it. Use your agent provider's privacy settings and your own data policies for sensitive work.
+
+`/think` supports `local_only`, `private`, and `public` search modes, so sensitive ideas do not require public web search.
 
 Telemetry is opt-in and limited to aggregate usage events. It is not required for the workflow. If you opt in, events go to the Cloudflare Worker documented in [`TELEMETRY.md`](TELEMETRY.md); the Worker source, schema, privacy invariants, and adversarial smoke tests all live in this repo.
 
