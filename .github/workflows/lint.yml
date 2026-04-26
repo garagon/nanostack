@@ -3014,6 +3014,30 @@ jobs:
           done
           exit $fail
 
+  custom-stack-examples-contract:
+    name: Custom Stack Examples static contract
+    runs-on: ubuntu-latest
+    # PR 1 of the Custom Stack Examples v1 round. Validates every
+    # stack under examples/custom-stack-template/<name>/: manifest
+    # schema (kind=custom_stack_example, schema_version=1, name
+    # regex), skills[] structure (path exists, basename matches
+    # manifest, frontmatter name + concurrency match, openai.yaml
+    # has the three discovery keys, bin/smoke.sh is executable, at
+    # least one work-helper besides smoke, bash -n on every
+    # bin/*.sh), phase_graph membership (core ∪ build ∪ skills),
+    # ship depends on release-readiness when the stack ships one,
+    # README has the six required H2 sections and four required
+    # tokens, and no committed runtime artifacts (.nanostack,
+    # node_modules, .env, credential JSON, logs).
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run static contract
+        run: |
+          chmod +x ci/check-custom-stack-examples.sh
+          ci/check-custom-stack-examples.sh
+
   guard-rule-ids-unique:
     name: Guard rule ids are unique
     runs-on: ubuntu-latest

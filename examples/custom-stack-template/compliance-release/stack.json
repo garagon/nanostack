@@ -1,0 +1,45 @@
+{
+  "schema_version": "1",
+  "kind": "custom_stack_example",
+  "name": "compliance-release",
+  "display_name": "Compliance Release Stack",
+  "description": "A read-only release compliance workflow that checks licenses, privacy signals, and release readiness before /ship.",
+  "skills": [
+    {
+      "name": "license-audit",
+      "path": "skills/license-audit",
+      "concurrency": "read",
+      "depends_on": ["build"]
+    },
+    {
+      "name": "privacy-check",
+      "path": "skills/privacy-check",
+      "concurrency": "read",
+      "depends_on": ["build"]
+    },
+    {
+      "name": "release-readiness",
+      "path": "skills/release-readiness",
+      "concurrency": "read",
+      "depends_on": ["review", "qa", "security", "license-audit", "privacy-check"]
+    }
+  ],
+  "phase_graph": [
+    { "name": "think",             "depends_on": [] },
+    { "name": "plan",              "depends_on": ["think"] },
+    { "name": "build",             "depends_on": ["plan"] },
+    { "name": "review",            "depends_on": ["build"] },
+    { "name": "qa",                "depends_on": ["build"] },
+    { "name": "security",          "depends_on": ["build"] },
+    { "name": "license-audit",     "depends_on": ["build"] },
+    { "name": "privacy-check",     "depends_on": ["build"] },
+    { "name": "release-readiness", "depends_on": ["review", "qa", "security", "license-audit", "privacy-check"] },
+    { "name": "ship",              "depends_on": ["release-readiness"] }
+  ],
+  "expected_evidence": [
+    "resolve.sh release-readiness returns upstream_artifacts for review, qa, security, license-audit, and privacy-check",
+    "conductor batch schedules license-audit and privacy-check as read phases after build",
+    "sprint-journal.sh emits sections for all three custom phases",
+    "analytics.sh --json counts all three custom phases"
+  ]
+}

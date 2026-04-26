@@ -1,0 +1,6 @@
+interface:
+  display_name: "privacy-check"
+  short_description: "Release privacy hygiene. Surfaces personal-data collection signals and missing privacy notes. Not a legal review."
+  default_prompt: "Use privacy-check before /ship to catch collection signals without a privacy note."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,6 @@
+interface:
+  display_name: "license-audit"
+  short_description: "Audits direct-dependency licenses before /release-readiness. Flags GPL/AGPL as BLOCKED, unknown as WARN."
+  default_prompt: "Use license-audit before /ship to surface license risk in this sprint's release decision."
+policy:
+  allow_implicit_invocation: true
