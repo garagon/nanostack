@@ -105,7 +105,7 @@ jobs:
           ci/e2e-think-archetypes.sh
 
   e2e-custom-stack:
-    name: E2E Custom Stack Framework v1 (12-cell journey)
+    name: E2E Custom Stack Framework v1 (15-cell journey)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # Custom Stack Framework v1 PR 6. Runs the full new-user journey:
