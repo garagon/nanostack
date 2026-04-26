@@ -2,7 +2,7 @@
 
 A three-skill stack that gates `/ship` on license, privacy, and release-readiness evidence. Read-only by design: no commits, no PRs, no deploys, no network calls.
 
-> Status: **PR 1 of the Custom Stack Examples v1 round.** The manifest, README, and skill folders are in place and the static contract (`ci/check-custom-stack-examples.sh`) passes. Skill behavior lands in PR 2; runtime end-to-end coverage lands in PR 3. The install commands below run once PR 3 ships; until then the skills are stubs that satisfy the structural contract.
+> Status: end-to-end working. The static contract (`ci/check-custom-stack-examples.sh`, 49 checks) runs on every PR; the runtime harness (`ci/e2e-custom-stack-examples.sh`, 15 cells / 51 assertions) runs in the opt-in E2E workflow. The install commands below are the same ones the harness exercises.
 
 ## Who this stack is for
 

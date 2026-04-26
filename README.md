@@ -763,7 +763,9 @@ Open `.nanostack/know-how/` in Obsidian. Sprint journals link to conflict preced
 
 ## Build on nanostack
 
-Nanostack is a workflow framework, not just a fixed skill bundle. Create your own skills, register them as phases, and reuse the same artifact store, resolver, sprint journal, analytics, conductor, and local vault that the built-in skills run on.
+Use Nanostack as-is, or build your own workflow stack on top. Custom skills can compose into a domain workflow that gates `/ship`, and they inherit the same artifact store, resolver, sprint journal, analytics, conductor, and local vault that the built-in skills run on. No SaaS, no daemon, no build step.
+
+### Single skill
 
 Scaffold a skill from the template, validate it, restart your agent:
 
@@ -772,7 +774,7 @@ bin/create-skill.sh license-audit --concurrency read --depends-on build
 bin/check-custom-skill.sh .nanostack/skills/license-audit
 ```
 
-What that gets you, all proven by `ci/e2e-custom-stack-flows.sh`:
+The framework guarantees that one skill inherits, all proven by `ci/e2e-custom-stack-flows.sh`:
 
 - `save-artifact.sh license-audit` and `find-artifact.sh license-audit` accept the custom phase the same way they accept a core phase.
 - `resolve.sh license-audit` returns `phase_kind: "custom"` with `upstream_artifacts` driven by the skill's `depends_on` (or by `phase_graph` in `.nanostack/config.json`).
@@ -781,9 +783,21 @@ What that gets you, all proven by `ci/e2e-custom-stack-flows.sh`:
 - `discard-sprint.sh --dry-run` lists the skill's artifacts alongside the core ones.
 - `conductor/bin/sprint.sh start --phases <json>` accepts a graph that includes the custom phase; `conductor/bin/sprint.sh batch` reads its `concurrency:` from `SKILL.md`.
 
-A marketing team builds `/audience` and `/campaign`. A data team builds `/explore` and `/model`. A design team builds `/wireframe` and `/usability`. A compliance team builds `/license-audit`, `/privacy`, and `/release-readiness`. All compose with nanostack's `/think` for ideation, `/review` for quality, and `/ship` for delivery.
+### Workflow stack
 
-The framework contract is in [`reference/custom-stack-contract.md`](reference/custom-stack-contract.md). Full walkthrough: [`EXTENDING.md`](EXTENDING.md). Starting point you can copy: [`examples/custom-skill-template/`](examples/custom-skill-template/).
+A stack is multiple custom skills wired together with a `phase_graph` so the conductor knows the dependency order. The compliance-release example proves the framework: three custom phases (`/license-audit` + `/privacy-check` + `/release-readiness`) compose into a release decision before `/ship`. `ci/e2e-custom-stack-examples.sh` walks the full new-user journey on a real `/tmp` project (scaffold, validate, save, resolve, journal, analytics, discard, conductor scheduling) and runs in the opt-in E2E workflow. 15 cells, 51 assertions.
+
+Copy the stack starting point:
+
+```
+examples/custom-stack-template/compliance-release/
+```
+
+The stack's [README](examples/custom-stack-template/compliance-release/README.md) walks through the install. The directory contract for any new stack is in [`reference/custom-stack-examples-technical-spec.md`](reference/custom-stack-examples-technical-spec.md); the framework contract those skills inherit is in [`reference/custom-stack-contract.md`](reference/custom-stack-contract.md).
+
+A marketing team builds `/audience` and `/campaign`. A data team builds `/explore` and `/model`. A design team builds `/wireframe` and `/usability`. A compliance team builds `/license-audit`, `/privacy-check`, and `/release-readiness`. All compose with Nanostack's `/think` for ideation, `/review` for quality, and `/ship` for delivery.
+
+Full walkthrough: [`EXTENDING.md`](EXTENDING.md).
 
 ## Privacy
 

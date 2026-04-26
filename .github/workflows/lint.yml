@@ -3014,6 +3014,77 @@ jobs:
           done
           exit $fail
 
+  custom-stack-examples-public-copy:
+    name: Public copy mentions the compliance-release stack + runtime harness
+    runs-on: ubuntu-latest
+    # PR 4 of the Custom Stack Examples v1 round. The framework
+    # spec's "do not reposition the README hero before runtime E2E
+    # lands" rule unblocks once ci/e2e-custom-stack-examples.sh is
+    # green. This lock asserts that the public docs (README.md,
+    # README.es.md, EXTENDING.md) actually describe the stack and
+    # the harness that proves it, so the public claim never drifts
+    # away from what the harness exercises.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Required tokens in README.md
+        run: |
+          set -e
+          fail=0
+          for tok in 'compliance-release' 'phase_graph' 'workflow stack' \
+                     'ci/e2e-custom-stack-examples.sh' \
+                     'examples/custom-stack-template/compliance-release'; do
+            if ! grep -qF "$tok" README.md; then
+              echo "FAIL: README.md missing token '$tok'"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Required tokens in README.es.md (Spanish first-class)
+        run: |
+          set -e
+          fail=0
+          for tok in 'compliance-release' 'phase_graph' 'workflow stack' \
+                     'ci/e2e-custom-stack-examples.sh' \
+                     'examples/custom-stack-template/compliance-release'; do
+            if ! grep -qF "$tok" README.es.md; then
+              echo "FAIL: README.es.md missing token '$tok'"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: EXTENDING.md links both starting points
+        run: |
+          set -e
+          fail=0
+          for tok in 'examples/custom-skill-template/audit-licenses' \
+                     'examples/custom-stack-template/compliance-release' \
+                     'reference/custom-stack-examples-technical-spec.md' \
+                     'ci/e2e-custom-stack-examples.sh'; do
+            if ! grep -qF "$tok" EXTENDING.md; then
+              echo "FAIL: EXTENDING.md missing token '$tok'"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Public copy does NOT make disallowed claims
+        run: |
+          set -e
+          fail=0
+          # Spec rules: no marketplace/plugin-ecosystem framing,
+          # no compliance-certified / GDPR / SOC2 claims, no
+          # "works in every agent identically" claim.
+          for f in README.md README.es.md EXTENDING.md; do
+            for bad in 'marketplace' 'plugin ecosystem' \
+                       'GDPR ready' 'SOC2 ready' 'compliance certified' \
+                       'works in every agent identically'; do
+              if grep -qiF "$bad" "$f"; then
+                echo "FAIL: $f contains disallowed phrase '$bad'"
+                fail=1
+              fi
+            done
+          done
+          exit $fail
+
   custom-stack-examples-contract:
     name: Custom Stack Examples static contract
     runs-on: ubuntu-latest
