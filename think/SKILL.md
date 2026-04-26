@@ -461,9 +461,13 @@ GATE_OK=$(jq -r '
   (.summary.target_user        // "") != "" and
   (.summary.narrowest_wedge    // "") != "" and
   (.summary.key_risk           // "") != "" and
-  (.summary.premise_validated // null) != null
+  ((.summary.premise_validated | type) == "boolean")
 ' "$THINK_FILE")
 ```
+
+`premise_validated` must be a real boolean — both `true` ("the premise is validated") and `false` ("we discussed it and the premise is NOT validated yet") count as a complete answer. The earlier filter `(.summary.premise_validated // null) != null` was a bug: in jq, `false // null` evaluates to `null`, so an honest "no, premise not validated" was treated identically to a missing field. The fix uses the type test so `true`, `false` both pass and only `null` / missing / wrong-type fails.
+
+When `premise_validated == false` and the gate passes, advancing to `/nano` is still a real product decision: the agent should call out "premise unvalidated" in the summary so the user can decide to ship a probe rather than a full sprint. The gate's job is to reject inventions, not to overrule the user's honest answer.
 
 `GATE_OK == "true"`: the brief is complete. Continue.
 
