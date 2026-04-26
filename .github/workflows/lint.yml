@@ -1134,6 +1134,137 @@ jobs:
           echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
           exit $fail
 
+  think-archetype-aliases:
+    name: /think archetypes alias map present
+    runs-on: ubuntu-latest
+    # Guided Archetypes v1 PR 2. The alias map is the single user-
+    # facing entry point. CI ensures the four canonical archetype
+    # names plus the most-used short aliases are documented in the
+    # contract reference, so a future edit cannot drop a canonical
+    # without breaking lint.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Canonical archetypes named in archetypes.md
+        run: |
+          set -e
+          fail=0
+          for canonical in founder_validation cli_tooling api_backend landing_experience; do
+            if ! grep -q "$canonical" think/references/archetypes.md; then
+              echo "FAIL: think/references/archetypes.md missing canonical archetype: $canonical"
+              fail=1
+            fi
+          done
+          # Short aliases the skill normalizes from. Spec lists these
+          # as the words a user actually types.
+          for alias in 'founder' 'cli' 'api' 'landing' 'design' 'backend' 'non-technical'; do
+            if ! grep -q "$alias" think/references/archetypes.md; then
+              echo "FAIL: think/references/archetypes.md missing alias: $alias"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: think/SKILL.md normalizes the alias map
+        run: |
+          set -e
+          if ! grep -q 'think/references/archetypes.md' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must reference think/references/archetypes.md"
+            exit 1
+          fi
+          # The skill must mention --archetype as an accepted flag
+          # AND the four short aliases; otherwise the user-facing
+          # surface drifts from the contract.
+          if ! grep -qE '\-\-archetype' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must accept --archetype flag"
+            exit 1
+          fi
+
+  think-archetype-no-wizard:
+    name: /think archetypes one-question rule (no wizard)
+    runs-on: ubuntu-latest
+    # The classifier asks at most one question, only when confidence
+    # is low. Multi-question forms ("Question 1... Question 2...",
+    # "answer all", "fill out this form", "choose all that apply")
+    # would turn /think into a survey. This job blocks the regression.
+    steps:
+      - uses: actions/checkout@v4
+      - name: think/SKILL.md and archetypes.md have no multi-question forms
+        run: |
+          set -e
+          fail=0
+          for pattern in 'Question 1.*Question 2' 'answer all' 'fill out this form' 'choose all that apply'; do
+            if grep -nE "$pattern" think/SKILL.md think/references/archetypes.md 2>/dev/null; then
+              echo "FAIL: forbidden multi-question pattern present: $pattern"
+              fail=1
+            fi
+          done
+          exit $fail
+
+  think-archetype-examples-source:
+    name: /think archetypes reference all four Examples Library paths
+    runs-on: ubuntu-latest
+    # Each archetype is grounded in a validated example. If the
+    # contract drops one, downstream skills lose the example_reference
+    # they save into the artifact. Lint enforces the reference set
+    # is complete.
+    steps:
+      - uses: actions/checkout@v4
+      - name: archetypes.md mentions every Examples Library archetype path
+        run: |
+          set -e
+          fail=0
+          for example in starter-todo cli-notes api-healthcheck static-landing; do
+            if ! grep -q "examples/$example" think/references/archetypes.md; then
+              echo "FAIL: think/references/archetypes.md missing examples/$example"
+              fail=1
+            fi
+          done
+          exit $fail
+
+  think-archetype-brief-gate:
+    name: /think archetypes do not block the brief gate
+    runs-on: ubuntu-latest
+    # The autopilot brief gate (Phase 6.6) checks five fields. The
+    # archetype field is OPTIONAL and the gate must NOT consult it.
+    # A future edit that adds archetype to the gate jq filter would
+    # break backward compatibility for v1 sessions and previous
+    # think artifacts that have no archetype set. This job blocks
+    # that drift.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Brief gate jq filter does not reference archetype
+        run: |
+          set -e
+          # Find the GATE_OK jq block in think/SKILL.md and confirm
+          # archetype does not appear inside it. Loose pattern: the
+          # entire span between "GATE_OK=$(jq" and the matching
+          # closing single quote on the line that has " THINK_FILE"
+          # or 'THINK_FILE'.
+          gate_block=$(awk '
+            /GATE_OK=\$\(jq/ { capture=1 }
+            capture { print }
+            capture && /THINK_FILE"\)/ { capture=0 }
+          ' think/SKILL.md)
+          if [ -z "$gate_block" ]; then
+            echo "FAIL: could not locate the GATE_OK jq block in think/SKILL.md"
+            exit 1
+          fi
+          if echo "$gate_block" | grep -qF 'archetype'; then
+            echo "FAIL: brief gate jq filter references archetype; archetype must remain optional"
+            echo "$gate_block"
+            exit 1
+          fi
+          # Positive check: the five required fields are all named in
+          # the gate. Drift away from those is a separate failure
+          # mode the existing think-autopilot-brief-gate job already
+          # covers, but assert here too so the diagnostic is precise.
+          for field in value_proposition target_user narrowest_wedge key_risk premise_validated; do
+            if ! echo "$gate_block" | grep -qF ".summary.$field"; then
+              echo "FAIL: brief gate missing required field: .summary.$field"
+              exit 1
+            fi
+          done
+
   think-search-privacy:
     name: /think search-before-building has modes + privacy boundary
     runs-on: ubuntu-latest

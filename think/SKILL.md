@@ -131,6 +131,101 @@ Presets change HOW you communicate. They do not change the flow, the forcing que
 
 Presets compose with modes and with `--retro`. A `/think --preset=yc --retro` is retro output in YC voice.
 
+## Guided Archetype Selection
+
+Archetypes are a first-question lens that shapes which opening question, diagnostic emphasis, key-risk taxonomy, and example reference `/think` uses. They do NOT change the workflow, the artifact contract, the brief gate, search privacy, or any safety guarantee.
+
+Full contract: read [`think/references/archetypes.md`](references/archetypes.md). Do not dump that file to the user.
+
+### Accepted input
+
+Equivalent forms parsed from the invocation:
+
+```
+/think --archetype=founder "..."
+/think --archetype founder "..."
+/think --type=api "..."
+/think "..."
+```
+
+### Aliases
+
+Normalize user-facing aliases to the canonical form before any other code path sees the value. The four aliases users actually type and the canonical they map to:
+
+| Short alias | Canonical |
+|---|---|
+| `founder` / `startup` / `nontechnical` / `non-technical` | `founder_validation` |
+| `cli` / `tool` / `devex` | `cli_tooling` |
+| `api` / `backend` / `server` | `api_backend` |
+| `landing` / `design` / `marketing` | `landing_experience` |
+
+Unknown value handling:
+
+```
+Unknown archetype '<value>'. Valid: founder, cli, api, landing. I will continue with automatic detection.
+```
+
+### Detection priority
+
+1. Explicit `--archetype` / `--type` flag on this run.
+2. User answer to the one-question classifier (only when confidence is low).
+3. Current path matches one of the four example archetype paths.
+4. Strong project-file signal (`server.js`, executable shell script, single `index.html` + no `package.json`, etc.).
+5. Prompt keyword score.
+6. `session.archetype` field if `/nano-run` wrote one.
+7. Fallback to `unknown`.
+
+Scoring (deterministic, vague model intuition is never the only source):
+
+| Signal | Weight |
+|---|---|
+| Path signal | +5 |
+| Project-file signal | +3 |
+| Strong keyword | +2 |
+| Weak keyword | +1 |
+
+Top score `>= 5` AND at least 2 points above second place: **high** confidence. `>= 3` AND at least 1 point above second place: **medium**. Otherwise: in Guided profile, ask one classifier question; in Professional profile, continue with `unknown` unless the user explicitly asks for guidance.
+
+### One-question classifier
+
+At most once per `/think` run, only when confidence is low and no explicit flag exists.
+
+**Guided wording (Spanish, plain language, no internal labels):**
+
+```
+Para ayudarte mejor, esto se parece mas a:
+1. validar una idea o feature chica,
+2. mejorar una pantalla o landing,
+3. agregar algo tecnico a una herramienta,
+4. cambiar una API o backend?
+```
+
+**Professional wording:**
+
+```
+Which lens should I use: founder_validation, landing_experience, cli_tooling, or api_backend?
+```
+
+If the user ignores the question and provides more context, infer again from the new context. If still unclear, fall back to `unknown` and the canonical `/think` flow. The classifier never repeats and never blocks autopilot when the brief gate fields are otherwise complete.
+
+### Interaction with presets
+
+Explicit `--preset` always wins over the archetype's default lens. Archetypes only suggest an internal lens when no `--preset` is set. The lens changes communication and diagnostic emphasis. It does NOT change the artifact schema or skip required phases. See the lens table in `think/references/archetypes.md` for the per-archetype default.
+
+### Banned terms in Guided first screen
+
+In addition to the plain-language contract bans, the Guided first screen may not contain `archetype`, `preset`, or `mode`. Name what you will do, not the internal label. For example:
+
+> Voy a empezar preguntando quien necesita esto hoy.
+
+Not:
+
+> I selected the founder_validation archetype.
+
+### Brief gate invariant (do not break)
+
+The Phase 6.6 autopilot brief gate checks five fields: `value_proposition`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`. It does NOT check `archetype`. A complete brief without an archetype must still advance to `/nano` under autopilot. Missing archetype alone never blocks the gate.
+
 ## Retro Mode
 
 If the user said `/think --retro` or `/think retro` or "retrospective", run the retrospective process instead of the normal diagnostic. **Do not initialize a new session.** Retro looks backward at what was shipped, not forward at what to build.
@@ -281,6 +376,8 @@ How `/think` uses each field:
 
 Understand the landscape, then determine the mode.
 
+**Run archetype detection first** per the Guided Archetype Selection section above. The detection runs after the session-state read and before mode detection because the archetype shapes the opening question regardless of which mode (Founder / Startup / Builder) the diagnostic uses. If `--archetype` was set explicitly, normalize the alias and proceed. Otherwise score the path / file / keyword signals deterministically. If confidence is low and no explicit flag exists, in Guided ask the one classifier question; in Professional, continue with `unknown`.
+
 **If the user didn't provide an idea or problem** (e.g. they just said `/think` or `/think --autopilot` with no context), simply ask in your response: "What do you want to build?" Do NOT use `AskUserQuestion` for this. Just ask in plain text and wait for their reply.
 
 **If AUTOPILOT is active:** Do NOT ask clarifying questions. Work with the information provided. Default to Builder mode. If the description is clear enough to plan, skip the diagnostic questions and go straight to Phase 5 (scope recommendation) with a brief that covers value prop, scope, starting point and risk. The user chose autopilot because they want speed, not a conversation.
@@ -328,9 +425,19 @@ Whatever mode you used, write the result to `summary.search_summary` in the stru
 
 ### Phase 2: The Diagnostic
 
+**Apply the archetype lens to the opening question and the diagnostic emphasis** (see lens definitions in `think/references/archetypes.md`). The archetype selects and reorders the forcing questions, it does not replace them. Always cover the Startup Mode forcing-question set; the lens decides which one opens the conversation and which risks get extra airtime.
+
+| Archetype | Primary opening question | Diagnostic emphasis |
+|---|---|---|
+| `founder_validation` | Who has this problem today, and what are they doing without your product? | target-user specificity, current workaround, smallest useful version, manual delivery test. |
+| `cli_tooling` | What command should exist, what should it print, and what must not break? | exact command shape, I/O contract, storage format, exit codes, shell quoting, backward compatibility. |
+| `api_backend` | What observable API behavior should change, and how will we prove it with a real request? | endpoint semantics, HTTP method/status, response body, backward compatibility, logging safety, readiness truthfulness. |
+| `landing_experience` | Who lands here, what do they need to understand in five seconds, and what should they do next? | audience, comparison set, headline clarity, proof, CTA, mobile layout, no third-party scripts. |
+| `unknown` | Use the canonical Startup Mode opening (Demand Reality). | Existing detection, no archetype-specific reordering. |
+
 #### Startup Mode — Six Forcing Questions
 
-Read `think/references/forcing-questions.md` and cover all six: Demand Reality, Status Quo, Desperate Specificity, Starting Point, Observation & Surprise, Future-Fit. Adapt order to conversation flow.
+Read `think/references/forcing-questions.md` and cover all six: Demand Reality, Status Quo, Desperate Specificity, Starting Point, Observation & Surprise, Future-Fit. Adapt order to conversation flow. The archetype selects which one opens the diagnostic; the rest still need to land before the brief is complete.
 
 Synthesize: What is the **one sentence** value proposition that survives all six questions?
 
@@ -468,6 +575,8 @@ GATE_OK=$(jq -r '
 `premise_validated` must be a real boolean — both `true` ("the premise is validated") and `false` ("we discussed it and the premise is NOT validated yet") count as a complete answer. The earlier filter `(.summary.premise_validated // null) != null` was a bug: in jq, `false // null` evaluates to `null`, so an honest "no, premise not validated" was treated identically to a missing field. The fix uses the type test so `true`, `false` both pass and only `null` / missing / wrong-type fails.
 
 When `premise_validated == false` and the gate passes, advancing to `/nano` is still a real product decision: the agent should call out "premise unvalidated" in the summary so the user can decide to ship a probe rather than a full sprint. The gate's job is to reject inventions, not to overrule the user's honest answer.
+
+**Brief gate does NOT require `archetype`.** The five fields above are exhaustive. A complete brief without an archetype field, or with `archetype = "unknown"`, must still pass the gate. Missing archetype alone never blocks autopilot. CI job `think-archetype-brief-gate` enforces this.
 
 `GATE_OK == "true"`: the brief is complete. Continue.
 
