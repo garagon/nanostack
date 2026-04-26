@@ -106,7 +106,7 @@ Archetype → internal lens map when no `--preset` was provided:
 
 | Archetype | Internal lens |
 |---|---|
-| `founder_validation` | `yc` (Professional) or `garry` (also Professional). In Guided profile, soften further: keep the narrowest-wedge / target-user emphasis but drop the YC delivery edge. |
+| `founder_validation` | `yc` by default. `garry` only when the user explicitly passes `--preset=garry` (which the explicit-flag rule above already routes). In Guided profile, soften further: keep the narrowest-wedge / target-user emphasis but drop the YC delivery edge. |
 | `cli_tooling` | `devex` |
 | `api_backend` | `eng` |
 | `landing_experience` | `design` |
@@ -441,7 +441,7 @@ Whatever mode you used, write the result to `summary.search_summary` in the stru
 
 ### Phase 2: The Diagnostic
 
-**Apply the archetype lens to the opening question and the diagnostic emphasis** (see lens definitions in `think/references/archetypes.md`). The archetype selects and reorders the forcing questions, it does not replace them. Always cover the Startup Mode forcing-question set; the lens decides which one opens the conversation and which risks get extra airtime.
+**Apply the archetype lens to the opening question and the diagnostic emphasis** (see lens definitions in `think/references/archetypes.md`). The archetype selects and reorders the forcing questions, it does not replace them. Cover the **active mode's** diagnostic set: Startup forcing questions for `founder_validation` and `landing_experience`; Builder forcing questions for `cli_tooling` and `api_backend`. The archetype→mode mapping lives in `think/references/archetypes.md` ("Mode interaction"). The lens decides which question opens the conversation and which risks get extra airtime.
 
 | Archetype | Primary opening question | Diagnostic emphasis |
 |---|---|---|
@@ -649,7 +649,7 @@ When `RUN_MODE=report_only`, skip the gate entirely. The brief is saved as the r
 
 **If `--autopilot` was used** (or the user said "autopilot", "run everything", "ship it end to end") AND the Brief Gate passed:
 
-> Autopilot active. Proceeding with the full sprint: /nano, build, /review, /qa, /security, /ship. I'll only stop for blocking issues or product questions I can't answer.
+> Autopilot active. Proceeding with the full sprint: /nano, build, /review, /security, /qa, /ship. I'll only stop for blocking issues or product questions I can't answer.
 
 Then proceed directly to `/nano` without waiting. Set `AUTOPILOT=true` in your context and carry it through every subsequent skill.
 
@@ -669,7 +669,8 @@ If 0 or 1 archived sessions (new user), show the sprint guide:
 > 2. Build the feature
 > 3. `/review` — two-pass code review (structure + adversarial edge cases)
 > 4. `/security` — OWASP audit + secrets scan
-> 5. `/ship` — PR, CI verification, sprint journal
+> 5. `/qa` — open the app like a real user; cover the golden path and edge cases
+> 6. `/ship` — PR, CI verification, sprint journal
 >
 > Or say `/think --autopilot` next time and I run everything after you approve the brief.
 

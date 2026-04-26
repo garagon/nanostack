@@ -2173,3 +2173,125 @@ jobs:
             done < <(printf '%s\n' "$blocks")
           done
           exit $fail
+
+  think-sprint-order-canonical:
+    name: /think autopilot + sprint guide use canonical order
+    runs-on: ubuntu-latest
+    # The canonical post-build order is /review -> /security -> /qa -> /ship.
+    # A retest caught think/SKILL.md emitting /review, /qa, /security, /ship
+    # in the autopilot announcement; that contradicts the README, the new-user
+    # sprint guide, and downstream skills. Lock the order so it cannot drift
+    # again.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Autopilot announcement uses canonical order
+        run: |
+          set -e
+          if ! grep -nF '/review, /security, /qa, /ship' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md autopilot announcement does not use canonical /review, /security, /qa, /ship order"
+            exit 1
+          fi
+          if grep -nF '/review, /qa, /security, /ship' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md still emits the wrong /review, /qa, /security, /ship order"
+            exit 1
+          fi
+      - name: New-user sprint guide lists /review then /security then /qa then /ship
+        run: |
+          set -e
+          # Pull the fenced quoted block that starts with "Here's the full sprint:"
+          # and stops at the first blank quote line. Then assert the four steps
+          # appear in canonical order.
+          guide=$(awk '
+            /Here.s the full sprint:/ { capture=1 }
+            capture { print }
+            capture && /Or say.*--autopilot/ { print; capture=0 }
+          ' think/SKILL.md)
+          if [ -z "$guide" ]; then
+            echo "FAIL: could not locate the new-user sprint guide block in think/SKILL.md"
+            exit 1
+          fi
+          review_line=$(echo "$guide" | grep -nF '/review' | head -1 | cut -d: -f1)
+          security_line=$(echo "$guide" | grep -nF '/security' | head -1 | cut -d: -f1)
+          qa_line=$(echo "$guide" | grep -nF '/qa' | head -1 | cut -d: -f1)
+          ship_line=$(echo "$guide" | grep -nF '/ship' | head -1 | cut -d: -f1)
+          for var in review_line security_line qa_line ship_line; do
+            eval "val=\$$var"
+            if [ -z "$val" ]; then
+              echo "FAIL: sprint guide missing step ($var)"
+              echo "$guide"
+              exit 1
+            fi
+          done
+          if [ "$review_line" -lt "$security_line" ] && \
+             [ "$security_line" -lt "$qa_line" ] && \
+             [ "$qa_line" -lt "$ship_line" ]; then
+            exit 0
+          fi
+          echo "FAIL: sprint guide order is not /review -> /security -> /qa -> /ship"
+          echo "lines: review=$review_line security=$security_line qa=$qa_line ship=$ship_line"
+          echo "$guide"
+          exit 1
+
+  think-early-guide-includes-qa:
+    name: /think early-sprint guide includes /qa
+    runs-on: ubuntu-latest
+    # The new-user sprint guide is the first place a non-technical user
+    # learns what the workflow does. Dropping /qa removes the "open the app
+    # like a real user" step that is exactly the value for non-technical
+    # users. This job blocks that regression.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sprint guide block names /qa explicitly
+        run: |
+          set -e
+          guide=$(awk '
+            /Here.s the full sprint:/ { capture=1 }
+            capture { print }
+            capture && /Or say.*--autopilot/ { print; capture=0 }
+          ' think/SKILL.md)
+          if [ -z "$guide" ]; then
+            echo "FAIL: could not locate the new-user sprint guide block in think/SKILL.md"
+            exit 1
+          fi
+          if ! echo "$guide" | grep -qF '/qa'; then
+            echo "FAIL: new-user sprint guide does not list /qa"
+            echo "$guide"
+            exit 1
+          fi
+
+  think-builder-archetypes-do-not-force-startup:
+    name: /think Builder archetypes are not forced into Startup mode
+    runs-on: ubuntu-latest
+    # archetypes.md maps cli_tooling and api_backend to Builder mode. The
+    # Phase 2 instruction "Always cover the Startup Mode forcing-question
+    # set" contradicts that mapping and pushes Builder users through
+    # founder-style questions. Lock the wording so it stays mode-aware.
+    steps:
+      - uses: actions/checkout@v4
+      - name: think/SKILL.md does not force Startup forcing questions on every archetype
+        run: |
+          set -e
+          # The exact phrase that triggered the regression. Block any
+          # variation that says "always" + "Startup Mode" + "forcing".
+          if grep -niE 'always cover the startup mode forcing' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md still forces Startup forcing questions on every archetype"
+            exit 1
+          fi
+          # Positive check: the Phase 2 paragraph mentions Builder explicitly,
+          # so non-technical readers and Codex retest both see the mode is
+          # archetype-driven.
+          if ! grep -nE 'Builder forcing questions for .*cli_tooling.*api_backend|Builder forcing questions for .*api_backend.*cli_tooling' think/SKILL.md; then
+            echo "FAIL: Phase 2 paragraph does not mention Builder forcing questions for cli_tooling and api_backend"
+            exit 1
+          fi
+          # Cross-check: archetypes.md still maps cli_tooling and api_backend
+          # to Builder. If that source of truth changes, this lint becomes
+          # stale and should be updated alongside it.
+          if ! grep -nE '\| .cli_tooling. \| Builder \|' think/references/archetypes.md; then
+            echo "FAIL: archetypes.md no longer maps cli_tooling to Builder; update this lint or the spec"
+            exit 1
+          fi
+          if ! grep -nE '\| .api_backend. \| Builder \|' think/references/archetypes.md; then
+            echo "FAIL: archetypes.md no longer maps api_backend to Builder; update this lint or the spec"
+            exit 1
+          fi
