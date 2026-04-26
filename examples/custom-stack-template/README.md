@@ -38,12 +38,12 @@ Before opening a PR with a new stack, run:
 ci/check-custom-stack-examples.sh
 ```
 
-It validates the manifest schema, the README structure, the skill folder shape, the absence of committed runtime artifacts, and `bash -n` on every helper. Once PR 3 of this round lands, `ci/e2e-custom-stack-examples.sh` will additionally exercise the runtime contract on a real `/tmp` project.
+It validates the manifest schema, the README structure, the skill folder shape, the absence of committed runtime artifacts, and `bash -n` on every helper. The runtime contract for the example stack is in `ci/e2e-custom-stack-examples.sh` (15 cells, 51 assertions on a real `/tmp` project).
 
-## What's covered today
+## What's covered
 
-- **Manifest + structural lint**: every stack file shape and skill folder layout (this PR).
-- **Skill behavior**: license audit, privacy hygiene, release-readiness composer (next PR).
-- **Runtime install + journey**: scaffold the stack, save artifacts, resolve, journal, analytics, discard, conductor scheduling (PR 3 of the round).
+- **Manifest + structural lint**: every stack file shape and skill folder layout, validated by `ci/check-custom-stack-examples.sh` (49 checks).
+- **Skill behavior**: license audit (npm/pip/go classifier), privacy hygiene (collection signals + privacy-note resolution), release-readiness composer (5-upstream rollup with TAMPERED detection). Each skill has a `bin/smoke.sh` that exercises real cases on a `/tmp` project.
+- **Runtime install + journey**: scaffold the stack from `bin/create-skill.sh --from`, save artifacts, resolve, journal, analytics, discard, conductor scheduling — all proven by `ci/e2e-custom-stack-examples.sh`.
 
-Until PR 3 ships, the stacks here are wired and lint-checked but not yet end-to-end runnable as a workflow. The status of each stack is on its own README.
+Each stack documents its own status and install path on its README.

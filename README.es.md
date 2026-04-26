@@ -227,9 +227,11 @@ Si querés enforcement duro, usá Claude Code. Si aceptás disciplina a nivel ag
 
 Para la guía completa de problemas en español (slash commands, jq, phase gate, puerto en uso, Windows, sprints atascados, conflictos de nombres), ver [TROUBLESHOOTING.es.md](TROUBLESHOOTING.es.md). Para temas avanzados (proxy corporativo, doble ejecución en autopilot, telemetría) consultá la versión canónica en inglés: [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
-## Construí tu propio skill
+## Construí tu propio workflow stack
 
-Nanostack es un framework de workflow, no solo un set fijo de skills. Podés crear tus propios skills, registrarlos como fases, y reutilizar el mismo artifact store, resolver, sprint journal, analytics, conductor y vault local que usan los skills built-in.
+Usá Nanostack como viene, o construí tu propio workflow stack arriba. Tus skills custom pueden componerse en un workflow de dominio que controla `/ship`, y heredan el mismo artifact store, resolver, sprint journal, analytics, conductor y vault local que usan los skills built-in. Sin SaaS, sin daemon, sin build step.
+
+### Un solo skill
 
 Generá un skill desde el template, validalo, reiniciá tu agente:
 
@@ -247,9 +249,21 @@ Lo que ese skill hereda automáticamente, todo cubierto por `ci/e2e-custom-stack
 - `discard-sprint.sh --dry-run` lista los artefactos del skill junto con los core.
 - `conductor/bin/sprint.sh start --phases <json>` acepta un grafo que incluye la fase custom; `batch` lee la `concurrency:` desde el `SKILL.md` del skill.
 
-Un equipo de marketing arma `/audience` y `/campaign`. Un equipo de datos arma `/explore` y `/model`. Un equipo de compliance arma `/license-audit` y `/privacy`. Todos componen con `/think` para ideas, `/review` para calidad y `/ship` para entrega.
+### Workflow stack
 
-El contrato del framework está en [`reference/custom-stack-contract.md`](reference/custom-stack-contract.md). Walkthrough completo: [`EXTENDING.md`](EXTENDING.md).
+Un stack es varios skills custom unidos por un `phase_graph` para que el conductor sepa el orden de dependencias. El ejemplo `compliance-release` lo prueba: tres fases custom (`/license-audit` + `/privacy-check` + `/release-readiness`) componen una decisión de release antes de `/ship`. `ci/e2e-custom-stack-examples.sh` recorre el journey completo del usuario nuevo: scaffold, validate, save, resolve, journal, analytics, discard, conductor scheduling. 15 celdas, 51 aserciones.
+
+Copiá el starting point del stack:
+
+```
+examples/custom-stack-template/compliance-release/
+```
+
+El [README del stack](examples/custom-stack-template/compliance-release/README.md) muestra la instalación. El contrato de directorio para nuevos stacks está en [`reference/custom-stack-examples-technical-spec.md`](reference/custom-stack-examples-technical-spec.md); el contrato del framework que los skills heredan está en [`reference/custom-stack-contract.md`](reference/custom-stack-contract.md).
+
+Un equipo de marketing arma `/audience` y `/campaign`. Un equipo de datos arma `/explore` y `/model`. Un equipo de compliance arma `/license-audit`, `/privacy-check` y `/release-readiness`. Todos componen con `/think` para ideas, `/review` para calidad y `/ship` para entrega.
+
+Walkthrough completo: [`EXTENDING.md`](EXTENDING.md).
 
 ## Privacidad
 

@@ -1,19 +1,35 @@
 # Extending Nanostack
 
-Add your own skills that plug into nanostack's workflow. Your skills save artifacts, read what other skills produced, and compose with /think, /review and /ship.
+Add your own skills that plug into Nanostack's workflow. Your skills save artifacts, read what other skills produced, and compose with `/think`, `/review`, and `/ship`. Multiple skills can compose into a domain workflow stack that gates `/ship` on its own evidence.
 
-> **Quickest way to start:**
+## Two starting points
+
+| If you want | Start here |
+|---|---|
+| One skill that reuses Nanostack's artifact store + resolver + journal + analytics + conductor | `examples/custom-skill-template/audit-licenses/` (single-skill template; `bin/create-skill.sh` scaffolds from it by default) |
+| A multi-skill stack that composes into a release gate before `/ship` | `examples/custom-stack-template/compliance-release/` (license + privacy + release-readiness composer; reference shape for any new stack) |
+
+> **Quickest way to start a single skill:**
 >
 > ```bash
 > bin/create-skill.sh license-audit --concurrency read --depends-on build
 > bin/check-custom-skill.sh .nanostack/skills/license-audit
 > ```
 >
-> The first command scaffolds a working skill from the bundled template, registers it as a custom phase, and rewrites every helper path to be self-contained. It writes to the same store path the lifecycle scripts read from (your repo root's `.nanostack/`, or `$HOME/.nanostack/` outside git), so the skill is visible whether you invoke the tool from the project root or a subdirectory. The second runs a check that covers SKILL.md frontmatter shape, the frontmatter `name:` matches the directory, `agents/openai.yaml` has the required discovery keys, the `display_name` is consistent with the skill, `bash -n` on helpers, registration in config, no leaked example paths, and a `save-artifact` + `find-artifact` round-trip. Restart your agent and `/license-audit` is live.
+> The first command scaffolds a working skill from the bundled template, registers it as a custom phase, and rewrites every helper path to be self-contained. It writes to the same store path the lifecycle scripts read from (your repo root's `.nanostack/`, or `$HOME/.nanostack/` outside git), so the skill is visible whether you invoke the tool from the project root or a subdirectory. The second runs a check that covers `SKILL.md` frontmatter shape, the frontmatter `name:` matches the directory, `agents/openai.yaml` has the required discovery keys, the `display_name` is consistent with the skill, `bash -n` on helpers, registration in config, no leaked example paths, and a `save-artifact` + `find-artifact` round-trip. Restart your agent and `/license-audit` is live.
 >
 > The contract those tools enforce lives in [`reference/custom-stack-contract.md`](reference/custom-stack-contract.md). The 15-cell end-to-end harness that proves the journey works (including subdir-scaffold and no-git scaffold paths) is at [`ci/e2e-custom-stack-flows.sh`](ci/e2e-custom-stack-flows.sh).
+
+> **Quickest way to start a workflow stack:**
 >
-> Prefer copying by hand? The template still lives at `examples/custom-skill-template/audit-licenses/` and its README walks through the structure.
+> Copy the compliance-release example, which scaffolds three skills (`license-audit` + `privacy-check` + `release-readiness`) and wires them into a `phase_graph` so the conductor schedules them between `build` and `ship`:
+>
+> ```bash
+> cp -R examples/custom-stack-template/compliance-release ~/.local/stacks/compliance-release
+> # Then follow the install commands in compliance-release/README.md.
+> ```
+>
+> The stack manifest schema, the directory contract any new stack must satisfy, and the runtime guarantees the framework gives a stack are documented in [`reference/custom-stack-examples-technical-spec.md`](reference/custom-stack-examples-technical-spec.md). The 15-cell runtime end-to-end harness for the example stack is at [`ci/e2e-custom-stack-examples.sh`](ci/e2e-custom-stack-examples.sh) (51 assertions).
 
 ## Configure your stack
 
