@@ -1134,6 +1134,137 @@ jobs:
           echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
           exit $fail
 
+  think-archetype-schema:
+    name: /think archetype fields land in the artifact
+    runs-on: ubuntu-latest
+    # Guided Archetypes v1 PR 4. The artifact is the only durable
+    # signal a downstream skill (or analytics, or support) gets
+    # about what archetype shaped this sprint. Three things must
+    # line up:
+    #   1. The schema doc declares the fields (PR 1).
+    #   2. The skill's THINK_JSON build site emits them (this PR).
+    #   3. A live save+read roundtrip on a sandbox preserves the
+    #      five archetype fields without breaking the brief gate.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Field names appear across schema, skill, and contract docs
+        run: |
+          set -e
+          fail=0
+          for path in reference/artifact-schema.md think/SKILL.md think/references/archetypes.md; do
+            for field in archetype archetype_confidence archetype_source example_reference; do
+              if ! grep -q "$field" "$path"; then
+                echo "FAIL: $path missing field name: $field"
+                fail=1
+              fi
+            done
+          done
+          exit $fail
+
+      - name: THINK_JSON build site assigns each archetype field
+        run: |
+          set -e
+          fail=0
+          # The Phase 6 jq -n block must declare every archetype
+          # field as a key in summary. Loose grep on each colon-form
+          # the existing block uses.
+          for field in archetype archetype_confidence archetype_source archetype_reason example_reference; do
+            if ! grep -qE "${field}:[[:space:]]+\\\$${field}" think/SKILL.md; then
+              echo "FAIL: think/SKILL.md THINK_JSON does not assign summary.$field"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Live save+read roundtrip with archetype + example_reference
+        run: |
+          set -e
+          fail=0
+          tmp=$(mktemp -d /tmp/arch-ci.XXXXXX)
+          cd "$tmp"
+          git init -q
+          mkdir -p .nanostack
+          export NANOSTACK_STORE="$tmp/.nanostack"
+
+          # Two payloads cover the full envelope: detected high-
+          # confidence + example, and the unknown/fallback case.
+          api_payload=$(jq -n '{
+            phase:"think",
+            summary:{
+              value_proposition:"Add /version endpoint",
+              scope_mode:"reduce", target_user:"backend dev",
+              narrowest_wedge:"GET /version", key_risk:"could break /health",
+              premise_validated:true, out_of_scope:[], manual_delivery_test:{possible:true,steps:[]},
+              search_summary:{mode:"local_only",result:"",existing_solution:"none"},
+              archetype:"api_backend", archetype_confidence:"high",
+              archetype_source:"detected_from_files",
+              archetype_reason:"Project has server.js.",
+              example_reference:{name:"api-healthcheck",path:"examples/api-healthcheck",why_relevant:"backend sandbox"}
+            },
+            context_checkpoint:{summary:"x"}
+          }')
+          $GITHUB_WORKSPACE/bin/save-artifact.sh think "$api_payload" >/dev/null
+
+          # Spec acceptance jq.
+          if ! jq -e '.summary.archetype == "api_backend" and .summary.archetype_confidence == "high" and .summary.archetype_source == "detected_from_files" and .summary.example_reference.path == "examples/api-healthcheck"' .nanostack/think/*.json >/dev/null; then
+            echo "FAIL: api_backend artifact did not preserve all archetype fields"
+            fail=1
+          fi
+
+          # Brief gate must still pass on the same artifact, with no
+          # archetype-aware filter. Same five fields the existing
+          # gate checks. A v1 reader without archetype knowledge
+          # must still see the artifact as complete.
+          gate=$(jq -r '
+            (.summary.value_proposition // "") != "" and
+            (.summary.target_user        // "") != "" and
+            (.summary.narrowest_wedge    // "") != "" and
+            (.summary.key_risk           // "") != "" and
+            ((.summary.premise_validated | type) == "boolean")
+          ' .nanostack/think/*.json)
+          if [ "$gate" != "true" ]; then
+            echo "FAIL: brief gate filter rejected an archetype-aware artifact"
+            fail=1
+          fi
+
+          # Reset and try the unknown/fallback envelope.
+          rm .nanostack/think/*.json
+          unknown_payload=$(jq -n '{
+            phase:"think",
+            summary:{
+              value_proposition:"Generic feature ask",
+              scope_mode:"reduce", target_user:"any",
+              narrowest_wedge:"smallest version", key_risk:"premise unclear",
+              premise_validated:false, out_of_scope:[], manual_delivery_test:{possible:false,steps:[]},
+              search_summary:{mode:"local_only",result:"",existing_solution:"none"},
+              archetype:"unknown", archetype_confidence:"low",
+              archetype_source:"fallback", archetype_reason:"",
+              example_reference:null
+            },
+            context_checkpoint:{summary:"x"}
+          }')
+          $GITHUB_WORKSPACE/bin/save-artifact.sh think "$unknown_payload" >/dev/null
+
+          if ! jq -e '.summary.archetype == "unknown" and .summary.archetype_source == "fallback" and .summary.example_reference == null' .nanostack/think/*.json >/dev/null; then
+            echo "FAIL: unknown archetype artifact did not preserve fallback fields"
+            fail=1
+          fi
+          # Brief gate still passes with archetype=unknown and
+          # premise_validated=false (PR #173 fix held).
+          gate=$(jq -r '
+            (.summary.value_proposition // "") != "" and
+            (.summary.target_user        // "") != "" and
+            (.summary.narrowest_wedge    // "") != "" and
+            (.summary.key_risk           // "") != "" and
+            ((.summary.premise_validated | type) == "boolean")
+          ' .nanostack/think/*.json)
+          if [ "$gate" != "true" ]; then
+            echo "FAIL: brief gate filter rejected unknown/false-premise artifact (PR #173 regression)"
+            fail=1
+          fi
+
+          exit $fail
+
   think-archetype-lens-routing:
     name: /think archetype lens routing + preset interaction
     runs-on: ubuntu-latest

@@ -526,6 +526,11 @@ Build the JSON inline and pass it to `save-artifact.sh`. Required fields (the au
 Use `jq -n` so the output is real JSON, not a string with embedded quotes:
 
 ```bash
+# Archetype fields. Set archetype="unknown" + archetype_source="fallback"
+# when no archetype was used; the brief gate does not consult these
+# fields so the artifact is always backward-compatible with v1
+# /think readers. example_reference is null when archetype is
+# "unknown".
 THINK_JSON=$(jq -n \
   --arg value_proposition "..."   \
   --arg scope_mode        "..."   \
@@ -536,6 +541,11 @@ THINK_JSON=$(jq -n \
   --argjson out_of_scope          '[]' \
   --argjson manual_delivery_test  '{"possible": false, "steps": []}' \
   --argjson search_summary        '{"mode": "local_only", "result": "", "existing_solution": "none"}' \
+  --arg archetype                 "unknown" \
+  --arg archetype_confidence      "low" \
+  --arg archetype_source          "fallback" \
+  --arg archetype_reason          "" \
+  --argjson example_reference     'null' \
   --argjson context_checkpoint    '{"summary":"", "key_files":[], "decisions_made":[], "open_questions":[]}' \
   '{
      phase: "think",
@@ -548,12 +558,41 @@ THINK_JSON=$(jq -n \
        premise_validated: $premise_validated,
        out_of_scope:      $out_of_scope,
        manual_delivery_test: $manual_delivery_test,
-       search_summary:    $search_summary
+       search_summary:    $search_summary,
+       archetype:            $archetype,
+       archetype_confidence: $archetype_confidence,
+       archetype_source:     $archetype_source,
+       archetype_reason:     $archetype_reason,
+       example_reference:    $example_reference
      },
      context_checkpoint: $context_checkpoint
    }')
 
 ~/.claude/skills/nanostack/bin/save-artifact.sh think "$THINK_JSON"
+```
+
+When an archetype WAS detected or set explicitly, replace the five default values with the actual ones:
+
+| Source | `archetype_source` | `archetype_confidence` |
+|---|---|---|
+| `--archetype` / `--type` flag | `explicit_flag` | `user_selected` |
+| User answered the one-question classifier | `user_answer` | `user_selected` |
+| Current path matches `examples/<archetype>` | `detected_from_files` | `high` |
+| Strong project-file signal | `detected_from_files` | `high` or `medium` |
+| Prompt keyword score | `detected_from_prompt` | `medium` or `low` |
+| `session.archetype` field | `session` | `user_selected` |
+| No signal hit threshold | `fallback` | `low` |
+
+`archetype_reason` is one short sentence the user could read: e.g. `"Current project has server.js and the prompt references an endpoint."` Empty string is acceptable for the `unknown`/`fallback` case.
+
+`example_reference` is `null` when archetype is `unknown`. Otherwise it is the object documented in `think/references/archetypes.md` for that archetype:
+
+```json
+{
+  "name": "starter-todo|cli-notes|api-healthcheck|static-landing",
+  "path": "examples/<example>",
+  "why_relevant": "string"
+}
 ```
 
 This is the first thing you do after the summary. Not optional. Not "Step 2". The summary and the save are one action. After this:
