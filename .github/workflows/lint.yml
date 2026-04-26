@@ -1263,14 +1263,20 @@ jobs:
           fail=0
           # Each stale string is one quoted argument so spaces inside
           # do not split. Order intentional: most-cited spec entries
-          # first.
+          # first. The set grows with each public-wording spec round
+          # so a regression hits the lint job, not the readers.
           for stale in \
             'Under 15 minutes' \
             'Four tiers' \
             'endpoint lands in a later PR' \
             'Claude does the rest' \
             'se ships' \
-            'Ship el puntito'; do
+            'Ship el puntito' \
+            'Nothing leaves unless you opt in' \
+            'post-deploy canary' \
+            'Four commands' \
+            'That is not a copilot' \
+            'Zero dependencies. Zero build step'; do
             if grep -nF "$stale" README.md README.es.md 2>/dev/null; then
               echo "FAIL: stale string present: $stale"
               fail=1
@@ -1289,7 +1295,11 @@ jobs:
             'starter-todo' \
             'cli-notes' \
             'api-healthcheck' \
-            'static-landing'; do
+            'static-landing' \
+            'delivery workflow' \
+            'What changes after installing Nanostack' \
+            'No Nanostack cloud' \
+            'Production deployment stays explicit'; do
             if ! grep -qF "$required" README.md; then
               echo "FAIL: required string missing in README.md: $required"
               fail=1

@@ -6,10 +6,14 @@
 <br>
 
 <p align="center">
-  Turns your AI coding agent into a delivery team: scope, plan, build, review, test, audit, and ship in language anyone can read.
+  Turn your AI coding agent into a delivery workflow.
 </p>
 
-<p align="center"><strong>Small sandbox sprints run in minutes. Real projects keep the same professional workflow.</strong></p>
+<p align="center">
+  Nanostack helps an agent challenge scope, plan the change, build, review, test, audit, and ship with a record of what happened.
+</p>
+
+<p align="center"><strong>Plain text skills. No build step. No Nanostack cloud.</strong></p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
@@ -30,7 +34,7 @@
 <br>
 
 
-Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). 13 skills total. The default sprint uses seven core specialists. Zero dependencies. Zero build step.
+Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). 13 skills total. The default sprint uses seven core specialists. No build step. No Nanostack cloud.
 
 Works with Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp, and Cline.
 
@@ -50,67 +54,45 @@ Every step reads the artifact the previous step wrote, so nothing falls through 
 | **04** | `/review`         | Two-pass code review. Scope drift detection. Auto-fixes the mechanical. |
 | **05** | `/security`       | OWASP A01-A10 audit + STRIDE threat modeling. Graded A-F.               |
 | **06** | `/qa`             | Tests the thing. Browser, API, CLI, or root-cause debug.                |
-| **07** | `/ship`           | PR creation, CI verification, post-deploy canary, sprint journal.       |
+| **07** | `/ship`           | PR creation, CI verification, release notes, sprint journal. Production deployment stays explicit and user-controlled. |
 
 ## Two profiles, same rigor
 
-Nanostack adapts what it shows you based on your context. The workflow does not change; the wording does.
+Nanostack adapts the explanation, not the standard.
 
-| Profile | When you get it | What output looks like |
-|---|---|---|
-| **Guided** | Local mode (no git repo), or when you choose it explicitly. | Plain language. No PR/CI/branch/diff jargon. Each phase tells you the result, how to try it, what was checked, and what remains unverified. |
-| **Professional** | Git repository with the standard developer toolchain, or when you choose it. | Findings, evidence, file paths, PR/CI status preserved. Phase-aware next-step prose. |
+| Profile | What changes |
+|---------|--------------|
+| **Guided** | Plain language, one next action, safer defaults, no hidden jargon. |
+| **Professional** | Denser output, deeper tradeoffs, explicit files, commands, and risks. |
 
-Either way: scope is challenged before planning, the plan names every file, review/security/qa run before ship, and the agent honestly reports what it could and could not check. Nanostack does not only protect the workflow; it guides delivery like a professional engineering team, understandable for technical and non-technical users.
+Local mode uses Guided language by default. A git project can still use Guided if the user wants simpler explanations.
 
 The wording rules live in [`reference/plain-language-contract.md`](reference/plain-language-contract.md). The session fields that select the profile live in [`reference/session-state-contract.md`](reference/session-state-contract.md).
 
-## Features
+## What is enforced depends on your agent
 
-<table>
-<tr>
-<td align="center" width="33%">
-<h3>🧠 Thinking partner</h3>
-Thinks with you, pushes back when needed. Asks the questions that take an idea from vague to concrete. You finish with clarity about what to build and why.
-</td>
-<td align="center" width="33%">
-<h3>📋 Real plans</h3>
-<code>/nano</code> lists every file the agent will touch and every risk before it writes a line. A plan you can read, argue with, and check off.
-</td>
-<td align="center" width="33%">
-<h3>🔍 Scope guard</h3>
-<code>/review</code> compares what got built with what you agreed to build. If the agent added extras, you see them before you merge.
-</td>
-</tr>
-<tr>
-<td align="center">
-<h3>🛡️ Security audit</h3>
-<code>/security</code> looks for password leaks, broken logins, and the kind of mistakes that make headlines. Every release, not once a quarter.
-</td>
-<td align="center">
-<h3>🧪 Real QA</h3>
-<code>/qa</code> opens your app like a real user. Clicks buttons, takes screenshots, and fixes the bugs it finds.
-</td>
-<td align="center">
-<h3>📦 Honest PRs</h3>
-<code>/ship</code> writes a PR description that explains <em>why</em> the change exists, not just which files moved.
-</td>
-</tr>
-<tr>
-<td align="center">
-<h3>🎯 Phase gate</h3>
-The sprint runs in order: think, plan, build, review, security, qa, ship. On hosts with hooks, skip attempts can be blocked. On other agents, the same order is guided and reported honestly.
-</td>
-<td align="center">
-<h3>🔐 Local first</h3>
-Nothing leaves unless you opt in. Your code, prompts, project names, and file paths stay on your computer.
-</td>
-<td align="center">
-<h3>⚡ No lock-in</h3>
-The skills are plain text files on your computer. Open any of them and read exactly what it does. No login, no SaaS, no cloud.
-</td>
-</tr>
-</table>
+Nanostack is agent-agnostic, but agent hosts do not expose the same control points. The adapter files in [`adapters/`](adapters/) are the source of truth for each host.
+
+| Level | Meaning |
+|-------|---------|
+| **L0 Unsupported** | Nanostack cannot provide this capability on that host. |
+| **L1 Instructions only** | The skill tells the agent what to do, but cannot block it. |
+| **L2 Reported** | Nanostack can detect and report the issue. |
+| **L3 Enforced** | Nanostack can block the action through host hooks or guard scripts. |
+
+A detailed per-host matrix (Bash guard, Write/Edit guard, phase gate) lives further down in [What enforces on which agent](#what-enforces-on-which-agent).
+
+## What changes after installing Nanostack
+
+| Before | With Nanostack |
+|--------|----------------|
+| A vague prompt turns into code immediately. | `/think` turns the idea into a brief, risk, and smallest useful starting point. |
+| The plan disappears in chat. | `/nano` saves a plan with files, risks, checks, and out-of-scope items. |
+| The agent can drift from the request. | `/review` compares what changed against what was agreed. |
+| QA and security happen only if someone remembers. | `/qa` and `/security` are first-class sprint phases. |
+| Shipping explains which files moved. | `/ship` explains why the change exists, how it was checked, and what remains. |
+| Every session starts from zero. | Sprint artifacts and journals preserve decisions in `.nanostack/`. |
+| Enforcement is unclear. | Adapter capabilities show what is blocked, guided, or unsupported for each agent. |
 
 ## Nanostack is right for you if
 
@@ -194,11 +176,19 @@ You:    [builds it]
 You:    /review
         Review: 2 findings (1 auto-fixed, 1 nit). 2 things done well.
 
+You:    /security
+        No secrets, auth changes, or unsafe data flows introduced. Grade A.
+
+You:    /qa
+        Opened the app, posted a reply, refreshed, confirmed the dot
+        appears and clears. 4 checks pass.
+
 You:    /ship
-        Ship: PR created. Tests pass. Done.
+        PR explains why the change exists, how it was checked, and what
+        remains. CI green. Sprint journal saved.
 ```
 
-You said "notifications." The agent said "your users have a freshness problem" and found a solution that ships in an afternoon instead of three weeks. Four commands. That is not a copilot. That is a thinking partner.
+That is the difference: not just code generation, but a delivery loop you can inspect.
 
 ## The sprint
 
@@ -568,14 +558,17 @@ This creates `.claude/settings.json` with permissions so Claude Code doesn't int
 
 Requires [Git for Windows](https://git-scm.com/downloads/win) which includes Git Bash. Claude Code uses Git Bash internally, so the setup script and all bin/ scripts work without changes. Alternatively use WSL or `npx skills add`.
 
-### Requirements
+## Requirements
 
-Nanostack works best with git but adapts automatically when there's no repo. With git, artifacts are stored relative to the git root, the phase gate verifies sprint compliance, scope drift compares planned files against `git diff`, and guard uses the repo boundary for in-project safety. Without git, nanostack detects local mode and adapts the sprint: review checks files from the plan instead of a diff, ship opens the result instead of creating a PR, and all skills use plain language without git terminology.
+- macOS or Linux shell environment (Windows works with Git Bash or WSL)
+- `bash`
+- [`git`](https://git-scm.com/)
+- [`jq`](https://jqlang.github.io/jq/) (`brew install jq`, `apt install jq`, or `choco install jq`)
+- One supported AI coding agent: Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp, or Cline
 
-- [Git](https://git-scm.com/)
-- [jq](https://jqlang.github.io/jq/) for artifact processing (`brew install jq`, `apt install jq`, or `choco install jq`)
-- macOS, Linux or Windows (Git Bash or WSL)
-- One of: Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp, Cline
+Nanostack has no app runtime dependency and no build step. The scripts use standard local tools.
+
+Nanostack works best with git but adapts automatically when there is no repo. With git, artifacts are stored relative to the git root, the phase gate verifies sprint compliance, scope drift compares planned files against `git diff`, and guard uses the repo boundary for in-project safety. Without git, Nanostack detects local mode and adapts the sprint: review checks files from the plan instead of a diff, ship opens the result instead of creating a PR, and all skills use plain language without git terminology.
 
 ## The Zen of Nanostack
 
@@ -792,9 +785,13 @@ Full guide: [`EXTENDING.md`](EXTENDING.md). Working starting point: [`examples/c
 
 ## Privacy
 
-Sprint data (briefs, plans, artifacts, journals) stays on your machine in `.nanostack/`.
+Nanostack itself has no cloud service.
 
-Telemetry is opt-in. Default is `off`. The client always writes local usage events to `~/.nanostack/` so you can inspect your own activity. If you opt into upload, events are sent to the Cloudflare Worker documented in [`TELEMETRY.md`](TELEMETRY.md). The Worker source, schema, privacy invariants, and adversarial smoke tests all live in this repo.
+By default, sprint artifacts, plans, journals, and know-how are written locally under `.nanostack/`.
+
+Nanostack itself stores sprint state, artifacts, and know-how locally. It does not send your code, prompts, project names, or file paths to a Nanostack server. Your AI agent provider may still process the context you give it. Use your agent provider's privacy settings and your own data policies for sensitive work.
+
+Telemetry is opt-in and limited to aggregate usage events. It is not required for the workflow. If you opt in, events go to the Cloudflare Worker documented in [`TELEMETRY.md`](TELEMETRY.md); the Worker source, schema, privacy invariants, and adversarial smoke tests all live in this repo.
 
 Tiers: `off` (default), `anonymous`, `community`. Installs from v0.4 and earlier default to `off` and see no prompt. New installs see a one-time prompt on first skill run.
 
