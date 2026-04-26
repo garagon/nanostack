@@ -228,6 +228,41 @@ nano_phase_graph_json() {
   printf '%s\n' "$default_graph"
 }
 
+# Topologically sort a phase_graph and emit the phase names, one per
+# line. Uses Kahn's algorithm (the same shape as the cycle check in
+# the validator). The graph is assumed valid; pass a graph that has
+# already been validated, or call _nano_phase_graph_is_valid first.
+# Returns 1 if the graph contains a cycle (no progress possible).
+nano_phase_graph_sort() {
+  local graph="${1:?nano_phase_graph_sort requires a graph JSON argument}"
+  command -v jq >/dev/null 2>&1 || return 1
+  echo "$graph" | jq -er '
+    def topo_sort:
+      . as $g
+      | reduce range(0; ($g | length) + 1) as $_ (
+          {sorted: [], remaining: $g};
+          .remaining as $r
+          | if ($r | length) == 0 then .
+            else
+              ($r | [.[] | select(.depends_on | length == 0) | .name]) as $leaves
+              | if ($leaves | length) == 0 then null
+                else
+                  {
+                    sorted: (.sorted + $leaves),
+                    remaining: [
+                      $r[]
+                      | select(.name as $n | ($leaves | index($n)) | not)
+                      | .depends_on |= map(select(. as $d | ($leaves | index($d)) | not))
+                    ]
+                  }
+                end
+            end
+        )
+      | if . == null then error("cycle") else .sorted end;
+    topo_sort | .[]
+  ' 2>/dev/null
+}
+
 # Best-effort skill-path resolution. Core phases live one directory
 # above bin/ (the nanostack repo). Custom phases live under skill_roots
 # from config, falling back to .nanostack/skills, ~/.claude/skills,

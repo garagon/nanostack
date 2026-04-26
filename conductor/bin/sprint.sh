@@ -112,31 +112,54 @@ cmd_start() {
     esac
   done
 
-  # Phase source resolution:
-  #   1. --phases <json|path>           (explicit user input — highest priority)
+  # Phase source resolution (fail-closed at every step):
+  #   1. --phases <json|path>           (explicit user input)
   #   2. .nanostack/config.json:phase_graph   (project-level customization)
   #   3. DEFAULT_PHASES                  (canonical core sprint)
+  #
+  # An explicit input that fails validation aborts; a config
+  # phase_graph that fails validation aborts (does NOT silently fall
+  # back to DEFAULT_PHASES — that would mask a real config bug).
+  # Only "no phase_graph in config" reaches DEFAULT_PHASES.
   local nanostack_root
   nanostack_root="$(cd "$(dirname "$0")/../.." && pwd)"
-  if [ -n "$explicit_phases" ]; then
-    phases="$explicit_phases"
-  elif [ -f "$nanostack_root/bin/lib/phases.sh" ]; then
-    # nano_phase_graph_json returns the config graph if present and
-    # valid, otherwise the canonical default. Either way conductor
-    # gets a graph it can trust.
-    . "$nanostack_root/bin/lib/phases.sh"
-    phases=$(nano_phase_graph_json)
-  fi
-
-  # Validate the chosen graph. Rejects malformed structure, unknown
-  # phase names, dangling depends_on, duplicate names, and cycles.
-  # Falls back to the default graph rather than starting a sprint that
-  # could deadlock or accept stray names.
   if [ -f "$nanostack_root/bin/lib/phases.sh" ]; then
     . "$nanostack_root/bin/lib/phases.sh"
+  fi
+
+  if [ -n "$explicit_phases" ]; then
+    phases="$explicit_phases"
+  else
+    # Try config.phase_graph directly. nano_phase_graph_json's
+    # tolerant fallback would silently use the default for an invalid
+    # config; conductor's contract is fail-closed here.
+    local cfg=""
+    if [ -n "${NANOSTACK_STORE:-}" ] && [ -f "$NANOSTACK_STORE/config.json" ]; then
+      cfg="$NANOSTACK_STORE/config.json"
+    elif [ -n "${HOME:-}" ] && [ -f "$HOME/.nanostack/config.json" ]; then
+      cfg="$HOME/.nanostack/config.json"
+    fi
+    if [ -n "$cfg" ] && command -v jq >/dev/null 2>&1; then
+      local cfg_graph
+      cfg_graph=$(jq -c '.phase_graph // empty' "$cfg" 2>/dev/null || echo "")
+      if [ -n "$cfg_graph" ] && [ "$cfg_graph" != "null" ]; then
+        if ! _nano_phase_graph_is_valid "$cfg_graph" "$cfg"; then
+          echo "ERROR: invalid phase_graph in $cfg (cycle, duplicate name, dangling depends_on, or unknown name)" >&2
+          echo "       Fix the config or pass --phases on the command line." >&2
+          exit 2
+        fi
+        phases="$cfg_graph"
+      fi
+    fi
+  fi
+
+  # Final validation pass on whatever was chosen. For the explicit
+  # branch this is the only validation. For the config branch this is
+  # a redundant safety net. The default graph passes by construction.
+  if [ -f "$nanostack_root/bin/lib/phases.sh" ]; then
     if ! _nano_phase_graph_is_valid "$phases"; then
       echo "ERROR: invalid phase graph (cycle, duplicate name, dangling depends_on, or unknown name)" >&2
-      echo "       Falling back to the default graph or fix --phases / .nanostack/config.json:phase_graph." >&2
+      echo "       Fix --phases / .nanostack/config.json:phase_graph or omit both to use the default." >&2
       exit 2
     fi
   fi
@@ -477,8 +500,20 @@ cmd_batch() {
     fi
   }
 
-  local phases
-  phases=$(jq -r '.phases[].name' "$sprint_dir/sprint.json")
+  # Phase iteration order MUST be a topological sort of the graph.
+  # Without that, a custom graph stored in any other order would emit
+  # batches that violate dependencies (e.g. ship before audit-licenses
+  # because ship appeared first in the array). Use the registry's
+  # topological sorter when available; the graph was already validated
+  # at cmd_start, so the sort cannot fail with a cycle here.
+  local phases graph_json
+  graph_json=$(jq -c '.phases' "$sprint_dir/sprint.json")
+  if command -v nano_phase_graph_sort >/dev/null 2>&1; then
+    phases=$(nano_phase_graph_sort "$graph_json" 2>/dev/null) || phases=""
+  fi
+  if [ -z "$phases" ]; then
+    phases=$(jq -r '.phases[].name' "$sprint_dir/sprint.json")
+  fi
 
   # Partition into execution batches
   # Track all phases scheduled in prior batches (considered "will be done")
