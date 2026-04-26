@@ -22,3 +22,20 @@ jobs:
         run: |
           chmod +x ci/e2e-user-flows.sh
           ci/e2e-user-flows.sh
+
+  e2e-delivery-matrix:
+    name: E2E delivery matrix (9 cells)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Complement to e2e-user-flows: tests every cell of the
+    # profile/run-mode/skip-trio matrix in isolation. Faster than the
+    # full user-journey harness, useful as a smoke test before
+    # tagging.
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq is present
+        run: jq --version
+      - name: Run delivery matrix
+        run: |
+          chmod +x ci/e2e-delivery-matrix.sh
+          ci/e2e-delivery-matrix.sh
