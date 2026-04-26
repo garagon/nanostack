@@ -2701,6 +2701,74 @@ jobs:
           # The smoke runner picks the helper from its own dir.
           "$tmp/audit-licenses/bin/smoke.sh"
 
+  lifecycle-custom-phase-outputs:
+    name: analytics + sprint-journal + discard-sprint emit custom phase data
+    runs-on: ubuntu-latest
+    # PR 4 of the Custom Stack Framework v1 round. Codex's retest
+    # documented that analytics returned total=0 even with custom
+    # artifacts saved, sprint-journal silently omitted custom phase
+    # sections, and default discard missed custom artifacts. PR 1
+    # already fixed default discard via the registry migration; PR 4
+    # finishes analytics + journal and locks the round-trip.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Migrated scripts source the phase registry
+        run: |
+          set -e
+          fail=0
+          for f in bin/analytics.sh bin/sprint-journal.sh; do
+            if ! grep -qE 'lib/phases\.sh' "$f"; then
+              echo "FAIL: $f does not source bin/lib/phases.sh"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Lifecycle round-trip on a real /tmp project
+        run: |
+          set -e
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          cd "$tmp"
+          git init -q
+          mkdir -p .nanostack
+          export NANOSTACK_STORE="$tmp/.nanostack"
+
+          # Register a custom phase, save one core + one custom artifact.
+          printf '%s' '{"custom_phases":["audit-licenses"]}' > .nanostack/config.json
+          "$GITHUB_WORKSPACE/bin/save-artifact.sh" plan \
+            '{"phase":"plan","summary":{"goal":"x"},"context_checkpoint":{"summary":"y"}}' >/dev/null
+          "$GITHUB_WORKSPACE/bin/save-artifact.sh" audit-licenses \
+            '{"phase":"audit-licenses","summary":{"status":"OK","headline":"47 deps scanned, 0 GPL/AGPL flagged"},"context_checkpoint":{"summary":"ok"}}' >/dev/null
+
+          # analytics: total includes custom; core_total/custom_total split.
+          out=$("$GITHUB_WORKSPACE/bin/analytics.sh" --json)
+          echo "$out" | jq -e '.sprints.plan == 1' >/dev/null
+          echo "$out" | jq -e '.sprints.core_total == 1' >/dev/null
+          echo "$out" | jq -e '.sprints."custom"."audit-licenses" == 1' >/dev/null
+          echo "$out" | jq -e '.sprints.custom_total == 1' >/dev/null
+          echo "$out" | jq -e '.sprints.total == 2' >/dev/null
+
+          # sprint-journal: emits /<phase> section with status + headline.
+          journal=$("$GITHUB_WORKSPACE/bin/sprint-journal.sh")
+          test -f "$journal"
+          grep -qF '## /audit-licenses' "$journal"
+          grep -qF '**Status:** OK' "$journal"
+          grep -qF '47 deps scanned, 0 GPL/AGPL flagged' "$journal"
+          grep -qF '**Artifact:**' "$journal"
+
+          # discard-sprint: default --dry-run includes the custom file.
+          out=$("$GITHUB_WORKSPACE/bin/discard-sprint.sh" --dry-run)
+          echo "$out" | grep -qF 'audit-licenses'
+          echo "$out" | grep -qF 'plan'
+
+          # Backward compat: with no custom_phases registered, analytics
+          # JSON's `total` equals `core_total` and `custom` is {}.
+          echo '{}' > .nanostack/config.json
+          out=$("$GITHUB_WORKSPACE/bin/analytics.sh" --json)
+          echo "$out" | jq -e '.sprints.custom == {}' >/dev/null
+          echo "$out" | jq -e '.sprints.custom_total == 0' >/dev/null
+          echo "$out" | jq -e '.sprints.total == .sprints.core_total' >/dev/null
+
   guard-rule-ids-unique:
     name: Guard rule ids are unique
     runs-on: ubuntu-latest

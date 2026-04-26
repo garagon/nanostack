@@ -6,6 +6,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
+. "$SCRIPT_DIR/lib/phases.sh"
 
 STORE="$NANOSTACK_STORE"
 KNOW_HOW="$NANOSTACK_STORE/know-how"
@@ -164,6 +165,39 @@ numfield() {
     [ -n "$PR" ] && echo "**PR:** #$PR | **Status:** $STATUS | **CI:** $CI"
     echo ""
   fi
+
+  # Custom phases — generic sections after the core ones. Skills that
+  # save artifacts with .summary.status / .summary.headline /
+  # .summary.result / .summary.next_action get those fields surfaced.
+  # If none of those are populated, the section falls back to a
+  # compact JSON dump of the .summary object so the entry is never
+  # silently empty.
+  CUSTOM_PHASES=$(nano_custom_phases 2>/dev/null)
+  for phase in $CUSTOM_PHASES; do
+    [ -z "$phase" ] && continue
+    CUSTOM_FILE=$(find_latest "$phase")
+    [ -z "$CUSTOM_FILE" ] && continue
+    echo "## /$phase"
+    echo ""
+    C_STATUS=$(field '.summary.status' "$CUSTOM_FILE")
+    C_HEADLINE=$(field '.summary.headline' "$CUSTOM_FILE")
+    C_RESULT=$(field '.summary.result' "$CUSTOM_FILE")
+    C_NEXT=$(field '.summary.next_action' "$CUSTOM_FILE")
+    [ -n "$C_STATUS" ] && echo "**Status:** $C_STATUS"
+    if [ -n "$C_HEADLINE" ]; then
+      echo "**Summary:** $C_HEADLINE"
+    elif [ -n "$C_RESULT" ]; then
+      echo "**Summary:** $C_RESULT"
+    elif [ -z "$C_STATUS" ]; then
+      # No structured field — emit a compact JSON dump so the section
+      # still carries information.
+      C_JSON=$(jq -c '.summary // {}' "$CUSTOM_FILE" 2>/dev/null || echo "{}")
+      echo "**Summary:** \`$C_JSON\`"
+    fi
+    [ -n "$C_NEXT" ] && echo "**Next:** $C_NEXT"
+    echo "**Artifact:** $CUSTOM_FILE"
+    echo ""
+  done
 
   # Lessons section (empty, for manual fill)
   echo "## Lessons"
