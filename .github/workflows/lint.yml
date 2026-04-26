@@ -2259,6 +2259,49 @@ jobs:
             exit 1
           fi
 
+  think-founder-lens-deterministic:
+    name: /think founder_validation lens is deterministic
+    runs-on: ubuntu-latest
+    # PR #193 made think/SKILL.md route founder_validation to `yc` by
+    # default and `garry` only via explicit --preset=garry. The reference
+    # doc that the skill tells readers to consult still said "yc or garry"
+    # until #194. An agent reading the reference can otherwise re-introduce
+    # the variability. Lock the deterministic phrasing in both files.
+    steps:
+      - uses: actions/checkout@v4
+      - name: think/SKILL.md and think/references/archetypes.md do not say "yc or garry"
+        run: |
+          set -e
+          fail=0
+          for f in think/SKILL.md think/references/archetypes.md; do
+            # Match the wording loosely: yc, optional whitespace/punctuation,
+            # "or", optional whitespace, garry. Catches "yc or garry",
+            # "`yc` or `garry`", "yc / garry" via the second pattern below.
+            if grep -niE '\byc\b[^a-z0-9]*or[^a-z0-9]+\bgarry\b' "$f"; then
+              echo "FAIL: $f still suggests yc OR garry; founder_validation must be deterministic"
+              fail=1
+            fi
+            if grep -niE '\byc\b[[:space:]]*/[[:space:]]*\bgarry\b' "$f"; then
+              echo "FAIL: $f still suggests yc / garry; founder_validation must be deterministic"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Both files state the deterministic rule explicitly
+        run: |
+          set -e
+          fail=0
+          for f in think/SKILL.md think/references/archetypes.md; do
+            # Positive check: the file mentions garry only as the explicit-flag
+            # path. Loose pattern: "garry" within ~80 chars of "--preset=garry"
+            # or "explicit". One of the two must hit.
+            if ! grep -niE 'garry.{0,80}(--preset=garry|explicit)|(--preset=garry|explicit).{0,80}garry' "$f"; then
+              echo "FAIL: $f does not state that garry is reachable only via the explicit --preset flag"
+              fail=1
+            fi
+          done
+          exit $fail
+
   think-builder-archetypes-do-not-force-startup:
     name: /think Builder archetypes are not forced into Startup mode
     runs-on: ubuntu-latest

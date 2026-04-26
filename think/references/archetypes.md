@@ -253,7 +253,7 @@ Presets remain explicit user choice. Archetypes only suggest an internal default
 
 | Archetype | Internal lens when no `--preset` |
 |---|---|
-| `founder_validation` | `yc` or `garry`, softened by Guided profile |
+| `founder_validation` | `yc` by default; `garry` only via explicit `--preset=garry`. Softened by Guided profile. |
 | `cli_tooling` | `devex` |
 | `api_backend` | `eng` |
 | `landing_experience` | `design` |
