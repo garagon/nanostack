@@ -146,8 +146,8 @@ A custom phase with no artifact for the current project produces no section.
 
 1. `--phases <json>` — inline JSON array passed on the command line.
 2. `--phases <path>` — path to a file containing a JSON array. Conductor reads the file when `<path>` is an existing file; otherwise it treats the value as inline JSON.
-3. `phase_graph` field in `.nanostack/config.json`. The registry reads this through `nano_phase_graph_json`, which already validates the graph and falls back to the default if the config is malformed.
-4. `DEFAULT_PHASES` — the canonical seven-node sprint (`think → plan → build → review/qa/security → ship`).
+3. `phase_graph` field in `.nanostack/config.json`. Conductor reads this field directly with `jq`, validates it, and aborts sprint creation with exit `2` if the graph is malformed (cycle, duplicate name, dangling `depends_on`, or unknown name). Silently falling back to the default would mask a real config bug, so conductor stays fail-closed here. The registry's tolerant helper `nano_phase_graph_json` keeps its fallback semantics for other callers (resolver, future consumers); only the conductor needs the strict path.
+4. `DEFAULT_PHASES` — the canonical seven-node sprint (`think → plan → build → review/qa/security → ship`). Reached only when no `--phases` flag was passed AND `.nanostack/config.json` has no `phase_graph` field.
 
 ### Validation
 
