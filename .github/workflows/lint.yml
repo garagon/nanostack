@@ -821,6 +821,44 @@ jobs:
           echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
           exit $fail
 
+  think-preset-no-dump:
+    name: /think preset loading without output noise
+    runs-on: ubuntu-latest
+    # /think vNext PR 4. Preset markdown is internal voice instruction,
+    # not user-facing content. Dumping it via `cat "$PRESET_FILE"` puts
+    # 50+ lines of rules on the first screen the user sees, which is
+    # noise for technical users and overwhelm for non-technical ones.
+    # The skill must read the preset internally and print one short
+    # headline.
+    steps:
+      - uses: actions/checkout@v4
+      - name: think/SKILL.md does not dump preset files
+        run: |
+          set -e
+          fail=0
+          # Forbidden literal forms the spec called out:
+          if grep -nE 'cat[[:space:]]+"\$PRESET_FILE"' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must not 'cat \$PRESET_FILE' (regression: floods first screen with rules)"
+            fail=1
+          fi
+          if grep -nE 'cat[[:space:]]+"\$HOME/\.claude/skills/nanostack/think/presets/default\.md"' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must not cat default.md either"
+            fail=1
+          fi
+          # Profile-keyed headline: at least mention 'Preset:' (professional)
+          # AND 'guided' (so the doc covers both voices).
+          if ! grep -q 'Preset:' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must show a one-line 'Preset: <name>.' headline"
+            fail=1
+          fi
+          # Spec rule: skill must say it loads the preset internally,
+          # not dump it.
+          if ! grep -qE 'Load the preset internally|read the file' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must declare that it loads the preset internally"
+            fail=1
+          fi
+          exit $fail
+
   think-autopilot-brief-gate:
     name: /think autopilot brief gate
     runs-on: ubuntu-latest
