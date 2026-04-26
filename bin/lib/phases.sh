@@ -289,7 +289,29 @@ nano_phase_skill_path() {
   if [ -n "$config" ] && command -v jq >/dev/null 2>&1; then
     roots=$(jq -r '.skill_roots // [] | .[]' "$config" 2>/dev/null)
   fi
-  local default_roots=".nanostack/skills $HOME/.claude/skills $HOME/.agents/skills"
+  # Build the search order from most-specific to least:
+  #   1. configured skill_roots (user override)
+  #   2. <store>/skills — the resolved store, same path bin/create-skill.sh
+  #      writes to. This is the load-bearing one: a scaffold from a git
+  #      subdir or a no-git project lives here, not under cwd/.nanostack.
+  #   3. <config-dir>/skills — covers a global config under $HOME/.nanostack
+  #      that the resolver picked up via _nano_phases_resolve_config.
+  #   4. cwd-relative .nanostack/skills (legacy, retained for back-compat).
+  #   5. $HOME/.claude/skills + $HOME/.agents/skills (agent install
+  #      locations for skills shipped outside .nanostack).
+  local default_roots=""
+  if [ -n "${NANOSTACK_STORE:-}" ]; then
+    default_roots="$NANOSTACK_STORE/skills"
+  fi
+  if [ -n "$config" ]; then
+    local config_dir
+    config_dir=$(dirname "$config")
+    case " $default_roots " in
+      *" $config_dir/skills "*) ;;
+      *) default_roots="${default_roots:+$default_roots }$config_dir/skills" ;;
+    esac
+  fi
+  default_roots="${default_roots:+$default_roots }.nanostack/skills $HOME/.claude/skills $HOME/.agents/skills"
   for root in $roots $default_roots; do
     case "$root" in
       "~/"*) root="$HOME/${root#~/}" ;;

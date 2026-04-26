@@ -168,13 +168,54 @@ A failed validation aborts with exit `2` and the message `ERROR: invalid phase g
 `cmd_batch`'s `get_concurrency` reads the `concurrency:` frontmatter field from a phase's `SKILL.md`. Lookup order:
 
 1. Built-in core skill at `<nanostack_root>/<phase>/SKILL.md`.
-2. Custom skill resolved via `nano_phase_skill_path` — walks `.nanostack/skills/`, `~/.claude/skills/`, `~/.agents/skills/`, plus any `skill_roots` configured in `.nanostack/config.json`.
+2. Custom skill resolved via `nano_phase_skill_path`. Search order, most-specific to least: configured `skill_roots` from `.nanostack/config.json`, then `<store>/skills/` (where `<store>` comes from `bin/lib/store-path.sh` — the same path `bin/create-skill.sh` writes to), then `<config-dir>/skills/` (covers a global config under `$HOME/.nanostack/`), then the legacy cwd-relative `.nanostack/skills/`, then `$HOME/.claude/skills/` and `$HOME/.agents/skills/` for skills installed outside `.nanostack/`. The store-path-relative entries are the load-bearing ones: a scaffold from a git subdirectory or a no-git project lives in the resolved store, not under cwd.
 3. Conductor-only `build` stage returns `write` (no SKILL.md).
 4. Unknown phase falls back to `write` and emits a stderr warning. The conservative default avoids accidentally scheduling a custom write-phase as parallel-read.
 
 ### Stability
 
 The output of `sprint.sh status` is keyed on phase names from the chosen graph. A custom graph that includes `audit-licenses` produces an `audit-licenses` entry under `.phases`, exactly as if it were a core phase. `sprint.sh batch` emits the same `{batch, type, phases}` JSON objects whether the phases are core, custom, or a mix.
+
+## Tooling
+
+`bin/create-skill.sh` scaffolds a custom skill and (by default) registers it as a custom phase in one shot.
+
+```bash
+bin/create-skill.sh license-audit --concurrency read --depends-on build
+```
+
+What it does:
+
+- Validates the skill name against the registry's regex (`^[a-z][a-z0-9-]*$`) and rejects any name that collides with a core phase.
+- Resolves the store path the same way every lifecycle script does (via `bin/lib/store-path.sh`): `$NANOSTACK_STORE` if set, otherwise the git repo root's `.nanostack/`, otherwise `$HOME/.nanostack/`. The skill lands at `<store>/skills/<name>/` and the registration is written to `<store>/config.json`. Same path that `save-artifact`, `resolve`, `analytics`, and `conductor` read from. A user invoking the tool from a git subdirectory writes to the repo root (not the subdir); a user without git writes to `$HOME/.nanostack/` (not the cwd).
+- Copies the bundled template (`examples/custom-skill-template/audit-licenses` by default; override with `--from <dir>`).
+- Substitutes the source skill name with `<name>` in `SKILL.md`, `agents/openai.yaml`, and `README.md`.
+- Optionally rewrites the frontmatter `concurrency:` field (`--concurrency read|write|exclusive`) and `depends_on:` field (`--depends-on <phase>`, repeatable).
+- Adds `<name>` to `.custom_phases` in `<store>/config.json`. Idempotent — already-present names are not duplicated. `--no-register` skips this step.
+
+`bin/check-custom-skill.sh` validates a copied or scaffolded skill against the framework contract.
+
+```bash
+bin/check-custom-skill.sh .nanostack/skills/license-audit
+```
+
+What it checks:
+
+- `SKILL.md` exists with `name:`, `description:`, and `concurrency:` frontmatter (`concurrency` must be `read`, `write`, or `exclusive`).
+- The frontmatter `name:` matches the directory basename. A copied template that still says `name: audit-licenses` inside `license-audit/` would expose `/audit-licenses` to the agent — not what the user intended.
+- `agents/openai.yaml` exists and contains `display_name`, `short_description`, `default_prompt` under `interface:`. The validator uses narrow grep checks instead of a YAML library so it stays portable on any machine with bash + jq + standard tools (no PyYAML or external runtime needed).
+- The `display_name` references the new skill name, catching the same kind of drift in the OpenAI-discovery surface.
+- Every `bin/*.sh` passes `bash -n`.
+- The skill directory name matches the phase regex.
+- The phase is registered in `<store>/config.json:custom_phases` so `save-artifact.sh` and `resolve.sh` accept it. `<store>` is resolved via `bin/lib/store-path.sh` — same path the scaffolder writes to.
+- `SKILL.md` does not embed `./examples/custom-skill-template/...` paths (would break after copy).
+- `save-artifact.sh` round-trips a smoke artifact and `find-artifact.sh` reads it back. The smoke artifact is removed after the check.
+
+Output is one `OK` or `FAIL` line per check, ending in `OK: <name> passed N checks.` or `FAIL: <K> of <N> checks failed for <name>.`. Exit `0` on full pass, `1` on any failure.
+
+## End-to-end coverage
+
+`ci/e2e-custom-stack-flows.sh` runs the full new-user journey on a real `/tmp` project: scaffold → check → run helper → save → find → resolve → journal → analytics → discard → conductor start → conductor batch → openai.yaml present → no example-path leak → subdirectory scaffold → no-git scaffold → frontmatter-name drift rejected. Fifteen cells, thirty assertions. The `e2e-custom-stack` GitHub Actions job runs it on `workflow_dispatch`. When the harness is green, the framework claims in `README.md` and `EXTENDING.md` are grounded in working code.
 
 ## Stability
 

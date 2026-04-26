@@ -104,6 +104,28 @@ jobs:
           chmod +x ci/e2e-think-archetypes.sh
           ci/e2e-think-archetypes.sh
 
+  e2e-custom-stack:
+    name: E2E Custom Stack Framework v1 (15-cell journey)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Custom Stack Framework v1 PR 6. Runs the full new-user journey:
+    # bin/create-skill.sh scaffolds a skill, bin/check-custom-skill.sh
+    # validates it, the lifecycle scripts surface the custom phase
+    # (resolver, journal, analytics, default discard), the conductor
+    # accepts a --phases graph that includes it, and the cmd_batch
+    # honors the custom skill's concurrency. Lint covers each piece;
+    # this harness proves they compose into one workflow.
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq + node available
+        run: |
+          jq --version
+          node --version
+      - name: Run custom-stack E2E
+        run: |
+          chmod +x ci/e2e-custom-stack-flows.sh
+          ci/e2e-custom-stack-flows.sh
+
   e2e-onboarding-flows:
     name: E2E /nano-run vNext flows (9 cells)
     runs-on: ubuntu-latest
