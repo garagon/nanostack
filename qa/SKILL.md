@@ -224,7 +224,7 @@ After QA is complete and the artifact is saved:
 
 Use `.user_message` for the prose and `.next_phase` for the phase name. The legacy positional form (`next-step.sh qa`) is still supported.
 
-When `profile == "guided"`, also include the four blocks from `reference/session-state-contract.md` (what was checked, safe to try, one next action, what remains unverified) at the top of the user-facing output. Use the wording rules in `reference/plain-language-contract.md` (no "QA", no "security audit", no "phase"; use "test pass", "safety check", "step"). Example:
+When `profile == "guided"`, the user-facing output follows the four-block skeleton in `reference/plain-language-contract.md` (Result / How to try / What was checked / What remains). Whether it is safe to try goes inside Result. Use the wording rules in the same contract (no "QA", no "security audit", no "phase"; use "test pass", "safety check", "step"). Example:
 
 <!-- guided-output:start -->
 ```
