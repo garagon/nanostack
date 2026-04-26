@@ -1274,9 +1274,15 @@ jobs:
             'Ship el puntito' \
             'Nothing leaves unless you opt in' \
             'post-deploy canary' \
+            'Post-deploy: smoke test clean' \
             'Four commands' \
+            'Six commands, start to shipped' \
             'That is not a copilot' \
-            'Zero dependencies. Zero build step'; do
+            'Zero dependencies. Zero build step' \
+            'Antigravity, Amp, and Cline' \
+            'Antigravity, Amp, or Cline' \
+            'Antigravity, Amp y Cline' \
+            'Antigravity, Amp, Cline'; do
             if grep -nF "$stale" README.md README.es.md 2>/dev/null; then
               echo "FAIL: stale string present: $stale"
               fail=1
