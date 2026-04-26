@@ -242,10 +242,10 @@
         },
         {
           "id": "G-030",
-          "pattern": "(cat|less|more|view|head|tail|vi|vim|nano|code|grep|egrep|fgrep|rg|ag|jq|yq|awk|sed|od|xxd|hexdump|strings|sort|uniq|wc|file|stat|tr)\\s+([^|;]*\\s)?[^|;]*\\.(env|env\\.[a-z]+|pem|key|p12|pfx|credentials|keystore|secrets)([[:space:]]|$)",
+          "pattern": "(cat|less|more|view|head|tail|vi|vim|nano|code|grep|egrep|fgrep|rg|ag|jq|yq|awk|sed|od|xxd|hexdump|strings|sort|uniq|wc|file|stat|tr)\\s+([^|;]*\\s)?[^|;]*\\.(env|env\\.local|env\\.production|env\\.staging|env\\.dev|env\\.development|env\\.test|pem|key|p12|pfx|credentials|keystore|secrets)([[:space:]]|$)",
           "category": "secrets-access",
           "description": "Reading or editing secrets files directly",
-          "alternative": "Use the project's secrets management. Do not read .env or key files into the agent transcript at all."
+          "alternative": "Use the project's secrets management. Do not read .env or key files into the agent transcript at all. Templates like .env.example, .env.sample, and .env.template are allowed."
         },
         {
           "id": "G-031",
@@ -255,25 +255,32 @@
           "alternative": "Read the specific variable you need with echo \"$VAR_NAME\". Do not pipe full env into the model."
         },
         {
-          "id": "G-031",
+          "id": "G-032",
           "pattern": "sudo\\s+(rm|chmod|chown|kill|systemctl|service|apt|yum)",
           "category": "privilege-escalation",
           "description": "Running destructive commands with elevated privileges",
           "alternative": "Run without sudo inside the project directory"
         },
         {
-          "id": "G-032",
+          "id": "G-033",
           "pattern": "docker\\s+run.*(--privileged|-v\\s+/[^t])",
           "category": "container-escape",
           "description": "Docker with privileged mode or host root mount",
           "alternative": "Use specific volume mounts and drop --privileged"
         },
         {
-          "id": "G-033",
+          "id": "G-034",
           "pattern": "(0\\.0\\.0\\.0|INADDR_ANY|--host\\s+0\\.0)",
           "category": "network-exposure",
           "description": "Binding to all interfaces exposes service to the network",
           "alternative": "Bind to 127.0.0.1 for local development"
+        },
+        {
+          "id": "G-035",
+          "pattern": "(cat|less|more|view|head|tail|vi|vim|nano|code|grep|egrep|fgrep|rg|ag|jq|yq|awk|sed|od|xxd|hexdump|strings|sort|uniq|wc|file|stat|tr)\\s+([^|;]*[[:space:]/])?(service[-_]?account|firebase[-_]?adminsdk|google[-_]?credentials|gcp[-_]?credentials|aws[-_]?credentials|supabase[-_]?service[-_]?role|client[-_]?secret[s]?|credentials|credential|secrets|secret)[^/[:space:]]*\\.json([[:space:]]|$)",
+          "category": "secrets-access",
+          "description": "Reading or editing JSON credential files directly",
+          "alternative": "Use the project's secrets management. Do not read credential JSON into the agent transcript."
         }
       ]
     },

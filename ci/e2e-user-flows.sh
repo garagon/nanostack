@@ -210,7 +210,13 @@ flow_bash_guard() {
     "env" \
     "printenv" \
     "git reset --hard" \
-    "git push --force"
+    "git push --force" \
+    "cat credentials.json" \
+    "jq . secrets.json" \
+    "cat service-account.json" \
+    "cat firebase-adminsdk.json" \
+    "cat .env.local" \
+    "cat .env.production"
   do
     assert_false "guard blocks: $cmd" "$guard" "$cmd"
   done
@@ -220,7 +226,12 @@ flow_bash_guard() {
     "git push --force-with-lease" \
     "git status" \
     "cat README.md" \
-    "rm -rf ./docs"
+    "rm -rf ./docs" \
+    "cat .env.example" \
+    "cat .env.sample" \
+    "cat .env.template" \
+    "jq . tsconfig.json" \
+    "jq . package.json"
   do
     assert_true "guard allows: $cmd" "$guard" "$cmd"
   done
