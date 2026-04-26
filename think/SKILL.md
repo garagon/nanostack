@@ -102,19 +102,28 @@ Parsing rules:
 - `/think "idea"` (no flag) → preset is `default`.
 - Unknown value → tell the user `Unknown preset '<name>'. Valid: default, yc, garry, eng, design, devex. Running with default.` and proceed with `default`.
 
-Load and display the preset so the user sees which voice you are about to use:
+Load the preset internally and show the user only a short headline — the kind of message they actually need ("Preset: eng. I'll pressure-test architecture, failure modes, rollback and tests."). Do NOT dump the preset file to the conversation. The preset markdown is internal voice instruction, not user-facing content; printing it floods the first screen with rules the user did not ask for.
 
-```bash
-PRESET="${PRESET:-default}"
-PRESET_FILE="$HOME/.claude/skills/nanostack/think/presets/$PRESET.md"
-if [ -f "$PRESET_FILE" ]; then
-  echo "--- preset: $PRESET ---"
-  cat "$PRESET_FILE"
-else
-  echo "preset '$PRESET' not found, using default"
-  cat "$HOME/.claude/skills/nanostack/think/presets/default.md"
-fi
+Read the file with the `Read` tool against the absolute path:
+
+```text
+$HOME/.claude/skills/nanostack/think/presets/<PRESET>.md
 ```
+
+Once the contents are in your context, summarize the preset to the user in **one short sentence** keyed on the active profile:
+
+| Profile | Style of headline |
+|---|---|
+| `professional` | "Preset: eng. I'll pressure-test architecture, failure modes, rollback and tests." (one line, names the lens, no preset body) |
+| `guided` | "Voy a ayudarte a elegir la versión más chica que vale la pena construir." (one line, plain language, do not mention "preset" or "voice rules") |
+
+If the preset name is unknown: warn briefly and fall back to `default`. Do not dump `default.md` either.
+
+```text
+Unknown preset 'foo'. Falling back to default.
+```
+
+Then keep working. The user sees one line, not the rule book.
 
 Apply the preset's **Voice** rules to every subsequent message in this skill run: diagnostic questions, ambition check, premise challenge, brief, closing. Apply the **Diagnostic framing** notes during Phase 2. Apply the **Closing** style at Phase 7.
 
