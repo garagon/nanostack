@@ -2769,6 +2769,110 @@ jobs:
           echo "$out" | jq -e '.sprints.custom_total == 0' >/dev/null
           echo "$out" | jq -e '.sprints.total == .sprints.core_total' >/dev/null
 
+  conductor-custom-graph:
+    name: conductor parses --phases and reads phase_graph from config
+    runs-on: ubuntu-latest
+    # PR 5 of the Custom Stack Framework v1 round. Codex's retest
+    # showed that conductor accepted --phases syntactically but
+    # always used DEFAULT_PHASES and that cmd_batch only resolved
+    # built-in skill paths. This lock proves the runtime contract:
+    #   1. --phases inline JSON wins
+    #   2. --phases from a file works
+    #   3. config.phase_graph drives the sprint when no --phases
+    #   4. cmd_batch reads custom skill concurrency from skill_roots
+    #   5. cycles + duplicate names are rejected up-front (exit 2)
+    steps:
+      - uses: actions/checkout@v4
+      - name: cmd_start sources the phase registry
+        run: |
+          set -e
+          if ! grep -qE 'lib/phases\.sh' conductor/bin/sprint.sh; then
+            echo "FAIL: conductor/bin/sprint.sh does not source bin/lib/phases.sh"
+            exit 1
+          fi
+          # cmd_start must call _nano_phase_graph_is_valid OR
+          # nano_phase_graph_json — otherwise --phases bypasses
+          # validation and the bad-graph cases below would pass.
+          if ! grep -qE '_nano_phase_graph_is_valid|nano_phase_graph_json' conductor/bin/sprint.sh; then
+            echo "FAIL: conductor does not call into the registry validator"
+            exit 1
+          fi
+      - name: Round-trip the conductor custom-graph contract
+        run: |
+          set -e
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          cd "$tmp"
+          git init -q
+          mkdir -p .nanostack/skills/audit-licenses
+          export NANOSTACK_STORE="$tmp/.nanostack"
+
+          # Custom skill on disk so cmd_batch can read its concurrency.
+          cat > .nanostack/skills/audit-licenses/SKILL.md <<'SKILLEOF'
+          name: audit-licenses
+          concurrency: read
+          depends_on: [build]
+          SKILLEOF
+          # Frontmatter delimiters need to live at column 0 inside the
+          # heredoc; the YAML lint will reject literal `---` there. Use
+          # printf to inject them around the body.
+          printf '%s\n' '---' > /tmp/skill-fm.txt
+          cat .nanostack/skills/audit-licenses/SKILL.md >> /tmp/skill-fm.txt
+          printf '%s\n' '---' >> /tmp/skill-fm.txt
+          mv /tmp/skill-fm.txt .nanostack/skills/audit-licenses/SKILL.md
+
+          # Case A: --phases inline JSON drives the sprint topology.
+          printf '%s' '{"custom_phases":["audit-licenses"]}' > .nanostack/config.json
+          "$GITHUB_WORKSPACE/conductor/bin/sprint.sh" start \
+            --phases '[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"audit-licenses","depends_on":["build"]},{"name":"ship","depends_on":["audit-licenses"]}]' \
+            >/dev/null
+          status=$("$GITHUB_WORKSPACE/conductor/bin/sprint.sh" status)
+          echo "$status" | jq -e '.phases | has("audit-licenses")' >/dev/null
+          echo "$status" | jq -e '.phases | length == 5' >/dev/null
+
+          # Case B: cmd_batch reads custom skill concurrency=read.
+          out=$("$GITHUB_WORKSPACE/conductor/bin/sprint.sh" batch 2>&1)
+          # audit-licenses must appear in a batch with type=read.
+          if ! echo "$out" | grep -qE '"type":"read".*"phases":\[[^]]*"audit-licenses"'; then
+            if ! echo "$out" | grep -qE '"phases":\[[^]]*"audit-licenses"[^]]*\].*"type":"read"'; then
+              echo "FAIL: audit-licenses not scheduled as concurrency=read"
+              echo "$out"
+              exit 1
+            fi
+          fi
+
+          # Case C: --phases from a file path.
+          echo '[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"ship","depends_on":["build"]}]' > /tmp/cond-graph.json
+          "$GITHUB_WORKSPACE/conductor/bin/sprint.sh" start --phases /tmp/cond-graph.json >/dev/null
+          "$GITHUB_WORKSPACE/conductor/bin/sprint.sh" status \
+            | jq -e '.phases | length == 4' >/dev/null
+          rm -f /tmp/cond-graph.json
+
+          # Case D: phase_graph from config drives the sprint when no
+          # --phases is given.
+          printf '%s' '{"custom_phases":["audit-licenses"],"phase_graph":[{"name":"think","depends_on":[]},{"name":"audit-licenses","depends_on":["think"]},{"name":"ship","depends_on":["audit-licenses"]}]}' > .nanostack/config.json
+          "$GITHUB_WORKSPACE/conductor/bin/sprint.sh" start >/dev/null
+          "$GITHUB_WORKSPACE/conductor/bin/sprint.sh" status \
+            | jq -e '.phases | length == 3' >/dev/null
+
+          # Case E: cycle is rejected with exit 2 (no sprint created).
+          out=$("$GITHUB_WORKSPACE/conductor/bin/sprint.sh" start \
+            --phases '[{"name":"think","depends_on":["plan"]},{"name":"plan","depends_on":["think"]}]' 2>&1) && {
+              echo "FAIL: conductor accepted a cycle"
+              exit 1
+            }
+          echo "$out" | grep -qF 'invalid phase graph' || {
+            echo "FAIL: rejection message does not say 'invalid phase graph'"
+            exit 1
+          }
+
+          # Case F: duplicate name is rejected.
+          "$GITHUB_WORKSPACE/conductor/bin/sprint.sh" start \
+            --phases '[{"name":"think","depends_on":[]},{"name":"think","depends_on":[]}]' 2>&1 && {
+              echo "FAIL: conductor accepted duplicate names"
+              exit 1
+            }
+
   guard-rule-ids-unique:
     name: Guard rule ids are unique
     runs-on: ubuntu-latest

@@ -90,6 +90,57 @@ find_sprint() {
 # ─── start ───────────────────────────────────────────────────
 cmd_start() {
   local phases="$DEFAULT_PHASES"
+  local explicit_phases=""
+
+  # Parse args. Today only --phases is supported; future flags can hook in here.
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --phases)
+        if [ -z "${2:-}" ]; then
+          echo "ERROR: --phases requires a JSON array or a path to a JSON file" >&2
+          exit 2
+        fi
+        # If $2 is an existing file, read it; otherwise treat as inline JSON.
+        if [ -f "$2" ]; then
+          explicit_phases=$(cat "$2")
+        else
+          explicit_phases="$2"
+        fi
+        shift 2
+        ;;
+      *) shift ;;
+    esac
+  done
+
+  # Phase source resolution:
+  #   1. --phases <json|path>           (explicit user input — highest priority)
+  #   2. .nanostack/config.json:phase_graph   (project-level customization)
+  #   3. DEFAULT_PHASES                  (canonical core sprint)
+  local nanostack_root
+  nanostack_root="$(cd "$(dirname "$0")/../.." && pwd)"
+  if [ -n "$explicit_phases" ]; then
+    phases="$explicit_phases"
+  elif [ -f "$nanostack_root/bin/lib/phases.sh" ]; then
+    # nano_phase_graph_json returns the config graph if present and
+    # valid, otherwise the canonical default. Either way conductor
+    # gets a graph it can trust.
+    . "$nanostack_root/bin/lib/phases.sh"
+    phases=$(nano_phase_graph_json)
+  fi
+
+  # Validate the chosen graph. Rejects malformed structure, unknown
+  # phase names, dangling depends_on, duplicate names, and cycles.
+  # Falls back to the default graph rather than starting a sprint that
+  # could deadlock or accept stray names.
+  if [ -f "$nanostack_root/bin/lib/phases.sh" ]; then
+    . "$nanostack_root/bin/lib/phases.sh"
+    if ! _nano_phase_graph_is_valid "$phases"; then
+      echo "ERROR: invalid phase graph (cycle, duplicate name, dangling depends_on, or unknown name)" >&2
+      echo "       Falling back to the default graph or fix --phases / .nanostack/config.json:phase_graph." >&2
+      exit 2
+    fi
+  fi
+
   local sprint_id="${PROJECT_HASH}-$(date -u +%Y%m%d-%H%M%S)"
   local sprint_dir="$CONDUCTOR_DIR/$sprint_id"
 
@@ -380,21 +431,48 @@ cmd_batch() {
 
   local nanostack_root
   nanostack_root="$(cd "$(dirname "$0")/../.." && pwd)"
+  # Source the registry so get_concurrency can locate custom skills
+  # via nano_phase_skill_path. Unavailable in test sandboxes that
+  # delete bin/lib/; in that case the helper still falls back to
+  # built-in core paths and the safe "write" default.
+  if [ -f "$nanostack_root/bin/lib/phases.sh" ]; then
+    . "$nanostack_root/bin/lib/phases.sh"
+  fi
 
-  # Get concurrency for a phase from its SKILL.md frontmatter
+  # Get concurrency for a phase from its SKILL.md frontmatter. Order:
+  #   1. Built-in core skill at <nanostack_root>/<phase>/SKILL.md
+  #   2. Custom skill resolved by the registry
+  #   3. Conductor-only stage (build) returns "write"
+  #   4. Unknown phase falls back to "write" with a warning so the
+  #      sprint never schedules a custom phase as parallel-read by
+  #      mistake.
   get_concurrency() {
     local phase="$1"
     local skill_md=""
     case "$phase" in
-      plan) skill_md="$nanostack_root/plan/SKILL.md" ;;
       build) echo "write"; return ;;
-      *) skill_md="$nanostack_root/$phase/SKILL.md" ;;
     esac
+    # Built-in core skill path.
+    if [ -f "$nanostack_root/$phase/SKILL.md" ]; then
+      skill_md="$nanostack_root/$phase/SKILL.md"
+    elif command -v nano_phase_skill_path >/dev/null 2>&1; then
+      # Custom skill: registry walks .nanostack/skills, ~/.claude/skills,
+      # and any configured skill_roots.
+      local custom_dir
+      custom_dir=$(nano_phase_skill_path "$phase" 2>/dev/null) || custom_dir=""
+      if [ -n "$custom_dir" ] && [ -f "$custom_dir/SKILL.md" ]; then
+        skill_md="$custom_dir/SKILL.md"
+      fi
+    fi
     if [ -n "$skill_md" ] && [ -f "$skill_md" ]; then
       local conc
       conc=$(sed -n '/^---$/,/^---$/p' "$skill_md" | grep '^concurrency:' | head -1 | sed 's/^concurrency: *//')
       echo "${conc:-write}"
     else
+      # Honest about not finding metadata. Default to "write" so
+      # conductor schedules conservatively (no accidental parallel
+      # write/exclusive overlap) and emit a warning to stderr.
+      echo "conductor: no SKILL.md found for phase '$phase'; defaulting concurrency=write" >&2
       echo "write"
     fi
   }

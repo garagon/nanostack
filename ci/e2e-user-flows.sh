@@ -528,6 +528,13 @@ flow_phase_registry() {
   # Lifecycle round-trip with one custom artifact saved (PR 4): analytics
   # counts it, sprint-journal emits a section for it, default discard
   # --dry-run includes its file path.
+  #
+  # Reset the audit-licenses dir first. An earlier block in this same
+  # flow may have saved a smoke artifact; save-artifact.sh names files
+  # by per-second timestamp, so a second write inside the same second
+  # silently overwrites the first and a write a second later doubles
+  # the count. Either way breaks the strict equality below.
+  rm -rf "$proj/.nanostack/audit-licenses"
   "$REPO/bin/save-artifact.sh" audit-licenses \
     '{"phase":"audit-licenses","summary":{"status":"OK","headline":"smoke audit"},"context_checkpoint":{"summary":"ok"}}' \
     >/dev/null
@@ -547,6 +554,31 @@ flow_phase_registry() {
   discard_out=$( "$REPO/bin/discard-sprint.sh" --dry-run )
   assert_true "default discard --dry-run includes the custom artifact" \
     bash -c "echo '$discard_out' | grep -qF 'audit-licenses'"
+
+  # Conductor (PR 5): --phases inline JSON drives the sprint topology;
+  # the custom skill's concurrency=read is honored during cmd_batch.
+  mkdir -p .nanostack/skills/audit-licenses
+  printf '%s\n' '---' 'name: audit-licenses' 'concurrency: read' 'depends_on: [build]' '---' \
+    > .nanostack/skills/audit-licenses/SKILL.md
+  "$REPO/conductor/bin/sprint.sh" start \
+    --phases '[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"audit-licenses","depends_on":["build"]},{"name":"ship","depends_on":["audit-licenses"]}]' \
+    >/dev/null
+  local sprint_status
+  sprint_status=$( "$REPO/conductor/bin/sprint.sh" status )
+  assert_true "conductor sprint includes the custom phase from --phases" \
+    bash -c "echo '$sprint_status' | jq -e '.phases | has(\"audit-licenses\")' >/dev/null"
+  assert_true "conductor sprint has 5 phases (custom graph)" \
+    bash -c "echo '$sprint_status' | jq -e '.phases | length == 5' >/dev/null"
+
+  local batch_out
+  batch_out=$( "$REPO/conductor/bin/sprint.sh" batch 2>&1 )
+  assert_true "conductor batch reads custom skill concurrency=read" \
+    bash -c "echo '$batch_out' | grep -qE '\"phases\":\\[[^]]*\"audit-licenses\"[^]]*\\].*\"type\":\"read\"|\"type\":\"read\".*\"phases\":\\[[^]]*\"audit-licenses\"'"
+
+  # Cycle in --phases must exit 2 (no sprint created).
+  assert_false "conductor rejects a cycle in --phases" \
+    "$REPO/conductor/bin/sprint.sh" start \
+    --phases '[{"name":"think","depends_on":["plan"]},{"name":"plan","depends_on":["think"]}]'
 
   # Add a phase_graph so the resolver populates upstream_artifacts;
   # build appears as null (no artifact dir), plan appears as a path.

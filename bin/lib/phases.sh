@@ -148,6 +148,12 @@ _nano_phase_graph_is_valid() {
       and (.depends_on | all(type == "string"))
     )
   ' >/dev/null 2>&1 || return 1
+  # Duplicate names are nonsensical: which entry's depends_on wins for
+  # the same phase? Reject up front so conductor scheduling never has
+  # to disambiguate.
+  if ! echo "$graph" | jq -e '([.[].name] | unique | length) == length' >/dev/null 2>&1; then
+    return 1
+  fi
   local names dep_targets
   names=$(echo "$graph" | jq -r '.[].name')
   dep_targets=$(echo "$graph" | jq -r '[.[].name] | join("\n")')
@@ -168,6 +174,32 @@ _nano_phase_graph_is_valid() {
       return 1
     fi
   done <<< "$deps"
+  # Cycle detection via Kahn's algorithm. Iteratively strip zero-deps
+  # nodes; if no progress is possible while nodes remain, a cycle
+  # exists. Conductor relies on the graph being a DAG so the topological
+  # batching never deadlocks.
+  if ! echo "$graph" | jq -e '
+    def acyclic:
+      . as $g
+      | reduce range(0; $g | length + 1) as $_ (
+          $g;
+          if length == 0 then .
+          else
+            ([.[] | select(.depends_on | length == 0) | .name]) as $leaves
+            | if ($leaves | length) == 0 then null
+              else
+                [.[]
+                  | select(.name as $n | ($leaves | index($n)) | not)
+                  | .depends_on |= map(select(. as $d | ($leaves | index($d)) | not))
+                ]
+              end
+          end
+        )
+      | . != null and length == 0;
+    acyclic
+  ' >/dev/null 2>&1; then
+    return 1
+  fi
   return 0
 }
 

@@ -136,6 +136,46 @@ A custom phase with no artifact for the current project produces no section.
 
 `bin/discard-sprint.sh --dry-run` (no `--phase` flag) iterates over every registered phase, core and custom, and lists `[dry-run] would delete: <path>` for each artifact in the date window. Without registered custom phases this is identical to the historical behavior; with custom phases registered, the default discard cleans them too. The explicit `--phase <name>` flag still narrows to a single phase.
 
+## Conductor
+
+`conductor/bin/sprint.sh` accepts a custom phase graph at sprint start.
+
+### Phase source resolution
+
+`cmd_start` picks the graph in this order (highest priority first):
+
+1. `--phases <json>` — inline JSON array passed on the command line.
+2. `--phases <path>` — path to a file containing a JSON array. Conductor reads the file when `<path>` is an existing file; otherwise it treats the value as inline JSON.
+3. `phase_graph` field in `.nanostack/config.json`. The registry reads this through `nano_phase_graph_json`, which already validates the graph and falls back to the default if the config is malformed.
+4. `DEFAULT_PHASES` — the canonical seven-node sprint (`think → plan → build → review/qa/security → ship`).
+
+### Validation
+
+Before creating the sprint directory, `cmd_start` runs `_nano_phase_graph_is_valid` against the chosen graph. The validator rejects:
+
+- Non-array structure or empty array.
+- An entry whose `.name` is not a string or whose `.depends_on` is not an array of strings.
+- A `.name` that fails the phase regex (`^[a-z][a-z0-9-]*$`).
+- A `.name` that is not in the known set: core ∪ registered custom ∪ the conductor's `build` stage.
+- A `.depends_on[]` entry that does not reference a name appearing elsewhere in the same graph.
+- **Duplicate names** in the graph. Two entries with the same `.name` make `depends_on` ambiguous.
+- **Cycles** in the dependency graph. Detected via Kahn's algorithm — if zero-deps node removal cannot reduce the graph to empty, a cycle exists.
+
+A failed validation aborts with exit `2` and the message `ERROR: invalid phase graph (cycle, duplicate name, dangling depends_on, or unknown name)`. No sprint directory is created. Same behavior whether the graph came from `--phases` or `config.json`.
+
+### Concurrency lookup
+
+`cmd_batch`'s `get_concurrency` reads the `concurrency:` frontmatter field from a phase's `SKILL.md`. Lookup order:
+
+1. Built-in core skill at `<nanostack_root>/<phase>/SKILL.md`.
+2. Custom skill resolved via `nano_phase_skill_path` — walks `.nanostack/skills/`, `~/.claude/skills/`, `~/.agents/skills/`, plus any `skill_roots` configured in `.nanostack/config.json`.
+3. Conductor-only `build` stage returns `write` (no SKILL.md).
+4. Unknown phase falls back to `write` and emits a stderr warning. The conservative default avoids accidentally scheduling a custom write-phase as parallel-read.
+
+### Stability
+
+The output of `sprint.sh status` is keyed on phase names from the chosen graph. A custom graph that includes `audit-licenses` produces an `audit-licenses` entry under `.phases`, exactly as if it were a core phase. `sprint.sh batch` emits the same `{batch, type, phases}` JSON objects whether the phases are core, custom, or a mix.
+
 ## Stability
 
 `phase_kind` is the load-bearing addition. Once shipped, downstream skills can branch on it. Future PRs may add new fields to the resolver output, but the existing shape stays — consumers should keep using `jq` field access rather than positional or shape-strict parsing.
