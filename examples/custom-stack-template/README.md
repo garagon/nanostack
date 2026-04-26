@@ -10,7 +10,7 @@ A stack is a set of custom skills plus a `phase_graph` that wires them into the 
 |---|---|---|
 | [`compliance-release/`](compliance-release/) | License audit + privacy hygiene + release-readiness composer that gates `/ship` | You ship code that may include third-party licenses or collect personal data, and you want a deterministic release-decision step before `/ship`. |
 
-More stacks land here as they prove out the framework. The first one (`compliance-release/`) is the reference shape — match its `stack.json` schema and README structure when adding new stacks.
+More stacks land here as they prove out the framework. The first one (`compliance-release/`) is the reference shape: match its `stack.json` schema and README structure when adding new stacks.
 
 ## How a stack is structured
 
@@ -42,8 +42,8 @@ It validates the manifest schema, the README structure, the skill folder shape, 
 
 ## What's covered today
 
-- **Manifest + structural lint** — every stack file shape and skill folder layout (this PR).
-- **Skill behavior** — license audit, privacy hygiene, release-readiness composer (next PR).
-- **Runtime install + journey** — scaffold the stack, save artifacts, resolve, journal, analytics, discard, conductor scheduling (PR 3 of the round).
+- **Manifest + structural lint**: every stack file shape and skill folder layout (this PR).
+- **Skill behavior**: license audit, privacy hygiene, release-readiness composer (next PR).
+- **Runtime install + journey**: scaffold the stack, save artifacts, resolve, journal, analytics, discard, conductor scheduling (PR 3 of the round).
 
 Until PR 3 ships, the stacks here are wired and lint-checked but not yet end-to-end runnable as a workflow. The status of each stack is on its own README.

@@ -196,6 +196,52 @@ for stack_dir in "${stack_dirs[@]}"; do
     fail "$stack_name phase_graph contains unknown names:$bad_graph"
   fi
 
+  # 10a. Every phase_graph[].depends_on[] target references a name that
+  #      exists in the same phase_graph. A misspelled dep would make the
+  #      conductor schedule run against a missing node, only surfacing
+  #      under runtime E2E. Catch it structurally.
+  bad_deps=""
+  while IFS=$'\t' read -r owner dep; do
+    [ -z "$dep" ] && continue
+    if ! printf '%s\n' "$graph_names" | grep -qFx "$dep"; then
+      bad_deps="$bad_deps $owner->$dep"
+    fi
+  done < <(jq -r '.phase_graph[]? | .name as $n | (.depends_on[]? | "\($n)\t\(.)")' "$stack_dir/stack.json")
+  if [ -z "$bad_deps" ]; then
+    ok "$stack_name phase_graph depends_on targets all resolve"
+  else
+    fail "$stack_name phase_graph has dangling depends_on:$bad_deps"
+  fi
+
+  # 10b. No duplicate phase_graph[].name. Two entries with the same
+  #      name would make depends_on ambiguous; the registry's runtime
+  #      validator already rejects this for config.phase_graph, so
+  #      catching it here in a static stack manifest stops the round
+  #      from shipping a contradictory shape.
+  graph_dupes=$(printf '%s\n' "$graph_names" | sort | uniq -d)
+  if [ -z "$graph_dupes" ]; then
+    ok "$stack_name phase_graph names are unique"
+  else
+    fail "$stack_name phase_graph contains duplicate names: $(echo "$graph_dupes" | tr '\n' ' ')"
+  fi
+
+  # 10c. Every declared skill appears in phase_graph. A stack that
+  #      ships a skill but never schedules it means the manifest and
+  #      the runtime contract drifted. The reverse (graph names not in
+  #      skills[]) is already covered by check 10.
+  missing_in_graph=""
+  while IFS= read -r s; do
+    [ -z "$s" ] && continue
+    if ! printf '%s\n' "$graph_names" | grep -qFx "$s"; then
+      missing_in_graph="$missing_in_graph $s"
+    fi
+  done <<< "$skill_names"
+  if [ -z "$missing_in_graph" ]; then
+    ok "$stack_name every declared skill appears in phase_graph"
+  else
+    fail "$stack_name skills declared but not in phase_graph:$missing_in_graph"
+  fi
+
   # 11. ship depends on the stack's composer (if there is a release-readiness
   #     skill, ship must depend on it, not directly on the review/security/qa
   #     trio). Spec rule for this stack; future stacks may declare a
