@@ -6,6 +6,134 @@ on:
     branches: [main]
 
 jobs:
+  nano-run-session-first:
+    name: /nano-run reads session state
+    runs-on: ubuntu-latest
+    # /nano-run vNext PR 2. Onboarding has to follow the same
+    # session-first pattern every other Sprint phase already follows
+    # (PROFILE / RUN_MODE / AUTOPILOT / PLAN_APPROVAL / HOST). A
+    # silent regression to git-vs-no-git inference would re-introduce
+    # the bug where Codex+git users land in Professional even though
+    # the adapter is instructions_only.
+    steps:
+      - uses: actions/checkout@v4
+      - name: start/SKILL.md reads the five canonical session fields via jq
+        run: |
+          set -e
+          fail=0
+          for var in PROFILE RUN_MODE AUTOPILOT PLAN_APPROVAL HOST; do
+            if ! grep -qE "^${var}=.*jq" start/SKILL.md; then
+              echo "FAIL: start/SKILL.md must read $var via jq from session.json"
+              fail=1
+            fi
+          done
+          if ! grep -q 'reference/session-state-contract.md' start/SKILL.md; then
+            echo "FAIL: start/SKILL.md must reference reference/session-state-contract.md"
+            fail=1
+          fi
+          exit $fail
+
+  nano-run-report-only:
+    name: /nano-run respects run_mode=report_only
+    runs-on: ubuntu-latest
+    # The report-only guard must appear BEFORE any mutating instruction
+    # (init-stack.sh, init-project.sh, file writes). A future edit that
+    # moves a mutation above the guard reintroduces the silent-mutate
+    # bug; this job blocks that.
+    steps:
+      - uses: actions/checkout@v4
+      - name: REPORT_ONLY guard appears before the first mutation site
+        run: |
+          set -e
+          fail=0
+          if ! grep -qE 'REPORT_ONLY' start/SKILL.md; then
+            echo "FAIL: start/SKILL.md must define REPORT_ONLY from run_mode"
+            fail=1
+          fi
+          guard_line=$(grep -nE 'REPORT_ONLY' start/SKILL.md | head -1 | cut -d: -f1)
+          # First mutating call site (init-stack or init-project run).
+          mut_line=$(grep -nE 'init-stack\.sh|init-project\.sh' start/SKILL.md | head -1 | cut -d: -f1)
+          if [ -z "$guard_line" ] || [ -z "$mut_line" ]; then
+            echo "FAIL: could not locate guard or mutation site"
+            exit 1
+          fi
+          if [ "$guard_line" -ge "$mut_line" ]; then
+            echo "FAIL: REPORT_ONLY guard (line $guard_line) must come BEFORE mutation site (line $mut_line)"
+            fail=1
+          fi
+          # Skill must explicitly say report-only does not write the
+          # setup artifact and does not run mutating scripts.
+          if ! grep -qE 'report.?only|REPORT_ONLY=1' start/SKILL.md; then
+            echo "FAIL: start/SKILL.md must reference the report_only mode by name"
+            fail=1
+          fi
+          exit $fail
+
+  nano-run-guided-output:
+    name: /nano-run Guided output uses the four-block skeleton
+    runs-on: ubuntu-latest
+    # The onboarding contract doc carries the canonical Guided
+    # output examples. The four blocks (Result / How to try / What
+    # was checked / What remains, plus Spanish parity) must all be
+    # present so the skill cannot drift away from the
+    # plain-language contract.
+    steps:
+      - uses: actions/checkout@v4
+      - name: onboarding-contract.md declares the four Guided blocks
+        run: |
+          set -e
+          fail=0
+          contract=start/references/onboarding-contract.md
+          if [ ! -f "$contract" ]; then
+            echo "FAIL: $contract is missing"
+            exit 1
+          fi
+          for block in 'Result' 'How to try' 'What was checked' 'What remains'; do
+            if ! grep -q "$block" "$contract"; then
+              echo "FAIL: $contract missing canonical Guided block: $block"
+              fail=1
+            fi
+          done
+          # Spanish parity, since local mode implies guided.
+          for block in 'Resultado' 'Como verlo' 'Que revise' 'Pendiente'; do
+            if ! grep -q "$block" "$contract"; then
+              echo "FAIL: $contract missing Spanish Guided block: $block"
+              fail=1
+            fi
+          done
+          # start/SKILL.md must point at the contract for shapes.
+          if ! grep -q 'onboarding-contract.md' start/SKILL.md; then
+            echo "FAIL: start/SKILL.md must point at start/references/onboarding-contract.md"
+            fail=1
+          fi
+          exit $fail
+
+  nano-run-capability-honesty:
+    name: /nano-run does not overclaim host enforcement
+    runs-on: ubuntu-latest
+    # The L0-L3 honesty rule applies to onboarding output too. Four
+    # phrasings the skill must never use, regardless of host or
+    # profile. The skill must also read adapters/ for capability
+    # values rather than synthesize them from host name.
+    steps:
+      - uses: actions/checkout@v4
+      - name: start/SKILL.md does not use forbidden enforcement claims
+        run: |
+          set -e
+          fail=0
+          for phrase in 'always blocks' 'guaranteed blocks' 'all agents enforce' 'hard-blocks on every agent'; do
+            if grep -qiF "$phrase" start/SKILL.md; then
+              echo "FAIL: start/SKILL.md contains forbidden enforcement claim: $phrase"
+              fail=1
+            fi
+          done
+          # Skill must read adapter capabilities from disk.
+          if ! grep -qE 'adapters/' start/SKILL.md; then
+            echo "FAIL: start/SKILL.md must read host capabilities from adapters/"
+            fail=1
+          fi
+          exit $fail
+
   workflow-yaml-parses:
     name: Workflow YAML parses
     runs-on: ubuntu-latest

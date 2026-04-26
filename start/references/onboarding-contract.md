@@ -123,6 +123,30 @@ Next:
 Run /nano-run in normal mode when you want me to apply this.
 ```
 
+### Guided success in Spanish (local mode + Spanish-speaking users)
+
+When the user is on local mode or interacting in Spanish, the four-block skeleton has a direct Spanish version per `reference/plain-language-contract.md`:
+
+<!-- guided-output:start -->
+```
+Resultado: Listo para probar sin riesgo.
+
+Como verlo:
+1. Abrí examples/starter-todo y corré /think "agregar fechas a las tareas".
+
+Que revise:
+- Encontré tu agente y revisé qué chequeos de seguridad soporta.
+- Revisé si esta carpeta ya parece una app.
+- Configuré el primer run en lenguaje claro.
+
+Pendiente:
+- No cambié todavía un proyecto real.
+- Algunos chequeos de seguridad dependen de tu agente. Te aviso cuando algo es guía y no bloqueo.
+```
+<!-- guided-output:end -->
+
+The Spanish names are the canonical translations the lint job locks: `Resultado` / `Como verlo` / `Que revise` / `Pendiente`.
+
 ## Behavioral rules
 
 1. **Detect before asking.** Inspect `git rev-parse`, `package.json`, `go.mod`, `pyproject.toml`, `requirements.txt`, `Dockerfile`, `.nanostack/config.json`, `.nanostack/stack.json`, `.claude/settings.json`. Only ask what cannot be detected.
