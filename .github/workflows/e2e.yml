@@ -57,3 +57,22 @@ jobs:
         run: |
           chmod +x ci/e2e-think-flows.sh
           ci/e2e-think-flows.sh
+
+  e2e-onboarding-flows:
+    name: E2E /nano-run vNext flows (9 cells)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # /nano-run vNext PR 5. Exercises the runtime contracts that the
+    # static lint matrix describes: profile resolution, capability
+    # reads from adapters, legacy detection, the report-only no-write
+    # invariant, and the setup artifact roundtrip. Static lint owns
+    # "the field is mentioned"; this harness owns "the contract works
+    # end-to-end on a real /tmp project".
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq is present
+        run: jq --version
+      - name: Run /nano-run E2E flows
+        run: |
+          chmod +x ci/e2e-onboarding-flows.sh
+          ci/e2e-onboarding-flows.sh
