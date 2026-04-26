@@ -59,10 +59,30 @@ Every artifact can include a `context_checkpoint` — a self-contained summary t
     "target_user": "string",
     "narrowest_wedge": "string",
     "key_risk": "string",
-    "premise_validated": true
+    "premise_validated": true,
+    "out_of_scope": ["string"],
+    "manual_delivery_test": {
+      "possible": true,
+      "steps": ["string"]
+    },
+    "search_summary": {
+      "mode": "local_only|private|public",
+      "result": "string",
+      "existing_solution": "none|partial|covers_80_percent"
+    }
+  },
+  "context_checkpoint": {
+    "summary": "string",
+    "key_files": ["string"],
+    "decisions_made": ["string"],
+    "open_questions": ["string"]
   }
 }
 ```
+
+**Required vs optional in `summary`:**
+- Required: `value_proposition`, `scope_mode`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`. The autopilot brief gate (`/think --autopilot`) refuses to advance to `/nano` when any of these are missing or empty.
+- Optional: `out_of_scope`, `manual_delivery_test`, `search_summary`. Skills downstream of `/think` consume them when present, fall back to safe defaults when absent.
 
 ### /nano
 
