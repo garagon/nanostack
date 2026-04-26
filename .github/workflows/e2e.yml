@@ -83,6 +83,27 @@ jobs:
           chmod +x ci/e2e-examples.sh
           ci/e2e-examples.sh
 
+  e2e-think-archetypes:
+    name: E2E /think Guided Archetypes v1 (9 cells)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Guided Archetypes v1 PR 5. Static lint covers the alias map,
+    # the no-wizard rule, the brief-gate optionality, and the
+    # save-site assignments. This harness exercises the runtime
+    # contract: each archetype path produces the expected
+    # archetype + example_reference, explicit flag wins,
+    # ambiguous prompts produce unknown rather than invented
+    # archetypes, and the brief gate stays archetype-agnostic
+    # under report_only and autopilot.
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq is present
+        run: jq --version
+      - name: Run /think archetypes E2E
+        run: |
+          chmod +x ci/e2e-think-archetypes.sh
+          ci/e2e-think-archetypes.sh
+
   e2e-onboarding-flows:
     name: E2E /nano-run vNext flows (9 cells)
     runs-on: ubuntu-latest
