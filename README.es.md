@@ -30,7 +30,7 @@
 
 Inspirado en [gstack](https://github.com/garrytan/gstack) de [Garry Tan](https://x.com/garrytan). 13 skills en total. El sprint principal usa siete especialistas. Cero dependencias. Cero paso de build.
 
-Funciona con Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp y Cline.
+Funciona hoy con adapters verificados en **Claude Code, Cursor, OpenAI Codex, OpenCode y Gemini CLI**. Los skill files son texto plano, así que otros agentes podrían cargarlos, pero solo esos cinco tienen un adapter verificado y declaración de capabilities en [`adapters/`](adapters/).
 
 ## Instalación
 
@@ -40,7 +40,7 @@ Funciona con Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravit
 npx create-nanostack
 ```
 
-Un solo comando. Detecta tus agentes, instala todo, corre setup. Funciona con Claude Code, Cursor, Codex, Gemini CLI, Amp, Cline, OpenCode y Antigravity.
+Un solo comando. Detecta tus agentes, instala todo, corre setup. Adapters verificados hoy: Claude Code, Cursor, Codex, OpenCode y Gemini CLI.
 
 Después corré `/nano-run` en tu agente para configurar el proyecto a través de una conversación.
 
@@ -74,7 +74,7 @@ Cada ejemplo trae prompt para pegar, flujo esperado, criterios de éxito y pasos
 - [Git](https://git-scm.com/)
 - [jq](https://jqlang.github.io/jq/) (`brew install jq` en macOS, `apt install jq` en Linux, `choco install jq` en Windows)
 - macOS, Linux o Windows (con Git Bash o WSL)
-- Uno de: Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp, Cline
+- Un agente de AI coding con adapter verificado: Claude Code, Cursor, OpenAI Codex, OpenCode o Gemini CLI
 
 ## Dos perfiles, mismo rigor
 

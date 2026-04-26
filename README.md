@@ -36,7 +36,7 @@
 
 Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). 13 skills total. The default sprint uses seven core specialists. No build step. No Nanostack cloud.
 
-Works with Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp, and Cline.
+Works with verified adapters today on **Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI**. The skill files are plain text, so other agents may load them, but only those five have a verified adapter and capability declaration in [`adapters/`](adapters/).
 
 ## What is Nanostack?
 
@@ -84,15 +84,15 @@ A detailed per-host matrix (Bash guard, Write/Edit guard, phase gate) lives furt
 
 ## What changes after installing Nanostack
 
-| Before | With Nanostack |
-|--------|----------------|
-| A vague prompt turns into code immediately. | `/think` turns the idea into a brief, risk, and smallest useful starting point. |
-| The plan disappears in chat. | `/nano` saves a plan with files, risks, checks, and out-of-scope items. |
-| The agent can drift from the request. | `/review` compares what changed against what was agreed. |
-| QA and security happen only if someone remembers. | `/qa` and `/security` are first-class sprint phases. |
-| Shipping explains which files moved. | `/ship` explains why the change exists, how it was checked, and what remains. |
-| Every session starts from zero. | Sprint artifacts and journals preserve decisions in `.nanostack/`. |
-| Enforcement is unclear. | Adapter capabilities show what is blocked, guided, or unsupported for each agent. |
+| Without Nanostack | With Nanostack |
+| --- | --- |
+| ❌ A vague prompt turns into code immediately. | ✅ `/think` turns the idea into a brief, risk, and smallest useful starting point. |
+| ❌ The plan disappears in chat. | ✅ `/nano` saves a plan with files, risks, checks, and out-of-scope items. |
+| ❌ The agent quietly refactors three things you did not ask for. | ✅ `/review` compares the code against the plan. Scope drift is visible before merge. |
+| ❌ QA and security happen only if someone remembers. | ✅ `/qa` opens your app and exercises it. `/security` runs on every ship and catches the mistakes that make headlines. |
+| ❌ Your PR says "add notifications" and nobody knows what actually changed or why. | ✅ `/ship` explains why the change exists, how it was checked, and what remains. |
+| ❌ You rush-commit Friday 5pm and Monday find out it broke something unrelated. | ✅ The sprint blocks `git commit` until `/review`, `/security`, and `/qa` pass. (Enforcement varies by agent; see honesty matrix below.) |
+| ❌ Every session re-pastes the same context: what we use, what is fragile. | ✅ Every skill reads the artifact the previous skill wrote. Sprint journals preserve decisions in `.nanostack/`. |
 
 ## Nanostack is right for you if
 
@@ -103,16 +103,18 @@ A detailed per-host matrix (Bash guard, Write/Edit guard, phase gate) lives furt
 - ✅ You want a process that works across Claude, Cursor, Codex, Gemini, and more
 - ✅ You want the skills on disk, inspectable, not locked in a SaaS
 
-## Problems Nanostack solves
+## Try it safely first
 
-| Without Nanostack | With Nanostack |
-| --- | --- |
-| ❌ You ask for a small feature and the agent quietly refactors three other things you didn't ask for. | ✅ `/review` compares the code against the plan. If the agent added five extra things, you see them before you merge. |
-| ❌ You ship, then find out a week later you exposed a password, broke a login, or left a SQL injection open. | ✅ `/security` runs on every ship. Catches the mistakes that make headlines before your users do. |
-| ❌ Your PR description says "add notifications" and nobody (including future-you) knows what actually changed or why. | ✅ `/ship` writes a PR that explains <em>why</em> the change exists, not just which files moved. |
-| ❌ Every new project you re-paste the same context into the agent: what we use, how we name things, what's fragile. | ✅ Every skill reads the artifact the previous skill wrote. `/review` already knows what `/nano` planned. |
-| ❌ "I'll write the tests later." You don't. Neither does the agent. | ✅ `/qa` is a step in the sprint, not a TODO at the bottom. It opens your app, clicks around, and proves the thing works. |
-| ❌ You rush-commit on a Friday at 5pm. Monday you find out it broke something unrelated. | ✅ The sprint blocks `git commit` until `/review`, `/security`, and `/qa` pass. No accidental Friday 5pm surprises. |
+Not sure yet? Start with a disposable sandbox from the Examples Library. It gives you a real sprint without risking your product.
+
+| Example | Best for | Stack | Time |
+|---|---|---|---|
+| [`starter-todo`](examples/starter-todo/) | new and non-technical users | one HTML file | 5-10 min |
+| [`cli-notes`](examples/cli-notes/) | CLI workflows | Bash | 5-15 min |
+| [`api-healthcheck`](examples/api-healthcheck/) | backend flows | Node stdlib HTTP | 10-15 min |
+| [`static-landing`](examples/static-landing/) | founders and designers | static HTML/CSS | 10-15 min |
+
+Each example has a copy-paste prompt, expected sprint flow, success criteria, and reset steps. Full Examples Library: [`examples/`](examples/).
 
 ## Quick start
 
@@ -123,19 +125,6 @@ npx create-nanostack
 One command. Detects your agents, installs everything, runs setup.
 
 Then run `/nano-run` in your agent to configure your project through a conversation. On your first sprint, `/think` shows the full pipeline so you know what comes next.
-
-## Try it safely first
-
-The fastest way to understand Nanostack is to run it on a project that does not matter yet. Pick a sandbox from the Examples Library:
-
-| Example | Best for | Stack | Time |
-|---|---|---|---|
-| [`starter-todo`](examples/starter-todo/) | new and non-technical users | one HTML file | 5-10 min |
-| [`cli-notes`](examples/cli-notes/) | CLI workflows | Bash | 5-15 min |
-| [`api-healthcheck`](examples/api-healthcheck/) | backend flows | Node stdlib HTTP | 10-15 min |
-| [`static-landing`](examples/static-landing/) | founders and designers | static HTML/CSS | 10-15 min |
-
-Each example has a copy-paste prompt, expected sprint flow, success criteria, and reset steps. Full library: [`examples/`](examples/).
 
 ## See it work
 
@@ -195,7 +184,7 @@ That is the difference: not just code generation, but a delivery loop you can in
 Nanostack is a process, not a collection of tools. The skills run in the order a sprint runs:
 
 ```
-/think → /nano → build → /review → /qa → /security → /ship
+/think → /nano → build → /review → /security → /qa → /ship
 ```
 
 Each skill feeds into the next. `/nano` writes an artifact that `/review` reads for scope drift detection. `/review` catches conflicts with `/security` findings. `/ship` verifies everything is clean before creating the PR. On Claude Code the phase gate enforces the pipeline at the hook layer: `git commit` is blocked until review, security, and qa have fresh artifacts. On agents without hook support the same gate runs as guided instructions, so the safety depends on the agent following them; see [What enforces on which agent](#what-enforces-on-which-agent).
@@ -281,11 +270,16 @@ You:    /review
 You:    /security
         Security: CRITICAL (0) HIGH (0) MEDIUM (1) LOW (1). Score: A.
 
+You:    /qa
+        Provisioned a sandbox bucket, attempted a public-grant
+        action, confirmed the gate blocked it, confirmed normal
+        ops still work. 8 checks pass.
+
 You:    /ship
-        Ship: PR created. CI passed. Post-deploy: smoke test clean.
+        PR ready. CI passed. Sprint journal saved.
 ```
 
-You said "security scanner." The agent said "you're building a prevention gate" because it listened to your pain, not your feature request. Six commands, start to shipped.
+You said "security scanner." The agent said "you're building a prevention gate" because it listened to your pain, not your feature request. Seven commands, start to shipped.
 
 ## Think brief
 
@@ -503,7 +497,7 @@ This gap is the single biggest known caveat in the framework. The roadmap is to 
 npx create-nanostack
 ```
 
-Detects your agents, installs all skills, runs setup. Works with Claude Code, Cursor, Codex, Gemini CLI, Amp, Cline, OpenCode, and Antigravity.
+Detects your agents, installs all skills, runs setup. Verified adapters today: Claude Code, Cursor, Codex, OpenCode, and Gemini CLI.
 
 Update from your agent:
 
@@ -564,7 +558,7 @@ Requires [Git for Windows](https://git-scm.com/downloads/win) which includes Git
 - `bash`
 - [`git`](https://git-scm.com/)
 - [`jq`](https://jqlang.github.io/jq/) (`brew install jq`, `apt install jq`, or `choco install jq`)
-- One supported AI coding agent: Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI, Antigravity, Amp, or Cline
+- One AI coding agent with a verified adapter: Claude Code, Cursor, OpenAI Codex, OpenCode, or Gemini CLI
 
 Nanostack has no app runtime dependency and no build step. The scripts use standard local tools.
 
