@@ -1,0 +1,6 @@
+interface:
+  display_name: "audit-licenses"
+  short_description: "Audit the open-source licenses of every direct dependency in this project. Flags GPL or AGPL licenses that may force the project itself to be open-source."
+  default_prompt: "Use audit-licenses to scan this project's dependencies for license compliance issues."
+policy:
+  allow_implicit_invocation: true

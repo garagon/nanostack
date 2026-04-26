@@ -540,6 +540,49 @@ flow_phase_registry() {
   unset NANOSTACK_STORE
 }
 
+
+
+# ─── Flow 9: custom skill template copy ───────────────────────────
+# After PR 3, copying examples/custom-skill-template/audit-licenses
+# into a fake skills root must work without referencing the source
+# folder. This flow exercises the spec's acceptance scenario:
+#   1. cp -R the template into /tmp/skills/audit-licenses
+#   2. cd into a sibling fake project
+#   3. run the helper from its absolute path (smoke.sh proxies for
+#      the helper since it covers all three stacks)
+#   4. confirm the SKILL.md does not embed the repo example path
+
+flow_custom_skill_template_copy() {
+  local skills_root="$TMP_ROOT/skills"
+  local proj="$TMP_ROOT/copy-test-proj"
+  mkdir -p "$skills_root" "$proj"
+  cd "$proj"
+  git init -q
+
+  cp -R "$REPO/examples/custom-skill-template/audit-licenses" "$skills_root/audit-licenses"
+
+  assert_true "copied SKILL.md does not embed the repo example path" \
+    bash -c "! grep -qE '\\./examples/custom-skill-template/' '$skills_root/audit-licenses/SKILL.md'"
+
+  assert_true "copied agents/openai.yaml is present" \
+    test -f "$skills_root/audit-licenses/agents/openai.yaml"
+
+  assert_true "copied bin/smoke.sh is executable" \
+    test -x "$skills_root/audit-licenses/bin/smoke.sh"
+
+  # Run the smoke check from the copied location. Three "ok" lines.
+  local smoke_out
+  smoke_out=$( "$skills_root/audit-licenses/bin/smoke.sh" 2>&1 )
+  assert_true "copied skill smoke passes (node)" \
+    bash -c "echo '$smoke_out' | grep -qE 'ok[[:space:]]+node manifest scans'"
+  assert_true "copied skill smoke passes (python)" \
+    bash -c "echo '$smoke_out' | grep -qE 'ok[[:space:]]+python manifest scans'"
+  assert_true "copied skill smoke passes (go)" \
+    bash -c "echo '$smoke_out' | grep -qE 'ok[[:space:]]+go manifest scans'"
+
+  cd "$REPO"
+}
+
 # ─── Run ──────────────────────────────────────────────────────────────
 
 echo "Nanostack E2E user flows"
@@ -554,6 +597,7 @@ flow sprint_phase_gate
 flow legacy_repair
 flow local_no_git
 flow phase_registry
+flow custom_skill_template_copy
 
 echo ""
 echo "========================"

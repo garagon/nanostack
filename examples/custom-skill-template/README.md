@@ -8,11 +8,13 @@ The included example is `/audit-licenses`: a small skill that scans your project
 
 - A complete `SKILL.md` with the frontmatter the agent runtime expects (`name`, `description`, `concurrency`, `summary`, `estimated_tokens`).
 - A bash helper at `bin/audit.sh` that does the actual work and returns structured JSON.
+- A smoke check at `bin/smoke.sh` you can run after copying the skill into your agent's directory.
+- An `agents/openai.yaml` discovery file so OpenAI-compatible agents see the skill.
 - Stack detection (npm, pip, go) the same way `/nano` and `/security` detect projects.
 - A pattern for saving an artifact via `bin/save-artifact.sh` so other skills (or `/compound`) can read your output later.
 - A standardized one-line headline at the close, matching the format the built-in skills use.
 
-## Try the example
+## Try the example without installing
 
 From any project with a `package.json`, `requirements.txt`, `pyproject.toml`, or `go.mod`:
 
@@ -20,11 +22,11 @@ From any project with a `package.json`, `requirements.txt`, `pyproject.toml`, or
 ~/.claude/skills/nanostack/examples/custom-skill-template/audit-licenses/bin/audit.sh node
 ```
 
-Replace `node` with `python` or `go` to match your stack. The output is JSON with a counts object and a flagged list.
+Replace `node` with `python` or `go` to match your stack. The output is JSON with a counts object and a flagged list. This path runs the helper directly from the example folder; it does not register the phase or save an artifact.
 
 ## Use it from your agent
 
-To make `/audit-licenses` an actual slash command in your agent, copy the skill folder into your agent's skills directory.
+Copy the skill folder into your agent's skills directory.
 
 For Claude Code:
 
@@ -32,7 +34,28 @@ For Claude Code:
 cp -r ~/.claude/skills/nanostack/examples/custom-skill-template/audit-licenses ~/.claude/skills/
 ```
 
-Then restart your agent. The agent reads `SKILL.md` to learn the trigger (`/audit-licenses`) and the description.
+Verify the copy works on its own:
+
+```bash
+~/.claude/skills/audit-licenses/bin/smoke.sh
+```
+
+Three "ok" lines mean the helper resolves manifests for Node, Python, and Go from a copy that has no link back to this repository.
+
+Register the phase in the project where you want to use it. `save-artifact.sh` and the resolver only accept phases listed in `.nanostack/config.json`:
+
+```bash
+mkdir -p .nanostack
+if [ -f .nanostack/config.json ]; then
+  jq '.custom_phases = ((.custom_phases // []) + ["audit-licenses"] | unique)' \
+    .nanostack/config.json > .nanostack/config.json.tmp \
+    && mv .nanostack/config.json.tmp .nanostack/config.json
+else
+  printf '%s\n' '{"custom_phases":["audit-licenses"]}' > .nanostack/config.json
+fi
+```
+
+Restart your agent. The agent reads `SKILL.md` to learn the trigger (`/audit-licenses`) and the description; OpenAI-compatible agents read `agents/openai.yaml` for the same purpose.
 
 For other agents, follow the install pattern documented in `EXTENDING.md` at the repo root.
 
