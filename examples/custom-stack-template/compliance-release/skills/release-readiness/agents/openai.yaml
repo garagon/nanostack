@@ -1,0 +1,6 @@
+interface:
+  display_name: "release-readiness"
+  short_description: "Composes review/qa/security/license-audit/privacy-check artifacts into a single release decision before /ship."
+  default_prompt: "Use release-readiness to gate /ship on the compliance-release stack's upstream evidence."
+policy:
+  allow_implicit_invocation: true
