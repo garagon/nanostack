@@ -6,6 +6,32 @@ on:
     branches: [main]
 
 jobs:
+  workflow-yaml-parses:
+    name: Workflow YAML parses
+    runs-on: ubuntu-latest
+    # Defensive lint added 2026-04-26 after a stretch where lint.yml
+    # itself failed to parse and every downstream job skipped silently.
+    # An unquoted colon in a step name and an unindented heredoc body
+    # both produce GitHub-tolerant but spec-invalid YAML; this job
+    # asserts the file actually parses with strict YAML so a future
+    # broken edit fails loudly on PR instead of silently after merge.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Strict YAML parse on every workflow file
+        run: |
+          set -e
+          fail=0
+          for f in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [ -f "$f" ] || continue
+            if ! python3 -c "import sys, yaml; yaml.safe_load(open('$f'))" 2>err.log; then
+              echo "FAIL: $f does not parse as YAML"
+              cat err.log
+              fail=1
+            fi
+          done
+          rm -f err.log
+          exit $fail
+
   shell-syntax:
     name: Shell syntax (bash -n)
     runs-on: ubuntu-latest
@@ -1018,7 +1044,7 @@ jobs:
           fi
           exit $fail
 
-      - name: profile resolution: Codex+git is guided
+      - name: "profile resolution: Codex+git is guided"
         run: |
           set -e
           tmp=$(mktemp -d /tmp/think-profile.XXXXXX)
@@ -1221,6 +1247,74 @@ jobs:
           fi
           exit $fail
 
+  readme-public-copy:
+    name: README public-copy regression lock
+    runs-on: ubuntu-latest
+    # Spec public-copy-regression-locks-2026-04-26. Stale claims have
+    # bitten this repo before (telemetry endpoint "lands in a later
+    # PR" stayed in the README months after the Worker shipped). This
+    # job asserts the stale strings the spec called out are gone and
+    # the required v1.0/Examples-Library/telemetry framing is present.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stale strings must NOT appear in README.md or README.es.md
+        run: |
+          set -e
+          fail=0
+          # Each stale string is one quoted argument so spaces inside
+          # do not split. Order intentional: most-cited spec entries
+          # first.
+          for stale in \
+            'Under 15 minutes' \
+            'Four tiers' \
+            'endpoint lands in a later PR' \
+            'Claude does the rest' \
+            'se ships' \
+            'Ship el puntito'; do
+            if grep -nF "$stale" README.md README.es.md 2>/dev/null; then
+              echo "FAIL: stale string present: $stale"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Required strings MUST appear in README.md
+        run: |
+          set -e
+          fail=0
+          for required in \
+            '13 skills total' \
+            'default sprint uses seven' \
+            'Examples Library' \
+            'starter-todo' \
+            'cli-notes' \
+            'api-healthcheck' \
+            'static-landing'; do
+            if ! grep -qF "$required" README.md; then
+              echo "FAIL: required string missing in README.md: $required"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Required strings MUST appear in README.es.md
+        run: |
+          set -e
+          fail=0
+          for required in \
+            'starter-todo' \
+            'cli-notes' \
+            'api-healthcheck' \
+            'static-landing' \
+            'telemetría' \
+            'Privacidad'; do
+            if ! grep -qF "$required" README.es.md; then
+              echo "FAIL: required string missing in README.es.md: $required"
+              fail=1
+            fi
+          done
+          exit $fail
+
   examples-library:
     name: Examples library contract
     runs-on: ubuntu-latest
@@ -1345,23 +1439,15 @@ jobs:
         run: |
           set -e
           fail=0
-          # Heading patterns the Spanish README must include. Each line
-          # is one full H2 heading; iterate with newline IFS so spaces
-          # inside the heading do not get split by the shell.
-          while IFS= read -r h; do
-            [ -z "$h" ] && continue
+          # Iterate with literal-quoted args so multi-word headings stay
+          # one item each. The heredoc form was correct shell but
+          # interacted badly with YAML block-scalar indentation rules.
+          for h in '## Instalación' '## Ejemplo' '## El sprint' '## Autopilot' '## Guard' '## Problemas comunes'; do
             if ! grep -qE "^$h" README.es.md; then
               echo "FAIL: README.es.md missing required section: $h"
               fail=1
             fi
-          done <<'EOF'
-## Instalación
-## Ejemplo
-## El sprint
-## Autopilot
-## Guard
-## Problemas comunes
-EOF
+          done
           exit $fail
 
       - name: TROUBLESHOOTING.es covers most-encountered entries
@@ -1371,20 +1457,12 @@ EOF
           # Spanish entries that map to the high-traffic English ones.
           # Advanced topics (corporate proxy, telemetry, autopilot
           # double-run) are allowed to live only in canonical English.
-          while IFS= read -r h; do
-            [ -z "$h" ] && continue
+          for h in 'Los comandos slash no aparecen' 'Command not found: jq' 'phase gate' 'Estoy en Windows' 'sprint' 'Conflicto de nombres'; do
             if ! grep -qiE "$h" TROUBLESHOOTING.es.md; then
               echo "FAIL: TROUBLESHOOTING.es.md missing high-traffic entry: $h"
               fail=1
             fi
-          done <<'EOF'
-Los comandos slash no aparecen
-Command not found: jq
-phase gate
-Estoy en Windows
-sprint
-Conflicto de nombres
-EOF
+          done
           exit $fail
 
   plain-language-contract:
@@ -1441,6 +1519,8 @@ EOF
               fi
               continue
             fi
+            # Process substitution keeps $fail in the parent shell scope
+            # (a piped while runs in a subshell, which would lose the flag).
             while IFS= read -r block; do
               [ -z "$block" ] && continue
               hit=$(echo "$block" | grep -i -oE "$patterns" || true)
@@ -1449,8 +1529,6 @@ EOF
                 echo "      block: $block"
                 fail=1
               fi
-            done <<EOF
-$blocks
-EOF
+            done < <(printf '%s\n' "$blocks")
           done
           exit $fail

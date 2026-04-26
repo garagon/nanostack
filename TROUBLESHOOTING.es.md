@@ -148,7 +148,7 @@ Nanostack funciona en Windows con dos caminos soportados:
 - **Git Bash** (incluido con Git for Windows). Corré `setup` desde Git Bash, no desde PowerShell o CMD.
 - **WSL2** (recomendado para uso intenso). Funciona como Linux nativo.
 
-PowerShell y CMD no están soportados — los scripts de nanostack usan Bash.
+PowerShell y CMD no están soportados; los scripts de nanostack usan Bash.
 
 Si las skills no aparecen después del setup en Windows:
 
