@@ -15,6 +15,24 @@ This is an example custom skill. It shows the patterns every nanostack-compatibl
 
 ## Process
 
+### 0. Resolve paths (host-agnostic)
+
+Every command below uses two env vars so the skill works on any agent that follows the nanostack layout. Defaults assume Claude Code; override the vars for Codex, Cursor, OpenCode, Gemini, or your own host.
+
+```bash
+NANOSTACK_ROOT="${NANOSTACK_ROOT:-$HOME/.claude/skills/nanostack}"
+SKILL_DIR="${SKILL_DIR:-$HOME/.claude/skills/audit-licenses}"
+```
+
+Common substitutions:
+
+| Host | NANOSTACK_ROOT | SKILL_DIR |
+|---|---|---|
+| Claude Code | `$HOME/.claude/skills/nanostack` | `$HOME/.claude/skills/audit-licenses` |
+| Codex / Cursor / OpenCode / Gemini | `$HOME/.agents/skills/nanostack` (or wherever the agent loads skills from) | `$HOME/.agents/skills/audit-licenses` |
+
+If the user already exported `NANOSTACK_ROOT` and `SKILL_DIR`, the defaults do not overwrite them.
+
 ### 1. Register the phase (first run only)
 
 `save-artifact.sh` and the resolver only accept phases listed in `.nanostack/config.json`. Register `audit-licenses` once per project:
@@ -37,19 +55,16 @@ Once registered the phase is first-class: the resolver returns `phase_kind=custo
 Load whatever upstream context exists for this phase. The resolver knows about `audit-licenses` because step 1 registered it:
 
 ```bash
-~/.claude/skills/nanostack/bin/resolve.sh audit-licenses
+"$NANOSTACK_ROOT/bin/resolve.sh" audit-licenses
 ```
 
 Output includes `phase_kind: "custom"` and `upstream_artifacts` driven by the phase's `depends_on` (declared in this skill's frontmatter, or in `.nanostack/config.json`'s `phase_graph` if you have one). Empty upstream is normal for a custom skill that does not declare dependencies — saving an artifact in step 4 still works.
 
 ### 3. Detect the stack and run the audit
 
-Check what kind of project this is and read its dependency manifest. The helper lives next to this `SKILL.md`. Once the skill is copied into your agent's skills directory (see the README), call it with its absolute path:
+Check what kind of project this is and read its dependency manifest. The helper lives next to this `SKILL.md`:
 
 ```bash
-SKILL_DIR="$HOME/.claude/skills/audit-licenses"
-# Substitute the path your agent uses for skills if it differs.
-
 if [ -f package.json ]; then
   "$SKILL_DIR/bin/audit.sh" node
 elif [ -f requirements.txt ] || [ -f pyproject.toml ]; then
@@ -69,11 +84,11 @@ The script prints a JSON block with `{ permissive: N, weak_copyleft: N, strong_c
 Show the user the summary first, then save an artifact so a future skill (or `/compound`) can read it:
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh audit-licenses \
+"$NANOSTACK_ROOT/bin/save-artifact.sh" audit-licenses \
   '{"phase":"audit-licenses","summary":{"flagged":[...],"counts":{...}},"context_checkpoint":{}}'
 ```
 
-The artifact lives at `.nanostack/audit-licenses/<timestamp>.json`. Other skills can find it with `bin/find-artifact.sh audit-licenses 30`.
+The artifact lives at `.nanostack/audit-licenses/<timestamp>.json`. Other skills can find it with `"$NANOSTACK_ROOT/bin/find-artifact.sh" audit-licenses 30`.
 
 ### 5. Headline
 

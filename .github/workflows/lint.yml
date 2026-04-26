@@ -2602,6 +2602,27 @@ jobs:
             echo "      Without registration, save-artifact.sh exits 1 the first time the agent runs the skill."
             exit 1
           fi
+      - name: SKILL.md uses host-agnostic NANOSTACK_ROOT and SKILL_DIR env vars
+        run: |
+          set -e
+          f=examples/custom-skill-template/audit-licenses/SKILL.md
+          # Both vars must be defined (with the ${VAR:-default} pattern).
+          if ! grep -qE 'NANOSTACK_ROOT=.*HOME' "$f"; then
+            echo "FAIL: SKILL.md does not define NANOSTACK_ROOT with a default"
+            exit 1
+          fi
+          if ! grep -qE 'SKILL_DIR=.*HOME' "$f"; then
+            echo "FAIL: SKILL.md does not define SKILL_DIR with a default"
+            exit 1
+          fi
+          # Helper invocations must not hardcode ~/.claude/skills/nanostack/bin/...
+          # That defeats the host-agnostic claim and locks the template
+          # to one agent layout.
+          if grep -nE '~/\.claude/skills/nanostack/bin/(resolve|save-artifact|find-artifact)\.sh' "$f"; then
+            echo "FAIL: SKILL.md hardcodes ~/.claude/skills/nanostack/bin/... paths"
+            echo "      Use \"\$NANOSTACK_ROOT/bin/...\" so non-Claude agents can substitute the path."
+            exit 1
+          fi
       - name: agents/openai.yaml exists and parses
         run: |
           set -e
