@@ -163,7 +163,10 @@ Discutí la idea, aprobá el brief, alejate. El agente corre el sprint completo:
 /nano → build → /review → /security → /qa → /ship
 ```
 
+**Autopilot avanza con un brief completo, no adivinando.** `/think --autopilot` siempre arma un brief primero. Si el brief tiene los campos requeridos (`value_proposition`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`), `/think` continúa a `/nano` sin pausar. Si falta alguno, `/think` para una vez y hace una sola pregunta enfocada — no inventa campos para seguir.
+
 Autopilot solo para si:
+- `/think` no puede armar el brief desde el contexto (hace una pregunta y sigue)
 - `/review` encuentra issues bloqueantes que necesitan tu decisión
 - `/security` encuentra vulnerabilidades críticas o altas
 - `/qa` falla los tests
