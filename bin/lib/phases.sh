@@ -214,13 +214,16 @@ nano_phase_graph_json() {
   local config
   config=$(_nano_phases_resolve_config "${1:-}") || true
   # Node order under `review`/`qa`/`security` matches the legacy
-  # PEERS list in bin/next-step.sh (review, security, qa). Downstream
-  # consumers (next-step's required_before_ship, sprint-journal,
-  # docs) expect that ordering, so the graph is the single source
-  # of truth and they read from it. PR 4 of the 2026-05-10 audit
-  # made the order load-bearing; Codex caught a sort-induced drift
-  # on the seventh review pass.
-  local default_graph='[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"review","depends_on":["build"]},{"name":"security","depends_on":["build"]},{"name":"qa","depends_on":["build"]},{"name":"ship","depends_on":["review","security","qa"]}]'
+  # hardcoded progression in bin/session.sh that this PR replaces:
+  # review -> qa -> security -> ship. Next-phase walks graph order,
+  # so the graph IS the progression contract. required_before_ship
+  # ends up as ["review","qa","security"] (graph-derived order);
+  # consumers that need set semantics work either way and the doc
+  # is the single source of truth on the wire shape. Two earlier
+  # Codex passes pulled in opposite directions on the array order
+  # vs the progression; we side with the progression because that
+  # is what the previous PR (PR 4) explicitly promised to preserve.
+  local default_graph='[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"review","depends_on":["build"]},{"name":"qa","depends_on":["build"]},{"name":"security","depends_on":["build"]},{"name":"ship","depends_on":["review","qa","security"]}]'
   if [ -n "$config" ] && command -v jq >/dev/null 2>&1; then
     local graph
     graph=$(jq -c '.phase_graph // empty' "$config" 2>/dev/null)

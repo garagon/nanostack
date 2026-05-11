@@ -34,16 +34,15 @@ PROJECT_HASH=$(printf '%s' "$PROJECT" | nano_sha256 | cut -c1-12)
 # security and ship.depends_on match bin/lib/phases.sh's default
 # graph so a conductor sprint that mirrors into session.json does
 # not change next_phase ordering vs a session that came from
-# bin/session.sh init alone. Codex caught the drift between the two
-# defaults on the PR 4 tenth review pass.
+# bin/session.sh init alone.
 DEFAULT_PHASES='[
   {"name":"think","depends_on":[]},
   {"name":"plan","depends_on":["think"]},
   {"name":"build","depends_on":["plan"]},
   {"name":"review","depends_on":["build"]},
-  {"name":"security","depends_on":["build"]},
   {"name":"qa","depends_on":["build"]},
-  {"name":"ship","depends_on":["review","security","qa"]}
+  {"name":"security","depends_on":["build"]},
+  {"name":"ship","depends_on":["review","qa","security"]}
 ]'
 
 # Detect agent name. Identity must be stable within one process and unique

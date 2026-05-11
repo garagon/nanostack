@@ -94,7 +94,7 @@ echo "[1] session init snapshots the active phase_graph"
 new_project "cell1-default"
 "$SESSION_SH" init development >/dev/null
 nodes=$(jq -r '.phase_graph // [] | map(.name) | join(",")' "$NANOSTACK_STORE/session.json")
-assert_eq "default graph nodes" "think,plan,build,review,security,qa,ship" "$nodes"
+assert_eq "default graph nodes" "think,plan,build,review,qa,security,ship" "$nodes"
 # At init, ready_phases is populated with the graph roots (every node
 # with empty depends_on). For the default sprint that is just `think`.
 # A previous form populated this with []; that was the regression
@@ -112,8 +112,8 @@ assert_eq "next_phase at init = think" "think" "$next_init"
 echo "[2] default sprint walk preserves the historical next_phase order"
 new_project "cell2-default-walk"
 "$SESSION_SH" init development >/dev/null
-declare -a expected_next=("plan" "review" "security" "qa" "ship" "compound")
-declare -a phases_to_complete=("think" "plan" "review" "security" "qa" "ship")
+declare -a expected_next=("plan" "review" "qa" "security" "ship" "compound")
+declare -a phases_to_complete=("think" "plan" "review" "qa" "security" "ship")
 for i in 0 1 2 3 4 5; do
   ph="${phases_to_complete[$i]}"
   "$SESSION_SH" phase-start "$ph" >/dev/null
@@ -528,7 +528,7 @@ EOF
 "$SESSION_SH" init development >/dev/null
 nodes_before=$(jq -c '.phase_graph | map(.name)' "$NANOSTACK_STORE/session.json")
 assert_eq "before conductor: session phase_graph is the default sprint" \
-  '["think","plan","build","review","security","qa","ship"]' "$nodes_before"
+  '["think","plan","build","review","qa","security","ship"]' "$nodes_before"
 
 "$REPO/conductor/bin/sprint.sh" start --phases \
   '[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"license-audit","depends_on":["build"]},{"name":"ship","depends_on":["license-audit"]}]' \
@@ -564,7 +564,7 @@ for ph in plan review; do
   "$SESSION_SH" phase-complete "$ph" >/dev/null
 done
 next_after_review=$(jq -r '.next_phase' "$NANOSTACK_STORE/session.json")
-assert_eq "/feature after review: next_phase != think" "security" "$next_after_review"
+assert_eq "/feature after review: next_phase != think" "qa" "$next_after_review"
 
 # Cell 9j: the guard's phase-gate reads required phases from the
 # session's phase_graph too. A custom workflow stack whose ship
