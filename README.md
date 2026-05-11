@@ -668,6 +668,28 @@ When you run `/ship` and the PR lands, it automatically generates a sprint journ
 
 The journal reads every phase artifact from the sprint and writes one file with the full decision trail: what `/think` reframed, what `/nano` scoped, what `/review` found, how conflicts were resolved, what `/security` graded.
 
+### Visual artifacts
+
+Every phase artifact is JSON. JSON is what every skill reads, what trust verification hashes, what the sprint journal aggregates. That layer stays canonical.
+
+On top of it, `bin/render-artifact.sh` produces a local HTML view of any artifact so a human can inspect the same evidence in a browser:
+
+```bash
+bin/render-artifact.sh plan --latest         # render the latest plan
+bin/render-artifact.sh review --latest       # review with severity counters
+bin/render-artifact.sh security --latest     # OWASP / STRIDE breakdown
+bin/render-artifact.sh journal --today       # whole sprint timeline
+bin/render-artifact.sh stack compliance-release  # custom workflow DAG
+```
+
+Output lands under `.nanostack/visual/` next to the JSON it came from. Every render writes a companion manifest that records source path, source integrity, render timestamp, and renderer version. Delete a generated HTML file at any time; the JSON is unchanged and the view can be regenerated from it.
+
+The renderer is offline-only: every page ships its own CSS, the Content-Security-Policy header blocks external network, no fonts or scripts are loaded from a CDN. A `--strict` flag fails the render when any source artifact's SHA-256 integrity hash does not match (`integrity_mismatch`) or is missing (`integrity_missing`).
+
+`--interactive` adds copy-only buttons to `/plan` and `/review` views: copy as prompt, copy as Markdown, copy as JSON patch. The buttons use the local clipboard API only. No filesystem writes, no network calls, no form submission.
+
+Visual artifacts are an optional inspection layer. Nothing depends on them: removing `.nanostack/visual/` does not change skill behavior or sprint state. The contract lives in `reference/visual-artifact-contract.md`.
+
 ### Knowledge compounding on /compound
 
 After shipping, run `/compound` to document what you learned:

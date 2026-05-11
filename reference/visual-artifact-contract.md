@@ -2,67 +2,79 @@
 
 ## Purpose
 
-`bin/render-artifact.sh` writes a static HTML view of a Nanostack JSON artifact. The HTML is a derived, local, inspectable view of the canonical artifact. JSON remains the source of truth; the renderer is strictly downstream.
+`bin/render-artifact.sh` writes a static HTML view of a Nanostack JSON artifact, sprint journal, or custom stack DAG. The HTML is a derived, local, inspectable view of canonical evidence. JSON remains the source of truth; the renderer is strictly downstream.
 
-This contract is normative for PR 1 of the Visual Artifacts Architecture v1 round (2026-05-11). It documents what the renderer produces, where it writes, what it refuses, and how downstream consumers must treat the output.
+This contract is normative for the Visual Artifacts v1 round (2026-05-11). It documents what the renderer produces, where it writes, what it refuses, and how downstream consumers must treat the output.
 
 ## Hard invariants
 
 1. **JSON is canonical.** No skill (`/review`, `/security`, `/qa`, `/ship`, `bin/resolve.sh`, conductor) reads HTML as source evidence. HTML can be deleted and regenerated without changing sprint state.
-2. **Deterministic.** Same source artifact + same renderer version produces semantically equivalent HTML and manifest. Only the manifest `created_at` field is allowed to vary.
-3. **Local.** Output paths live under `$NANOSTACK_STORE/visual/`. The renderer refuses `--out` paths that escape the visual root and refuses to follow a symlinked visual root.
+2. **Deterministic.** Same source artifact + same renderer version produces semantically equivalent HTML and manifest. Only the manifest `created_at` and timestamp fields are allowed to vary.
+3. **Local.** Output paths live under `$NANOSTACK_STORE/visual/`. The renderer refuses `--out` paths that escape the visual root and refuses to follow a symlinked visual root or any symlinked subdirectory under it.
 4. **Trust-aware.** Every render records source trust. `--strict` rejects `integrity_missing` and `integrity_mismatch`. Without `--strict`, `integrity_mismatch` still fails (exit 3); `integrity_missing` renders with a visible untrusted badge.
 5. **Escaped.** Every string read from JSON passes through `nano_html_escape` or `nano_attr_escape` before reaching HTML.
-6. **Offline.** No external scripts, fonts, CSS, images, telemetry, or analytics. CSP defaults to `default-src 'none'`. Static mode forbids inline script.
-7. **Interactive mode is copy-only.** Reserved for PR 4. PR 1 rejects `--interactive` with exit 2.
+6. **Offline.** No external scripts, fonts, CSS, images, telemetry, or analytics. Static-mode CSP defaults to `default-src 'none'`. The interactive mode (see below) widens the policy to allow ONE inline script body, with strict allowlist enforcement.
+7. **Interactive mode is copy-only.** When `--interactive` is passed for `/plan` or `/review`, the page emits three clipboard buttons (copy as prompt / Markdown / JSON patch). The inline script may use only `navigator.clipboard.writeText`. No `fetch`, no `XMLHttpRequest`, no `localStorage`, no `sessionStorage`, no `document.cookie`, no `eval`, no `new Function`, no `<form>`, no `document.write`, no `window.open`. Other phases reject `--interactive` with exit 1.
 
 A consumer that depends on any of these invariants can read the manifest (see below) to confirm the render produced today's contract.
 
 ## CLI
 
 ```
-bin/render-artifact.sh <phase> [artifact-path|--latest] [--strict] [--interactive] [--out <path>] [--manifest-only]
+bin/render-artifact.sh <phase> [artifact-path|--latest] [--strict]
+                               [--interactive] [--out <path>]
+                               [--manifest-only]
+
+bin/render-artifact.sh journal [--today|--date YYYY-MM-DD]
+
+bin/render-artifact.sh stack [<name>] [--strict] [--manifest-only]
 ```
 
 | Form | Behavior |
 |------|----------|
-| `<phase> --latest` | Resolve source via `bin/find-artifact.sh <phase> 30`. |
+| `<phase> --latest` | Resolve source via `bin/find-artifact.sh <phase> 30 --no-session-sync`. |
 | `<phase> <artifact-path>` | Render the explicit file. Phase mismatch fails with exit 1. |
 | `<phase>` with no artifact argument | Equivalent to `<phase> --latest`. |
-| `journal --today` | Reserved for PR 3. Exit 2 in PR 1. |
-| `stack <name>` | Reserved for PR 3. Exit 2 in PR 1. |
+| `journal --today` | Aggregate every registered phase artifact for today's date into a sprint timeline. |
+| `journal --date YYYY-MM-DD` | Same shape, restricted to the requested date. Filename prefix filter; no 30-day fallback. |
+| `journal` (no flag) | Defaults to today's UTC date. |
+| `stack <name>` | Render a custom workflow DAG. Looks up `examples/custom-stack-template/<name>/stack.json`, then `$NANOSTACK_STORE/stacks/<name>/stack.json`. |
+| `stack default` | Falls back to `.nanostack/config.json`'s `phase_graph` when no named stack file is found. Any other unknown name renders a "Stack not found" notice rather than falling back. |
 
 | Flag | Behavior |
 |------|----------|
-| `--latest` | Resolve source with `find-artifact.sh`. |
-| `--strict` | Require `nano_artifact_trust == verified`. |
-| `--interactive` | Reserved for PR 4. Exit 2 in PR 1. |
-| `--out <path>` | Write HTML to explicit path. Path must be inside `$NANOSTACK_STORE/visual/`. |
-| `--manifest-only` | Write manifest only. Useful for CI trust checks. |
+| `--latest` | Resolve source with `find-artifact.sh --no-session-sync`. |
+| `--strict` | Require `nano_artifact_trust == verified` for the source artifact (phase renders) or for every aggregated source (journal / stack). Aggregate strict mode allows `missing` (a phase not run yet) but rejects `integrity_missing` and `integrity_mismatch`. |
+| `--interactive` | Enable copy-only clipboard buttons. Supported only for `/plan` and `/review`. Exit 1 elsewhere. |
+| `--out <path>` | Write HTML to explicit path. Path must lexically normalize under `$NANOSTACK_STORE/visual/` and may not traverse a symlinked directory. The leaf file may not pre-exist as a symlink or directory. |
+| `--manifest-only` | Write manifest only. The strict check still runs first, so a malformed source still produces exit 3. |
 
 | Exit | Meaning |
 |------|---------|
 | 0 | Render succeeded. Output path printed to stdout. |
-| 1 | Input error: missing artifact, invalid JSON, phase mismatch, unsupported phase. |
-| 2 | Feature intentionally unsupported in current PR. |
+| 1 | Input error: missing artifact, invalid JSON, phase mismatch, unsupported phase, malformed stack name, `--interactive` requested outside `/plan` and `/review`. |
 | 3 | Trust failure (`integrity_mismatch` always; `integrity_missing` only under `--strict`). |
-| 4 | Unsafe output path or symlinked visual root. |
+| 4 | Unsafe output path: outside the visual root, symlinked subdirectory, symlinked leaf, directory at leaf, or symlinked visual root. |
 
 ## Store layout
 
 ```
 $NANOSTACK_STORE/visual/
   <phase>/                       core phase HTML (plan, think, review, security, qa, ship)
-  custom/<phase>/                custom phase HTML
+  custom/<phase>/                custom phase HTML (future, when wired)
   journal/                       sprint journal HTML
+  stack/<name>/                  custom stack DAG HTML
   manifests/                     companion manifest JSON for every render
 ```
 
 Filename format:
 
-- HTML: `YYYYMMDD-HHMMSS-<phase>.html`
-- Core manifest: `YYYYMMDD-HHMMSS-<phase>.manifest.json`
-- Custom manifest: `YYYYMMDD-HHMMSS-custom-<phase>.manifest.json`
+- Phase HTML: `YYYYMMDD-HHMMSS-<pid>-<phase>.html`
+- Journal HTML: `YYYYMMDD-HHMMSS-<pid>-journal-<date>.html`
+- Stack HTML: `YYYYMMDD-HHMMSS-<pid>-stack-<name>.html`
+- Manifest: matching stem with `.manifest.json` suffix, under `manifests/`
+
+The PID suffix prevents collisions between same-second renders.
 
 ## Manifest schema
 
@@ -71,8 +83,8 @@ Every render writes a companion manifest. Schema version `1`:
 ```json
 {
   "schema_version": "1",
-  "kind": "phase",
-  "phase": "plan",
+  "kind": "phase|journal|stack",
+  "phase": "plan|think|review|security|qa|ship|journal|stack",
   "custom_phase": false,
   "format": "html",
   "interactive": false,
@@ -85,11 +97,13 @@ Every render writes a companion manifest. Schema version `1`:
       "trust": "verified"
     }
   ],
-  "output_path": "/absolute/path/.nanostack/visual/plan/20260511-180100-plan.html",
+  "output_path": "/absolute/path/.nanostack/visual/plan/20260511-180100-12345-plan.html",
   "renderer": {
     "name": "nanostack-html-renderer",
     "version": "1"
   },
+  "schema_valid": true,
+  "schema_error": null,
   "created_at": "2026-05-11T18:01:00Z"
 }
 ```
@@ -99,9 +113,12 @@ Validation rules:
 - `schema_version` equals `"1"`.
 - `format` equals `"html"`.
 - `kind` is one of `phase`, `journal`, `stack`.
-- `source_artifacts` length is at least 1; each entry has `phase`, `path`, `trust`.
+- `source_artifacts` length is at least 1. Phase renders have one entry; journal aggregates every registered phase; stack renders include the stack definition file (or `.nanostack/config.json` for `stack default`) as the first source, plus one entry per phase.
 - `output_path` is absolute and under `$NANOSTACK_STORE/visual/`.
 - `renderer.version` is present.
+- `interactive` is `true` only for `/plan` and `/review` renders with `--interactive`.
+
+Even failure modes ("Stack invalid", "Stack not found") produce a manifest with a synthetic `stack:<name>` source so downstream consumers always see at least one entry.
 
 ## HTML safety contract
 
@@ -110,7 +127,8 @@ Every generated HTML document includes:
 - `<!doctype html>`.
 - `<meta charset="utf-8">`.
 - `<meta name="viewport" content="width=device-width, initial-scale=1">`.
-- A static-mode CSP: `default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'`.
+- Static-mode CSP: `default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'`.
+- Interactive-mode CSP: same as static plus `script-src 'unsafe-inline'`.
 - A `<title>` of the form `Nanostack /<phase> visual artifact`.
 - A `<main>` element with `data-nanostack-visual="1"` and `data-phase="<phase>"`.
 - A trust badge element with `data-trust="<status>"`.
@@ -118,12 +136,13 @@ Every generated HTML document includes:
 
 Forbidden in any generated template or rendered output:
 
-- External URLs (`http://`, `https://`).
+- External URLs (`http://`, `https://`) except inside the locked `nano_visual_safe_pr_url` allowlist for `/ship` PR links and the SVG XML namespace identifier.
 - `<script src=...>`, `fetch(`, `XMLHttpRequest`, `navigator.sendBeacon`.
 - `localStorage`, `sessionStorage`, `document.cookie`.
 - `eval(`, `new Function(`.
+- `<form>`, `document.write`, `window.open`.
 
-CI enforces the forbidden list against `bin/render-artifact.sh` and `bin/lib/visual-render.sh` via `ci/check-visual-artifact-templates.sh`.
+The interactive inline script body is allowed to use `navigator.clipboard.writeText` only. CI enforces the forbidden list against `bin/render-artifact.sh`, `bin/lib/visual-render.sh`, and `bin/lib/html-escape.sh` via `ci/check-visual-artifact-templates.sh`.
 
 ## Escape helpers
 
@@ -135,6 +154,8 @@ CI enforces the forbidden list against `bin/render-artifact.sh` and `bin/lib/vis
 
 Every JSON-derived string MUST pass through one of these. Fixed template HTML (page shell, table headers, button labels) may be written directly.
 
+For interactive mode, an additional transform in `render-artifact.sh::_js_safe_for_script` encodes every `<` in JS-embedded JSON payloads as `<` so the HTML parser cannot exit the script body via `<!--<script>`, `</script>`, or `<!CDATA[` sequences. `JSON.parse` reads `<` as the literal `<`, so the clipboard payload the user pastes is unchanged.
+
 ## Trust badge wording
 
 | Status | Badge text |
@@ -142,20 +163,46 @@ Every JSON-derived string MUST pass through one of these. Fixed template HTML (p
 | `verified` | `verified` |
 | `integrity_missing` | `unverified` |
 | `integrity_mismatch` | This status never reaches the badge: the render exits 3 before HTML is written. |
+| `not_applicable` | `aggregated` (used by journal and stack views, which surface per-source trust inline). |
 | `not_found` | This status never reaches the badge: the render exits 1 before HTML is written. |
 
 The wording is locked. A renderer that prints other strings for these statuses fails `ci/check-visual-artifact-templates.sh`.
 
+## Multi-store trust scope
+
+In a project-local store (`$(git rev-parse --show-toplevel)/.nanostack`), the journal and stack renderers surface tampered same-day artifacts even when `.project` was flipped. The integrity hash is the authoritative signal because no one else writes to the project repo's `.nanostack/` directory.
+
+In a shared store (for example `$HOME/.nanostack` used across projects), the renderers require `.project` to match the current project before surfacing tamper. This avoids false positives from other projects' tampered or legacy artifacts.
+
+The store-local check uses `realpath` so a macOS `/tmp` → `/private/tmp` symlink does not produce a false mismatch.
+
+## Stack graph validation
+
+`stack` renders accept a `phase_graph` only if all of the following hold:
+
+- It is a non-empty array of objects.
+- Each entry has a non-empty string `.name` and an array-of-string `.depends_on`.
+- Names match `^[A-Za-z0-9_-]+$` (no whitespace, no path separators).
+- Names are unique.
+- Every name in any `.depends_on` exists as a declared node (no dangling references).
+- The graph is acyclic (Kahn-style topological pass; rounds capped at `node_count + 1`).
+
+A graph that fails any check produces a "Stack invalid" notice with the specific reason. The manifest still writes with a synthetic source pointing at the stack file.
+
 ## Relationship to existing primitives
 
 - Trust state comes from `bin/lib/artifact-trust.sh::nano_artifact_trust`. The renderer never reimplements integrity checks.
-- Source artifact resolution uses `bin/find-artifact.sh` for `--latest` and accepts an explicit path otherwise. The renderer parses the explicit path with `jq -e .` and verifies `.phase` matches the requested phase.
-- Schema validation uses `bin/lib/artifact-schemas.sh::nano_validate_artifact`. A source artifact that fails schema validation is rendered with a visible "schema invalid" notice rather than failing the render; the manifest still records the source trust.
+- Source artifact resolution for phase renders uses `bin/find-artifact.sh --no-session-sync` so the renderer never mutates `session.json`.
+- Journal date filtering uses a filename prefix sort (matches `save-artifact.sh`'s `YYYYMMDD-HHMMSS.json` convention), not file mtime.
+- Schema validation uses `bin/lib/artifact-schemas.sh::nano_validate_artifact`. A source artifact that fails schema validation is rendered with a visible "schema invalid" notice rather than failing the render; the manifest records the source trust and an HTML data-testid marks the warning.
 - Store path comes from `bin/lib/store-path.sh::NANOSTACK_STORE`.
+- Phase registry comes from `bin/lib/phases.sh::nano_all_phases` and `nano_phase_graph_json`. Custom phases declared in `.nanostack/config.json` appear in the journal timeline and the `stack default` fallback.
 - No skill, conductor command, or guard hook reads the HTML output. The renderer is strictly downstream.
 
 ## Determinism and atomicity
 
-- Writes go to `<path>.tmp.$$` and rename into place after the render and manifest both succeed.
-- Temporary files are removed on trap.
+- Writes go through `mktemp "$path.tmp.XXXXXX"` (O_EXCL) and rename into place after the render and manifest both succeed.
+- Temporary files and the per-render scratch directory are removed on trap.
 - The renderer prints exactly one line to stdout on success: the absolute HTML output path. Errors go to stderr.
+- Same-second renders never collide on manifest paths because the timestamp includes the PID.
+- Lexical path normalization (`nano_visual_normalize_path`) defeats `..` escape and symlink-then-up attacks before any filesystem write.

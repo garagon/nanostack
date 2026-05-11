@@ -39,6 +39,10 @@ See `reference/custom-stack-contract.md` for the contract, `examples/custom-stac
 
 Every artifact written by `bin/save-artifact.sh` carries a SHA-256 integrity field. `bin/find-artifact.sh` has a `--require-integrity` flag for strict consumers, and `bin/resolve.sh` exposes per-upstream trust state in its `upstream_status` field (`verified`, `integrity_missing`, `integrity_mismatch`, `missing`, `not_applicable`).
 
+## Visual artifacts
+
+`bin/render-artifact.sh` produces a local HTML view of any phase artifact, sprint journal, or custom stack DAG. Output lands under `.nanostack/visual/` with a companion manifest recording the source artifact path, integrity, and renderer version. HTML is a derived, deletable view; JSON remains canonical. The renderer is offline (Content-Security-Policy locks every page, no external scripts or fonts). A `--strict` flag fails the render when any source has `integrity_missing` or `integrity_mismatch`. An `--interactive` flag adds copy-only clipboard buttons to `/plan` and `/review` (copy as prompt / Markdown / JSON patch); no filesystem writes, no network calls. The contract is in `reference/visual-artifact-contract.md`.
+
 ## Privacy
 
 There is no Nanostack cloud. Artifacts, journals, and analytics stay under `.nanostack/` on disk. Telemetry is opt-in and documented in `TELEMETRY.md`; the on-by-default behavior is no remote calls.

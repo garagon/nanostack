@@ -276,6 +276,28 @@ Un equipo de marketing arma `/audience` y `/campaign`. Un equipo de datos arma `
 
 Walkthrough completo: [`EXTENDING.md`](EXTENDING.md).
 
+## Artifactos visuales
+
+Cada artefacto de fase es JSON. El JSON es lo que leen los skills, lo que firma el hash de integridad y lo que agrega el sprint journal. Esa capa es la canónica.
+
+Encima de eso, `bin/render-artifact.sh` produce una vista HTML local de cualquier artefacto para que un humano pueda inspeccionar la misma evidencia en el navegador:
+
+```bash
+bin/render-artifact.sh plan --latest         # último /nano
+bin/render-artifact.sh review --latest       # /review con contadores de severidad
+bin/render-artifact.sh security --latest     # OWASP / STRIDE
+bin/render-artifact.sh journal --today       # timeline del sprint
+bin/render-artifact.sh stack compliance-release  # DAG del workflow custom
+```
+
+El output queda en `.nanostack/visual/` al lado del JSON que lo originó. Cada render escribe un manifest que registra path origen, integridad SHA-256, timestamp y versión del renderer. Podés borrar el HTML cuando quieras: el JSON no cambia y la vista se regenera.
+
+El renderer es offline: cada página trae su propio CSS, el Content-Security-Policy bloquea la red externa, no se cargan fonts ni scripts de CDN. El flag `--strict` falla si algún artefacto fuente tiene la integridad rota (`integrity_mismatch`) o sin firmar (`integrity_missing`).
+
+`--interactive` suma botones de copia en `/plan` y `/review` (copy as prompt, copy as Markdown, copy as JSON patch). Usan solo el clipboard local. Sin escrituras a disco, sin llamadas de red, sin form submission.
+
+Los artifactos visuales son una capa opcional de inspección. Nada depende de ellos: borrar `.nanostack/visual/` no cambia el comportamiento de ningún skill ni el estado del sprint. El contrato vive en `reference/visual-artifact-contract.md`.
+
 ## Privacidad
 
 Nanostack no tiene un servicio cloud propio. Guarda planes, artefactos, journals y know-how localmente en `.nanostack/`. No envía tu código, prompts, nombres de proyecto ni rutas de archivo a servidores de Nanostack. Tu proveedor de agente de IA puede procesar el contexto que le des; usá las opciones de privacidad de tu proveedor y tus propias políticas de datos para trabajo sensible.

@@ -3782,3 +3782,61 @@ jobs:
         run: ci/check-visual-artifact-templates.sh
       - name: End-to-end render contract
         run: ci/e2e-visual-artifacts.sh
+
+  visual-artifact-public-copy:
+    # Locks the public framing introduced in PR 5: visual artifacts are
+    # "inspectable local evidence", JSON canonical, HTML derived. No
+    # cloud/SaaS/certification language allowed inside any paragraph
+    # that mentions render-artifact.sh, visual artifacts, or
+    # .nanostack/visual.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Public copy is locally-framed and modest
+        run: |
+          set -e
+          # Files that may speak publicly about visual artifacts.
+          FILES=(README.md README.es.md llms.txt AGENTS.md reference/visual-artifact-contract.md)
+          # Words that misrepresent the local-only, optional nature of
+          # the renderer. The check pulls a 10-line window around every
+          # render-artifact / visual artifact mention so the lint only
+          # fires when the banned word actually appears in the context
+          # that frames the renderer publicly.
+          BAD_WORDS='cloud viewer|hosted viewer|SaaS viewer|cloud dashboard|cloud render|cloud-rendered|cloud-based viewer|attestation|certified release|enterprise[- ]grade'
+          fail=0
+          for f in "${FILES[@]}"; do
+            [ -f "$f" ] || continue
+            # Extract a 10-line window around every renderer mention.
+            window=$(grep -niE -A10 -B2 'render-artifact|visual artifact|\.nanostack/visual' "$f" 2>/dev/null || true)
+            if [ -z "$window" ]; then continue; fi
+            if printf '%s\n' "$window" | grep -niE -- "$BAD_WORDS" >/dev/null 2>&1; then
+              echo "FAIL: $f has a banned framing word in a visual-artifact paragraph."
+              printf '%s\n' "$window" | grep -niE -- "$BAD_WORDS"
+              fail=1
+            fi
+          done
+          [ "$fail" = "1" ] && exit 1
+          echo "OK: visual artifact public copy stays local-first and modest."
+
+      - name: Visual artifact section present in public surfaces
+        run: |
+          set -e
+          # The public surfaces must each at least *acknowledge* the
+          # renderer once so the docs do not drift back to JSON-only
+          # framing. Codex PR 5 anchor.
+          for pair in \
+              "README.md|render-artifact" \
+              "README.es.md|render-artifact" \
+              "llms.txt|render-artifact" \
+              "AGENTS.md|render-artifact" \
+              "reference/visual-artifact-contract.md|render-artifact"; do
+            file="${pair%|*}"
+            needle="${pair#*|}"
+            if ! grep -qF "$needle" "$file"; then
+              echo "FAIL: $file does not mention $needle. Update the public copy when PR 5 framing changes."
+              exit 1
+            fi
+          done
+          echo "OK: every public surface mentions render-artifact."
