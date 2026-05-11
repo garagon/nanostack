@@ -67,6 +67,10 @@ KNOWN_HOSTS="claude cursor codex opencode gemini"
 ENFORCEMENT_ENUM="unsupported instructions_only detectable hooked enforced host_dependent"
 DISCOVERY_ENUM="native rules_file extension skill_folder instructions_only unsupported unknown host_dependent"
 VERIFICATION_METHOD_ENUM="ci manual unknown"
+# Supported schema versions. Bump here when the schema doc adds a new
+# version and update downstream consumers in the same commit so an
+# adapter cannot ship a future-incompatible shape silently.
+SCHEMA_VERSION_ENUM="1"
 
 # Adapter names listed in the README. Adapters in this list get the
 # strict fail-after-60 policy; an adapter not listed in the README is
@@ -102,6 +106,7 @@ FAIL=0
 WARN=0
 RESULTS_JSON="[]"
 RESULTS_TEXT=""
+FILTER_MATCHED=0
 
 check_adapter() {
   local file="$1"
@@ -111,6 +116,7 @@ check_adapter() {
   if [ -n "$FILTER" ] && [ "$name" != "$FILTER" ]; then
     return 0
   fi
+  [ -n "$FILTER" ] && FILTER_MATCHED=1
 
   local host last_verified bash_guard write_guard phase_gate discovery method
   if ! jq -e '.' "$file" >/dev/null 2>&1; then
@@ -138,6 +144,19 @@ check_adapter() {
       errors="${errors:+$errors; }missing $key"
     fi
   done
+
+  # schema_version must match a known value. Bumping the schema means
+  # adding to SCHEMA_VERSION_ENUM in the same commit that updates
+  # downstream consumers, so an adapter cannot ship a future-
+  # incompatible shape silently. Codex flagged the missing version
+  # check on the PR 6 fourth review pass.
+  local schema_v
+  schema_v=$(jq -r '.schema_version // ""' "$file")
+  if [ -z "$schema_v" ]; then
+    errors="${errors:+$errors; }schema_version is empty"
+  elif ! in_enum "$schema_v" "$SCHEMA_VERSION_ENUM"; then
+    errors="${errors:+$errors; }schema_version=$schema_v not in supported set ($SCHEMA_VERSION_ENUM)"
+  fi
 
   # verification must be an object with method + evidence.
   if jq -e '.verification | type == "object"' "$file" >/dev/null 2>&1; then
@@ -280,6 +299,20 @@ for f in "$ADAPTER_DIR"/*.json; do
   [ -f "$f" ] || continue
   check_adapter "$f"
 done
+
+# When the caller passed a filter and nothing matched, treat that as a
+# failure. Otherwise a typo (`check-adapters.sh codxe`) produced an
+# empty summary that exited 0, suggesting CI had validated the
+# requested adapter when no file matched. Codex flagged this on the
+# PR 6 fourth review pass.
+if [ -n "$FILTER" ] && [ "$FILTER_MATCHED" = "0" ]; then
+  FAIL=$((FAIL + 1))
+  RESULTS_TEXT="${RESULTS_TEXT}FAIL  ${FILTER}: no adapters/${FILTER}.json found (filter matched nothing)
+"
+  RESULTS_JSON=$(echo "$RESULTS_JSON" | jq \
+    --arg name "$FILTER" \
+    '. + [{adapter: $name, status: "fail", age_days: 0, message: "filter matched no adapter file"}]')
+fi
 
 # Cross-check: every README-listed adapter must have a JSON file.
 for host in $README_LISTED; do

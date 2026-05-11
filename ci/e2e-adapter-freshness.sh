@@ -311,6 +311,39 @@ echo "$out" | grep -q "must be a non-empty array of strings" && \
   assert_eq "doctor_checks message present" "yes" "yes" || \
   assert_eq "doctor_checks message present" "yes" "no"
 
+# Cell 7h: a filter that matches no adapter file is a failure, not a
+# silent empty pass. Codex flagged the typo-passes-silently hole on
+# the PR 6 fourth review pass.
+echo "[7h] filter with no match fails (does not silently pass)"
+root=$(new_repo "cell7h-typo-filter")
+cat > "$root/README.md" <<'EOF'
+README mentions `claude`.
+EOF
+write_adapter "$root" claude "$NOW_ISO"
+out=$(cd "$root" && bash bin/check-adapters.sh codxe 2>&1; echo "RC=$?")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "filter 'codxe' (typo) exits 1" "1" "$rc"
+echo "$out" | grep -q "filter matched nothing" && \
+  assert_eq "filter-typo message present" "yes" "yes" || \
+  assert_eq "filter-typo message present" "yes" "no"
+
+# Cell 7i: schema_version must be in the supported set. An adapter
+# declaring schema_version=2 (forward-incompatible) used to pass.
+# Codex caught the missing version check on the PR 6 fourth review
+# pass.
+echo "[7i] schema_version is validated against the supported set"
+root=$(new_repo "cell7i-schema-version")
+cat > "$root/README.md" <<'EOF'
+README mentions `claude`.
+EOF
+write_adapter "$root" claude "$NOW_ISO" '.schema_version = "2"'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "schema_version=2 exits 1" "1" "$rc"
+echo "$out" | grep -q "schema_version=2 not in supported set" && \
+  assert_eq "schema-version message present" "yes" "yes" || \
+  assert_eq "schema-version message present" "yes" "no"
+
 # Cell 8: --json output emits a parseable summary object.
 echo "[8] --json output is parseable"
 root=$(new_repo "cell8")
