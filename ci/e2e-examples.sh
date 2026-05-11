@@ -149,7 +149,7 @@ save_sprint() {
     local payload
     case "$phase" in
       review)
-        payload=$(jq -n --arg p "$phase" '{phase:$p, summary:{v:1, status:"clean"}, scope_drift:"none", findings:[], context_checkpoint:{summary:"sandbox review"}}')
+        payload=$(jq -n --arg p "$phase" '{phase:$p, summary:{v:1, status:"clean"}, scope_drift:{status:"clean"}, findings:[], context_checkpoint:{summary:"sandbox review"}}')
         ;;
       qa|security)
         payload=$(jq -n --arg p "$phase" '{phase:$p, summary:{v:1, status:"clean"}, findings:[], context_checkpoint:{summary:"sandbox check"}}')

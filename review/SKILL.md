@@ -146,16 +146,16 @@ When a conflict is detected, mark it inline:
 **In `--standard` mode:** Document conflicts inline in output.
 **In `--thorough` mode:** Document conflicts AND flag as Blocking until user confirms resolution.
 
-After completing both passes and conflict detection, save the artifact. Run this command now — do not skip it. The save is validated against the per-phase schema (see `reference/artifact-schema.md`); a review artifact requires `summary` (object), `scope_drift`, `findings` (array), and `context_checkpoint`.
+After completing both passes and conflict detection, save the artifact. Run this command now — do not skip it. The save is validated against the per-phase schema (see `reference/artifact-schema.md`); a review artifact requires `summary` (object), `scope_drift` (object with at least `status`), `findings` (array), and `context_checkpoint`. `bin/sprint-journal.sh` reads `.scope_drift.status`, so the object shape is not optional.
 
 ```bash
 REVIEW_JSON=$(jq -n \
-  --arg  mode        "$REVIEW_MODE" \
-  --argjson summary  '{"blocking":0,"should_fix":0,"nitpicks":0,"positive":0}' \
-  --arg  scope_drift "none" \
-  --argjson findings '[]' \
-  --argjson conflicts '[]' \
-  --arg  checkpoint_summary "Review found N issues, scope drift status, conflict count." \
+  --arg     mode        "$REVIEW_MODE" \
+  --argjson summary     '{"blocking":0,"should_fix":0,"nitpicks":0,"positive":0}' \
+  --argjson scope_drift '{"status":"clean","planned_files":[],"actual_files":[],"out_of_scope_files":[],"missing_files":[]}' \
+  --argjson findings    '[]' \
+  --argjson conflicts   '[]' \
+  --arg     checkpoint_summary "Review found N issues, scope drift status, conflict count." \
   '{
      phase: "review",
      mode: $mode,

@@ -363,7 +363,7 @@ JS
     "$NS" phase-start "$phase" >/dev/null
     case "$phase" in
       review)
-        "$ART" "$phase" '{"phase":"review","summary":{"v":1,"blocking":0},"scope_drift":"none","findings":[],"context_checkpoint":{"summary":"e2e review"}}' >/dev/null
+        "$ART" "$phase" '{"phase":"review","summary":{"v":1,"blocking":0},"scope_drift":{"status":"clean"},"findings":[],"context_checkpoint":{"summary":"e2e review"}}' >/dev/null
         ;;
       security|qa)
         "$ART" "$phase" "{\"phase\":\"$phase\",\"summary\":{\"v\":1},\"findings\":[],\"context_checkpoint\":{\"summary\":\"e2e $phase\"}}" >/dev/null

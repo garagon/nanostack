@@ -154,7 +154,7 @@ fake_complete() {
   local payload
   case "$phase" in
     review)
-      payload="{\"phase\":\"review\",\"summary\":{\"v\":1},\"scope_drift\":\"none\",\"findings\":[],\"context_checkpoint\":{\"summary\":\"matrix $phase\"}}"
+      payload="{\"phase\":\"review\",\"summary\":{\"v\":1},\"scope_drift\":{\"status\":\"clean\"},\"findings\":[],\"context_checkpoint\":{\"summary\":\"matrix $phase\"}}"
       ;;
     qa|security)
       payload="{\"phase\":\"$phase\",\"summary\":{\"v\":1},\"findings\":[],\"context_checkpoint\":{\"summary\":\"matrix $phase\"}}"

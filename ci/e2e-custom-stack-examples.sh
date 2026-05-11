@@ -146,7 +146,7 @@ echo "[4] save core artifacts (review, qa, security) via save-artifact.sh"
 # context_checkpoint). The fixtures below pass the per-phase
 # validator in bin/lib/artifact-schemas.sh.
 "$REPO/bin/save-artifact.sh" review \
-  '{"phase":"review","summary":{"status":"OK","blocking":0,"should_fix":0,"nitpicks":0,"positive":1},"scope_drift":"none","findings":[],"context_checkpoint":{"summary":"reviewed"}}' \
+  '{"phase":"review","summary":{"status":"OK","blocking":0,"should_fix":0,"nitpicks":0,"positive":1},"scope_drift":{"status":"clean"},"findings":[],"context_checkpoint":{"summary":"reviewed"}}' \
   >/dev/null
 "$REPO/bin/save-artifact.sh" qa \
   '{"phase":"qa","summary":{"status":"OK","tests_run":1,"tests_passed":1,"tests_failed":0,"bugs_found":0,"bugs_fixed":0},"findings":[],"context_checkpoint":{"summary":"qa"}}' \

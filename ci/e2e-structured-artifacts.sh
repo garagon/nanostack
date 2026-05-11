@@ -85,7 +85,7 @@ echo
 # Cell 1: per-phase validator accepts the canonical structured shapes.
 echo "[1] nano_validate_artifact accepts canonical shapes"
 plan_ok=$(jq -n '{phase:"plan",summary:{planned_files:["a.ts"],plan_approval:"manual"},context_checkpoint:{summary:"x"}}')
-review_ok=$(jq -n '{phase:"review",summary:{blocking:0},scope_drift:"none",findings:[],context_checkpoint:{summary:"x"}}')
+review_ok=$(jq -n '{phase:"review",summary:{blocking:0},scope_drift:{status:"clean"},findings:[],context_checkpoint:{summary:"x"}}')
 qa_ok=$(jq -n '{phase:"qa",summary:{tests_run:5},findings:[],context_checkpoint:{summary:"x"}}')
 sec_ok=$(jq -n '{phase:"security",summary:{total_findings:0},findings:[],context_checkpoint:{summary:"x"}}')
 ship_ok=$(jq -n '{phase:"ship",summary:{pr_number:42,status:"merged"},context_checkpoint:{summary:"x"}}')
