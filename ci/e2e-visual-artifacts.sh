@@ -471,6 +471,74 @@ mkdir -p "$NANOSTACK_STORE/visual/plan/explicit.html"  # leaf is a directory
 assert_exit "directory at output leaf exits 4" 4 \
   sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan --latest --out '$NANOSTACK_STORE/visual/plan/explicit.html'"
 
+# ─── Cell 9i: symlink + .. bypass through write target ─────
+# PR 1 pass 6 P1 regression: --out with a symlinked component
+# followed by `..`. Lexical normalization passed before; the kernel
+# would resolve the original path at write time and escape visual/.
+# The fix is to write to the normalized path.
+printf "\n  ${DIM}Cell 9i: symlink + .. bypass through write (PR 1 pass 6)${NC}\n"
+PROJ="$TMP_ROOT/cell9i"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/visual/plan"
+mkdir -p "$TMP_ROOT/cell9i-outside"
+ln -s "$TMP_ROOT/cell9i-outside" "$NANOSTACK_STORE/visual/link"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+# Attack: visual/link/../evil.html. Normalized this is visual/evil.html
+# (under visual/). At kernel-resolve time the original path goes:
+# visual/link -> /tmp/.../cell9i-outside, then .. -> /tmp/.../, then
+# evil.html appears outside the store.
+set +e
+(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest --out \
+  "$NANOSTACK_STORE/visual/link/../evil.html" >/dev/null 2>&1)
+RC=$?
+set -e
+# Either the render exits 4 (rejected), or it succeeds writing
+# safely to visual/evil.html under the normalized path. Both are
+# acceptable; what is NOT acceptable is a file appearing outside
+# visual/.
+LEAK_COUNT=$(find "$TMP_ROOT/cell9i-outside" -maxdepth 1 -type f -name "*.html" 2>/dev/null | wc -l | tr -d ' ')
+STORE_LEAK=$(find "$PROJ" -maxdepth 3 -name 'evil.html' -not -path "*/visual/*" 2>/dev/null | wc -l | tr -d ' ')
+assert_true "no file outside visual via symlink+.. (outside dir empty)" sh -c "[ '$LEAK_COUNT' = '0' ]"
+assert_true "no file at evil.html outside visual/" sh -c "[ '$STORE_LEAK' = '0' ]"
+
+# ─── Cell 9j: same-second renders keep their own manifests ──
+# PR 1 pass 6 P2 regression.
+printf "\n  ${DIM}Cell 9j: same-second renders unique manifests (PR 1 pass 6)${NC}\n"
+PROJ="$TMP_ROOT/cell9j"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+H1=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest --out "$NANOSTACK_STORE/visual/plan/a.html")
+H2=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest --out "$NANOSTACK_STORE/visual/plan/b.html")
+# Find each provenance footer's manifest pointer; they must differ.
+M1=$(grep -oE 'visual-manifest-path[^>]*>[^<]+<' "$H1" | sed -E 's/.*>([^<]+)<.*/\1/' | head -1)
+M2=$(grep -oE 'visual-manifest-path[^>]*>[^<]+<' "$H2" | sed -E 's/.*>([^<]+)<.*/\1/' | head -1)
+assert_true "render 1 references manifest A" sh -c "[ -n '$M1' ] && [ -f '$M1' ]"
+assert_true "render 2 references manifest B" sh -c "[ -n '$M2' ] && [ -f '$M2' ]"
+assert_true "manifests differ" sh -c "[ '$M1' != '$M2' ]"
+
+# ─── Cell 9k: non-object JSON artifact -> exit 1 ────────────
+# PR 1 pass 6 P3 regression.
+printf "\n  ${DIM}Cell 9k: non-object JSON exits 1 (PR 1 pass 6)${NC}\n"
+PROJ="$TMP_ROOT/cell9k"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+ARR="$TMP_ROOT/cell9k-array.json"
+echo '[]' > "$ARR"
+assert_exit "array JSON exits 1" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan '$ARR'"
+STR="$TMP_ROOT/cell9k-string.json"
+echo '"hello"' > "$STR"
+assert_exit "string JSON exits 1" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan '$STR'"
+NUM="$TMP_ROOT/cell9k-num.json"
+echo '42' > "$NUM"
+assert_exit "number JSON exits 1" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan '$NUM'"
+
 # ─── Cell 9: symlinked visual root rejected ─────────────────
 printf "\n  ${DIM}Cell 9: symlinked visual root rejected${NC}\n"
 PROJ="$TMP_ROOT/cell9"

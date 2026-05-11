@@ -56,7 +56,11 @@ nano_visual_output_dir() {
 }
 
 nano_visual_timestamp() {
-  date -u +%Y%m%d-%H%M%S
+  # PID suffix prevents two same-second renders from colliding on the
+  # manifest stem. Codex PR 1 pass 6 caught the contract violation:
+  # the second render overwrote the first manifest while the first
+  # HTML kept pointing at the now-stale path.
+  printf '%s-%s\n' "$(date -u +%Y%m%d-%H%M%S)" "$$"
 }
 
 nano_visual_html_path() {

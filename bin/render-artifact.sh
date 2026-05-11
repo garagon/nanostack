@@ -147,8 +147,12 @@ if ! jq -e '.' "$ART_PATH" >/dev/null 2>&1; then
   exit 1
 fi
 
-# .phase field must match the requested phase.
-ART_PHASE=$(jq -r '.phase // ""' "$ART_PATH")
+# .phase field must match the requested phase. Codex PR 1 pass 6
+# caught: a top-level JSON array or string crashes `jq -r '.phase //
+# ""'` with exit 5 under set -e; the documented input-error exit is
+# 1. The `?` operator suppresses the path error so non-object JSON
+# falls through cleanly and the phase mismatch branch handles it.
+ART_PHASE=$(jq -r '.phase? // ""' "$ART_PATH")
 if [ "$ART_PHASE" != "$PHASE" ]; then
   echo "render-artifact: artifact phase '$ART_PHASE' does not match requested phase '$PHASE': $ART_PATH" >&2
   exit 1
@@ -195,12 +199,23 @@ else
 fi
 MANIFEST_PATH=$(nano_visual_manifest_path "phase" "$PHASE" "$TS")
 
+# Codex PR 1 pass 6 caught: even after lexical normalization passes
+# the safety check, mkdir -p and mv use the ORIGINAL path, and the
+# kernel resolves symlink components literally. A path like
+# `visual/link/../evil.html` with `link` pointing outside collapses
+# to `visual/evil.html` for the check but resolves to
+# `outside/../evil.html` -> `outside/.../evil.html` at write time.
+# Reassign HTML_PATH and MANIFEST_PATH to their normalized form so
+# the kernel never traverses a `..` after a symlinked component.
+HTML_PATH="$(nano_visual_normalize_path "$HTML_PATH")"
+MANIFEST_PATH="$(nano_visual_normalize_path "$MANIFEST_PATH")"
+
 # Refuse any symlink under visual/ on the path to HTML or manifest.
 # Codex PR 1 pass 4 caught that mkdir -p / mv would happily write
 # through a pre-existing visual/plan symlink to an outside target;
 # nano_visual_assert_safe_root only guards the root itself.
-nano_visual_assert_safe_descend "$(nano_visual_normalize_path "$HTML_PATH")"
-nano_visual_assert_safe_descend "$(nano_visual_normalize_path "$MANIFEST_PATH")"
+nano_visual_assert_safe_descend "$HTML_PATH"
+nano_visual_assert_safe_descend "$MANIFEST_PATH"
 
 mkdir -p "$(dirname "$HTML_PATH")"
 mkdir -p "$(dirname "$MANIFEST_PATH")"
