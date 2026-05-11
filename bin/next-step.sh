@@ -103,43 +103,56 @@ fi
 # duplicate starts.
 SESSION_READY="[]"
 SESSION_NEXT=""
+HAS_GRAPH_AWARE_SESSION=0
 HAS_SESSION=0
 if [ -f "$SESSION_FILE" ]; then
   HAS_SESSION=1
-  SESSION_READY=$(jq -c '.ready_phases // []' "$SESSION_FILE" 2>/dev/null || echo "[]")
-  SESSION_NEXT=$(jq -r '.next_phase // ""' "$SESSION_FILE" 2>/dev/null || echo "")
+  # A session that was written by a pre-PR-4 build has neither
+  # phase_graph nor ready_phases. Detect that and route through the
+  # legacy artifact-based lookup so an in-progress sprint upgraded
+  # mid-flight still gets sensible next-step output. Codex flagged
+  # the upgrade regression on the PR 4 fifth review pass.
+  if jq -e '(.phase_graph // []) | length > 0' "$SESSION_FILE" >/dev/null 2>&1; then
+    HAS_GRAPH_AWARE_SESSION=1
+    SESSION_READY=$(jq -c '.ready_phases // []' "$SESSION_FILE" 2>/dev/null || echo "[]")
+    SESSION_NEXT=$(jq -r '.next_phase // ""' "$SESSION_FILE" 2>/dev/null || echo "")
+  fi
 fi
 
-if [ "$HAS_SESSION" = "1" ]; then
+# can_ship derives from the graph contract, not from NEXT_PHASE.
+# It means "every phase in required_before_ship has completed" so a
+# graph where ship is parallel-ready alongside another phase still
+# reports can_ship=true. Codex flagged the dependency-vs-display
+# mix-up on the PR 4 fifth review pass.
+compute_can_ship_from_session() {
+  jq -r '
+    (.phase_graph // []) as $g
+    | def ancestors($name):
+        ($g | map(select(.name == $name)) | first // {depends_on:[]}).depends_on as $deps
+        | $deps + ($deps | map(ancestors(.)) | add // []);
+      ([.phase_log[]? | select(.status == "completed") | .phase] | unique) as $done
+      | (ancestors("ship") | unique | map(select(. != "think" and . != "plan" and . != "build"))) as $required
+      | ($required - $done | length == 0)
+  ' "$SESSION_FILE" 2>/dev/null || echo "false"
+}
+
+if [ "$HAS_GRAPH_AWARE_SESSION" = "1" ]; then
   PENDING_JSON="$SESSION_READY"
   NEXT_PHASE="$SESSION_NEXT"
   PENDING_COUNT=$(echo "$PENDING_JSON" | jq 'length')
+  CAN_SHIP=$(compute_can_ship_from_session)
   if [ -z "$NEXT_PHASE" ] || [ "$NEXT_PHASE" = "null" ]; then
-    # No phase is ready right now. This can mean two things:
-    #   - The sprint is finished (everything past ship completed).
-    #   - The sprint has not started yet and the initial ready set
-    #     was not snapshotted (legacy session pre-PR-4).
-    # Safe answer: "no specific next phase" with can_ship gated on
-    # ship having actually completed. We never collapse to "ship"
-    # implicitly; that wrongly suggested a fresh session was ship-
-    # ready (Codex caught this on the PR 4 first review pass).
     NEXT_PHASE=""
     ship_done=$(jq -r '[.phase_log[]? | select(.phase == "ship" and .status == "completed")] | length' "$SESSION_FILE" 2>/dev/null || echo "0")
     if [ "$ship_done" -gt 0 ]; then
       NEXT_PHASE="compound"
-      CAN_SHIP="true"
-    else
-      CAN_SHIP="false"
     fi
-  elif [ "$NEXT_PHASE" = "ship" ] || [ "$NEXT_PHASE" = "compound" ]; then
-    CAN_SHIP="true"
-  else
-    CAN_SHIP="false"
   fi
 else
-  # No session file. Fall back to the legacy artifact-based lookup
-  # so a host that drives /review/security/qa without going through
-  # session.sh init still gets sensible output.
+  # No session file OR a legacy session without phase_graph. Fall
+  # back to the artifact-based lookup so a host that drives
+  # /review/security/qa without going through (or before) the
+  # graph-aware session contract still gets sensible output.
   PENDING_JSON="[]"
   for phase in $PEERS; do
     if ! phase_completed "$phase"; then
@@ -199,12 +212,12 @@ fi
 # hardcoded shape continue to receive it when the session uses the
 # default graph.
 REQUIRED_BEFORE_SHIP_JSON='["review","security","qa"]'
-if [ "$HAS_SESSION" = "1" ]; then
+if [ "$HAS_GRAPH_AWARE_SESSION" = "1" ]; then
   # The graph snapshot inside session.json is authoritative. For the
   # default sprint that yields ["review","qa","security"] (same set
   # as the legacy default); for a custom graph it returns the actual
   # transitive chain ship depends on. Falls back to the legacy default
-  # if the jq filter fails (legacy session pre-PR-4).
+  # if the jq filter fails.
   REQUIRED_BEFORE_SHIP_JSON=$(jq -c '
     (.phase_graph // []) as $g
     | def ancestors($name):

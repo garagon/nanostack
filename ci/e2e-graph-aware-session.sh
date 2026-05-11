@@ -405,6 +405,50 @@ next_after=$(jq -r '.next_phase' "$NANOSTACK_STORE/session.json")
 assert_eq "after starting audit-a: ready drops audit-a" '["audit-b"]' "$ready_after"
 assert_eq "after starting audit-a: next_phase points at audit-b" "audit-b" "$next_after"
 
+# Cell 9d: a legacy session (no phase_graph snapshot, from a pre-PR-4
+# build) must fall back to the artifact-based legacy lookup so an
+# in-progress sprint upgraded mid-flight still advances. Codex flagged
+# the upgrade regression on the PR 4 fifth review pass.
+echo "[9d] legacy session without phase_graph uses artifact fallback"
+new_project "cell9d-legacy"
+cat > "$NANOSTACK_STORE/session.json" <<'EOF'
+{
+  "schema_version": "2",
+  "profile": "professional",
+  "phase_log": [
+    {"phase":"think","status":"completed"},
+    {"phase":"plan","status":"completed"},
+    {"phase":"review","status":"completed"}
+  ]
+}
+EOF
+out=$("$NEXT_STEP" --json 2>/dev/null)
+assert_eq "legacy session: next_phase = security (artifact fallback)" \
+  "security" "$(echo "$out" | jq -r '.next_phase')"
+assert_eq "legacy session: ready_phases includes qa" \
+  "true" "$(echo "$out" | jq '.ready_phases | any(. == "qa")')"
+assert_eq "legacy session: can_ship still false" \
+  "false" "$(echo "$out" | jq -r '.can_ship')"
+
+# Cell 9e: can_ship is derived from graph dependencies, not from
+# whether NEXT_PHASE happens to be "ship". For the default sprint
+# after review+qa+security complete, ship is ready and can_ship is
+# true regardless of which phase appears as next_phase. Codex flagged
+# the next_phase-vs-required_before_ship mismatch on the PR 4 fifth
+# review pass.
+echo "[9e] can_ship reflects required_before_ship, not next_phase identity"
+new_project "cell9e-canship"
+"$SESSION_SH" init development >/dev/null
+for ph in think plan review qa security; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+out=$("$NEXT_STEP" --json 2>/dev/null)
+assert_eq "after r+q+s: ship is next_phase" "ship" "$(echo "$out" | jq -r '.next_phase')"
+assert_eq "after r+q+s: can_ship = true (deps met)" "true" "$(echo "$out" | jq -r '.can_ship')"
+assert_eq "after r+q+s: ready_phases = [ship]" \
+  '["ship"]' "$(echo "$out" | jq -c '.ready_phases')"
+
 # Cell 10: default sprint user_message remains exactly the historical
 # wording. No regression for built-in flows.
 echo "[10] default sprint user_message is unchanged"

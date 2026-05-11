@@ -1044,12 +1044,21 @@ jobs:
 
           "$NS" init feature --profile guided --autopilot >/dev/null
 
+          # PR 4 of the 2026-05-10 audit made session.sh init seed
+          # next_phase with the graph root (think). Walk past think
+          # and plan so the assertions land on the post-build state
+          # the rest of this matrix exercises.
+          for phase in think plan; do
+            "$NS" phase-start "$phase" >/dev/null
+            "$NS" phase-complete "$phase" >/dev/null
+          done
+
           # Empty post-build state: review/security/qa all pending.
           out=$("$NEXT" --json)
           echo "$out" | jq -e '.profile == "guided"' >/dev/null || { echo "FAIL: profile not propagated"; fail=1; }
-          echo "$out" | jq -e '.next_phase == "review"' >/dev/null || { echo "FAIL: empty state should suggest review"; fail=1; }
-          echo "$out" | jq -e '.can_ship == false' >/dev/null || { echo "FAIL: empty state should not allow ship"; fail=1; }
-          echo "$out" | jq -e '.pending_phases | length == 3' >/dev/null || { echo "FAIL: empty state should list 3 pending peers"; fail=1; }
+          echo "$out" | jq -e '.next_phase == "review"' >/dev/null || { echo "FAIL: post-build state should suggest review"; fail=1; }
+          echo "$out" | jq -e '.can_ship == false' >/dev/null || { echo "FAIL: post-build state should not allow ship"; fail=1; }
+          echo "$out" | jq -e '.pending_phases | length == 3' >/dev/null || { echo "FAIL: post-build state should list 3 pending peers"; fail=1; }
           echo "$out" | jq -e '.user_message | length > 0' >/dev/null || { echo "FAIL: user_message empty"; fail=1; }
 
           # Legacy text mode: review/security/qa caller passes its own phase.
@@ -1061,7 +1070,7 @@ jobs:
           # Mark review + security + qa complete in session phase_log.
           for phase in review security qa; do
             "$NS" phase-start "$phase" >/dev/null
-            jq --arg p "$phase" '.phase_log[-1].status = "completed"' .nanostack/session.json > .tmp && mv .tmp .nanostack/session.json
+            "$NS" phase-complete "$phase" >/dev/null
           done
           out=$("$NEXT" --json)
           echo "$out" | jq -e '.next_phase == "ship"' >/dev/null || { echo "FAIL: all peers done should suggest ship"; fail=1; }
