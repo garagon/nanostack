@@ -523,9 +523,14 @@ _latest_safe_artifact_for_stack() {
       store_is_local=true
     fi
   fi
+  # Codex PR 3 pass 14: do NOT cap the candidate list before the
+  # project filter. In a shared store with many newer other-project
+  # artifacts, the cap would hide this project's older legitimate
+  # (or tampered) artifact and the stack row would render as missing.
+  # The early-return inside the loop keeps the walk bounded.
   # shellcheck disable=SC2012
   local candidates
-  candidates=$(ls -1t "$dir"/*.json 2>/dev/null | head -30)
+  candidates=$(ls -1t "$dir"/*.json 2>/dev/null)
   [ -z "$candidates" ] && return 0
   local f
   while IFS= read -r f; do

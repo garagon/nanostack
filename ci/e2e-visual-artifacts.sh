@@ -1308,6 +1308,37 @@ assert_exit "B's journal --strict succeeds despite shared-store tamper" 0 \
   sh -c "cd '$PROJ_B' && '$REPO/bin/render-artifact.sh' journal --today --strict"
 unset NANOSTACK_STORE
 
+# ─── Cell 22y: stack lookup walks past 30 newer foreign artifacts (PR 3 pass 14) ─
+printf "\n  ${DIM}Cell 22y: stack lookup uncapped (PR 3 pass 14)${NC}\n"
+SHARED_STORE="$TMP_ROOT/cell22y-shared"
+mkdir -p "$SHARED_STORE/plan"
+# Our project saves a plan FIRST (oldest).
+PROJ_OURS="$TMP_ROOT/cell22y-ours"
+setup_project "$PROJ_OURS"
+(cd "$PROJ_OURS" && NANOSTACK_STORE="$SHARED_STORE" "$REPO/bin/save-artifact.sh" plan '{
+  "phase":"plan",
+  "summary":{"goal":"OURS","scope":"small","planned_files":[],"plan_approval":"manual"},
+  "context_checkpoint":{"summary":"x","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+OUR_PLAN=$(ls "$SHARED_STORE/plan/"*.json | head -1)
+OUR_PROJECT=$(jq -r '.project' "$OUR_PLAN")
+# Now write 35 newer "other project" artifacts.
+PROJ_OTHER="$TMP_ROOT/cell22y-other"
+setup_project "$PROJ_OTHER"
+sleep 1  # ensure mtime is strictly newer
+for i in $(seq 1 35); do
+  TS="2026-05-12-$(printf "%06d" $((100000 + i)))"
+  cat > "$SHARED_STORE/plan/${TS//-/}.json" <<JSON
+{"phase":"plan","project":"/other/$i","timestamp":"$TS","summary":{"goal":"other$i"}}
+JSON
+done
+# Render our project's stack. Without the fix, our plan was beyond
+# the 30-candidate cap and the row would render as missing.
+export NANOSTACK_STORE="$SHARED_STORE"
+HTML=$(cd "$PROJ_OURS" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+assert_contains "stack finds OUR plan past 30 newer foreign artifacts" "$HTML" "$OUR_PLAN"
+unset NANOSTACK_STORE
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"
