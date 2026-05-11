@@ -2643,7 +2643,7 @@ jobs:
           # resolver must still emit `build` and `ship` keys with null
           # values for custom phases.
           printf '%s' '{"custom_phases":["audit-licenses"],"phase_graph":[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"ship","depends_on":["build"]},{"name":"audit-licenses","depends_on":["build","plan","ship"]}]}' > .nanostack/config.json
-          "$GITHUB_WORKSPACE/bin/save-artifact.sh" plan '{"phase":"plan","summary":{"goal":"x"},"context_checkpoint":{"summary":"y"}}' >/dev/null
+          "$GITHUB_WORKSPACE/bin/save-artifact.sh" plan '{"phase":"plan","summary":{"goal":"x","planned_files":[],"plan_approval":"manual"},"context_checkpoint":{"summary":"y"}}' >/dev/null
           out=$("$GITHUB_WORKSPACE/bin/resolve.sh" audit-licenses 2>/dev/null)
           echo "$out" | jq -e '.upstream_artifacts.build == null' >/dev/null
           echo "$out" | jq -e '.upstream_artifacts.plan | type == "string"' >/dev/null
@@ -2862,7 +2862,7 @@ jobs:
           # Register a custom phase, save one core + one custom artifact.
           printf '%s' '{"custom_phases":["audit-licenses"]}' > .nanostack/config.json
           "$GITHUB_WORKSPACE/bin/save-artifact.sh" plan \
-            '{"phase":"plan","summary":{"goal":"x"},"context_checkpoint":{"summary":"y"}}' >/dev/null
+            '{"phase":"plan","summary":{"goal":"x","planned_files":[],"plan_approval":"manual"},"context_checkpoint":{"summary":"y"}}' >/dev/null
           "$GITHUB_WORKSPACE/bin/save-artifact.sh" audit-licenses \
             '{"phase":"audit-licenses","summary":{"status":"OK","headline":"47 deps scanned, 0 GPL/AGPL flagged"},"context_checkpoint":{"summary":"ok"}}' >/dev/null
 

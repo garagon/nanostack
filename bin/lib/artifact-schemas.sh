@@ -101,11 +101,14 @@ nano_validate_artifact() {
       ;;
     review)
       _nano_validate_field "$json" '.summary' 'object'
-      # scope_drift must be an object: bin/sprint-journal.sh reads
-      # .scope_drift.status, so a string-shaped scope_drift silently
-      # loses the drift signal downstream. Codex caught the contract
-      # mismatch on the PR 3 fourth review pass.
+      # scope_drift must be an object with a .status field: the
+      # downstream consumer bin/sprint-journal.sh reads
+      # .scope_drift.status. An empty object satisfies "is an object"
+      # but still drops the drift signal silently, so .status is
+      # required too. Codex caught the contract mismatch on the PR 3
+      # fourth and fifth review passes.
       _nano_validate_field "$json" '.scope_drift' 'object'
+      _nano_validate_field "$json" '.scope_drift.status' 'string'
       _nano_validate_field "$json" '.findings' 'array'
       _nano_validate_field "$json" '.context_checkpoint' 'object'
       ;;

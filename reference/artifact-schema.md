@@ -15,7 +15,7 @@ Legacy artifacts saved before this contract are still readable by `bin/find-arti
 |-------|-----------------|
 | `think` | `summary` (object). The `/think` autopilot brief gate enforces the rich set (`value_proposition`, `scope_mode`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`); the schema validator only checks summary shape. |
 | `plan` | `summary` (object) with `planned_files` (array) and `plan_approval`; `context_checkpoint` (object). |
-| `review` | `summary` (object); `scope_drift` (any non-null value); `findings` (array); `context_checkpoint` (object). |
+| `review` | `summary` (object); `scope_drift` (object with `status` string); `findings` (array); `context_checkpoint` (object). |
 | `qa` | `summary` (object); `findings` (array); `context_checkpoint` (object). |
 | `security` | `summary` (object); `findings` (array); `context_checkpoint` (object). |
 | `ship` (normal mode) | `summary` (object); `context_checkpoint` (object). Typical summary fields: `pr_number`, `pr_url`, `title`, `status`, `ci_passed`. |
