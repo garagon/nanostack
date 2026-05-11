@@ -1572,8 +1572,16 @@ cat > "$NANOSTACK_STORE/plan/$(date -u +%Y%m%d)-120000.json" <<JSON
   "context_checkpoint": {"summary": null}
 }
 JSON
-HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest --interactive 2>/dev/null || true)
-[ -n "$HTML" ] && assert_true "schema-warning plan with --interactive renders" test -f "$HTML"
+# Render must succeed (exit 0). Without unconditional assertion the
+# `|| true` mask would have made the cell silently pass on regressions
+# (codex PR 4 pass 2).
+set +e
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest --interactive 2>&1)
+RC=$?
+set -e
+assert_exit "schema-warning plan with --interactive exits 0" 0 test "$RC" = 0
+assert_true "schema-warning plan html path is non-empty" sh -c "[ -n '$HTML' ]"
+assert_true "schema-warning plan html file exists" test -f "$HTML"
 
 # ─── Cell 23k: --interactive on schema-warning review does not crash (PR 4 pass 1) ─
 printf "\n  ${DIM}Cell 23k: --interactive on schema-warning review (PR 4 pass 1)${NC}\n"
@@ -1591,8 +1599,14 @@ cat > "$NANOSTACK_STORE/review/$(date -u +%Y%m%d)-120000.json" <<JSON
   "context_checkpoint": {}
 }
 JSON
-HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" review --latest --interactive 2>/dev/null || true)
-[ -n "$HTML" ] && assert_true "schema-warning review with --interactive renders" test -f "$HTML"
+# Same unconditional assertion as cell 23j.
+set +e
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" review --latest --interactive 2>&1)
+RC=$?
+set -e
+assert_exit "schema-warning review with --interactive exits 0" 0 test "$RC" = 0
+assert_true "schema-warning review html path is non-empty" sh -c "[ -n '$HTML' ]"
+assert_true "schema-warning review html file exists" test -f "$HTML"
 
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
