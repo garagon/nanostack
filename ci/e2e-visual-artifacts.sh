@@ -1109,6 +1109,64 @@ CFG
 HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack empty_name)
 assert_contains "empty name rejected" "$HTML" "Stack invalid"
 
+# ─── Cell 22q: integrity_missing + .project flip caught (PR 3 pass 7) ─
+printf "\n  ${DIM}Cell 22q: integrity_missing + .project flip (PR 3 pass 7)${NC}\n"
+PROJ="$TMP_ROOT/cell22q"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+# Strip .integrity AND flip .project.
+jq 'del(.integrity) | .project = "/other"' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_contains "journal surfaces .integrity-strip + .project-flip" "$HTML" 'data-trust="integrity_missing"'
+assert_exit "journal --strict catches integrity_missing + .project flip" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today --strict"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+assert_contains "stack surfaces .integrity-strip + .project-flip" "$HTML" 'data-phase="plan" data-trust="integrity_missing"'
+assert_exit "stack --strict catches integrity_missing + .project flip" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack compliance-release --strict"
+
+# ─── Cell 22r: cyclic phase_graph rejected (PR 3 pass 7) ────
+printf "\n  ${DIM}Cell 22r: cyclic phase_graph rejected (PR 3 pass 7)${NC}\n"
+PROJ="$TMP_ROOT/cell22r"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+
+mkdir -p "$NANOSTACK_STORE/stacks/cycle2"
+cat > "$NANOSTACK_STORE/stacks/cycle2/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"cycle2",
+  "phase_graph": [
+    {"name":"a","depends_on":["b"]},
+    {"name":"b","depends_on":["a"]}
+  ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack cycle2)
+assert_contains "2-node cycle rejected" "$HTML" "cycle"
+
+mkdir -p "$NANOSTACK_STORE/stacks/cycle3"
+cat > "$NANOSTACK_STORE/stacks/cycle3/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"cycle3",
+  "phase_graph": [
+    {"name":"a","depends_on":["c"]},
+    {"name":"b","depends_on":["a"]},
+    {"name":"c","depends_on":["b"]}
+  ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack cycle3)
+assert_contains "3-node cycle rejected" "$HTML" "cycle"
+
+mkdir -p "$NANOSTACK_STORE/stacks/self_cycle"
+cat > "$NANOSTACK_STORE/stacks/self_cycle/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"self_cycle",
+  "phase_graph": [
+    {"name":"a","depends_on":["a"]}
+  ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack self_cycle)
+assert_contains "self-cycle rejected" "$HTML" "cycle"
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"

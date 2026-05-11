@@ -510,7 +510,11 @@ _latest_safe_artifact_for_stack() {
     [ -z "$f" ] && continue
     local t
     t=$(nano_artifact_trust "$f" 2>/dev/null || echo "not_found")
-    if [ "$t" = "integrity_mismatch" ]; then
+    # Codex PR 3 pass 7: surface BOTH integrity_missing and
+    # integrity_mismatch before the project filter. A combined
+    # .integrity-strip + .project-flip attack would otherwise leave
+    # the artifact as "missing" and slip past aggregate --strict.
+    if [ "$t" = "integrity_mismatch" ] || [ "$t" = "integrity_missing" ]; then
       printf '%s\n' "$f"
       return 0
     fi
@@ -943,9 +947,13 @@ render_journal_body() {
       [ -z "$f" ] && continue
       # Trust check first: a same-day candidate whose hash does not
       # match must surface as tampered even if .project changed.
+      # Codex PR 3 pass 7: surface BOTH integrity_missing and
+      # integrity_mismatch so a combined .integrity-strip +
+      # .project-flip cannot leave the row as "missing" and slip past
+      # aggregate --strict.
       local t
       t=$(nano_artifact_trust "$f" 2>/dev/null || echo "not_found")
-      if [ "$t" = "integrity_mismatch" ]; then
+      if [ "$t" = "integrity_mismatch" ] || [ "$t" = "integrity_missing" ]; then
         printf '%s\n' "$f"
         return 0
       fi
@@ -1137,6 +1145,42 @@ render_stack_body() {
     | all(.[]; (.depends_on // []) | all(. as $d | $names | index($d) != null))
   ' >/dev/null 2>&1; then
     graph_validation_error="phase_graph has a dangling dependency (depends_on points at an undeclared phase)"
+  else
+    # Cycle detection via iterative Kahn-style topological pass in
+    # bash. The depth resolver in render_stack_svg cannot draw a
+    # cyclic graph; rather than leave nodes out of the SVG silently,
+    # reject the stack up front (codex PR 3 pass 7). For each round,
+    # remove nodes whose deps are all in `done`; if a round makes no
+    # progress while nodes remain, declare a cycle.
+    local _cycle_done=" " _cycle_pending _cycle_total _cycle_round _cycle_progressed
+    _cycle_total=$(printf '%s' "$graph_json" | jq -r 'length')
+    _cycle_pending=$(printf '%s' "$graph_json" | jq -r '.[].name' | tr '\n' ' ')
+    for _cycle_round in $(seq 1 "$((_cycle_total + 1))"); do
+      _cycle_progressed=0
+      local _cycle_next=""
+      for _n in $_cycle_pending; do
+        local _deps _ok=1
+        _deps=$(printf '%s' "$graph_json" | jq -r --arg n "$_n" '.[] | select(.name == $n) | .depends_on // [] | .[]')
+        for _d in $_deps; do
+          case "$_cycle_done" in
+            *" $_d "*) ;;
+            *) _ok=0; break ;;
+          esac
+        done
+        if [ "$_ok" = "1" ]; then
+          _cycle_done="$_cycle_done$_n "
+          _cycle_progressed=1
+        else
+          _cycle_next="$_cycle_next$_n "
+        fi
+      done
+      _cycle_pending="$_cycle_next"
+      [ "$_cycle_progressed" = "0" ] && break
+      [ -z "$_cycle_pending" ] && break
+    done
+    if [ -n "$_cycle_pending" ]; then
+      graph_validation_error="phase_graph contains a cycle (cannot draw the DAG); unresolved: $(echo $_cycle_pending | sed 's/ *$//')"
+    fi
   fi
   if [ -n "$graph_validation_error" ]; then
     printf '    <section class="card">\n      <h2>Stack invalid</h2>\n      <p>The stack definition for <code>%s</code> has a malformed <code>phase_graph</code>: %s.</p>\n    </section>\n' \
