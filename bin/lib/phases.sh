@@ -285,6 +285,17 @@ nano_phase_skill_path() {
       return 1
       ;;
   esac
+  # Repo-bundled non-core skills live at $NANOSTACK_ROOT/<name>/SKILL.md
+  # (feature, doctor, help, compound, start, etc). They are shipped with
+  # the repo and can be set as current_phase, but they are not in the
+  # core list. The previous raw lookup in guard saw them directly; we
+  # preserve that behavior here so guard concurrency stays consistent
+  # whether the phase is core, repo-bundled, or registered custom.
+  # Codex caught this on the PR 1 fourth pass.
+  if [ -n "$repo_root" ] && [ -d "$repo_root/$phase" ] && [ -f "$repo_root/$phase/SKILL.md" ]; then
+    printf '%s\n' "$repo_root/$phase"
+    return 0
+  fi
   # Build a newline-delimited candidate list so paths with spaces (a
   # $HOME like "Hello World" or a store under "My Drive") survive
   # iteration. Previous form was a single space-separated string fed

@@ -20,7 +20,8 @@
 #  16. Guard blocks writes during a read-only custom phase.
 #  17. Custom write phase does not trigger the concurrency block.
 #  18. Built-in review phase still blocks (regression check).
-#  19. Guard still works when the store path contains a space.
+#  19. Guard finds repo-bundled non-core skills (feature, doctor).
+#  20. Guard still works when the store path contains a space.
 #
 # This harness is the contract Codex's spec calls for in PR 6: a clean
 # sandbox user can complete the entire workflow without reading source.
@@ -319,12 +320,35 @@ guard_rc=$?
 set -e
 assert_eq "built-in review phase blocks write (exit 1)" "1" "$guard_rc"
 
-# Cell 19: a HOME (or store) path that contains a space must not break
+# Cell 19: repo-bundled non-core skills (feature, doctor, help, ...)
+# also have concurrency: read frontmatter. The guard's previous raw
+# lookup at $NANOSTACK_ROOT/<phase>/SKILL.md saw them directly; the
+# registry-aware lookup must keep finding them. Codex caught the
+# regression on PR 1's fourth pass — without the repo-root fallback,
+# `current_phase=feature` left SKILL_CONC empty and the guard allowed
+# writes.
+echo "[19] guard finds repo-bundled non-core skills"
+BUNDLED_PROJ="$TMP_ROOT/bundled-project"
+mkdir -p "$BUNDLED_PROJ/.nanostack"
+cd "$BUNDLED_PROJ"
+git init -q
+for bundled in feature doctor; do
+  echo "{\"current_phase\":\"$bundled\"}" > "$BUNDLED_PROJ/.nanostack/session.json"
+  set +e
+  NANOSTACK_STORE="$BUNDLED_PROJ/.nanostack" \
+    "$REPO/guard/bin/check-dangerous.sh" "touch should-not-pass" >/dev/null 2>&1
+  guard_rc=$?
+  set -e
+  assert_eq "bundled $bundled phase blocks write" "1" "$guard_rc"
+done
+cd "$PROJ"
+
+# Cell 20: a HOME (or store) path that contains a space must not break
 # the guard. The previous space-separated root iteration in
 # nano_phase_skill_path silently dropped path halves and made the
 # concurrency block a no-op for these users. Codex caught the
 # regression on PR 1 of the architecture round; this cell locks it.
-echo "[19] guard works when store path contains a space"
+echo "[20] guard works when store path contains a space"
 SPACE_TMP=$(mktemp -d /tmp/nanostack-space.XXXXXX)
 SPACE_HOME="$SPACE_TMP/home with space"
 SPACE_PROJ="$SPACE_TMP/nogit"

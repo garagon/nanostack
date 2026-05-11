@@ -130,7 +130,7 @@ jobs:
           ci/e2e-custom-stack-examples.sh
 
   e2e-custom-stack:
-    name: E2E Custom Stack Framework v1 (19-cell journey)
+    name: E2E Custom Stack Framework v1 (20-cell journey)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # Custom Stack Framework v1 PR 6. Runs the full new-user journey:
