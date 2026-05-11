@@ -57,10 +57,16 @@ if [ ! -d "$ADAPTER_DIR" ]; then
   exit 1
 fi
 
-# Known hosts and accepted capability enum values.
+# Known hosts and accepted capability enum values. The capability
+# values come from reference/host-adapter-schema.md; bash/write/phase
+# all share the same enum. Codex caught the earlier drift on the
+# PR 6 first review pass — the docs accepted `detectable`,
+# `hooked`, and `host_dependent` while the script was rejecting
+# them.
 KNOWN_HOSTS="claude cursor codex opencode gemini"
-ENFORCEMENT_ENUM="enforced reported instructions_only unsupported unknown"
-DISCOVERY_ENUM="native rules_file extension skill_folder instructions_only unsupported unknown"
+ENFORCEMENT_ENUM="unsupported instructions_only detectable hooked enforced host_dependent"
+DISCOVERY_ENUM="native rules_file extension skill_folder instructions_only unsupported unknown host_dependent"
+VERIFICATION_METHOD_ENUM="ci manual unknown"
 
 # Adapter names listed in the README. Adapters in this list get the
 # strict fail-after-60 policy; an adapter not listed in the README is
@@ -117,31 +123,79 @@ check_adapter() {
   method=$(jq -r '.verification.method // ""' "$file")
 
   local errors=""
-  for key in host last_verified bash_guard write_guard phase_gate skill_discovery; do
+  # Full required-field list from reference/host-adapter-schema.md.
+  # Codex flagged the truncated check on the PR 6 first review pass:
+  # the previous list omitted schema_version, verification,
+  # install_target, doctor_checks so an adapter could ship with no
+  # verification evidence and still pass.
+  for key in host schema_version last_verified verification skill_discovery \
+             bash_guard write_guard phase_gate install_target doctor_checks; do
     if ! jq -e --arg k "$key" 'has($k)' "$file" >/dev/null 2>&1; then
       errors="${errors:+$errors; }missing $key"
     fi
   done
 
+  # verification must be an object with method + evidence.
+  if jq -e '.verification | type == "object"' "$file" >/dev/null 2>&1; then
+    local v_method
+    v_method=$(jq -r '.verification.method // ""' "$file")
+    if [ -z "$v_method" ]; then
+      errors="${errors:+$errors; }verification.method is empty"
+    elif ! in_enum "$v_method" "$VERIFICATION_METHOD_ENUM"; then
+      errors="${errors:+$errors; }verification.method=$v_method not in enum ($VERIFICATION_METHOD_ENUM)"
+    fi
+    if ! jq -e '.verification.evidence | type == "string" and length > 0' "$file" >/dev/null 2>&1; then
+      errors="${errors:+$errors; }verification.evidence is empty or wrong type"
+    fi
+  elif jq -e 'has("verification")' "$file" >/dev/null 2>&1; then
+    # Field exists but is not an object.
+    errors="${errors:+$errors; }verification is not an object"
+  fi
+
+  # doctor_checks must be a non-empty array of strings.
+  if jq -e 'has("doctor_checks") and (.doctor_checks | type == "array")' "$file" >/dev/null 2>&1; then
+    if ! jq -e '.doctor_checks | length > 0' "$file" >/dev/null 2>&1; then
+      errors="${errors:+$errors; }doctor_checks is empty"
+    fi
+  elif jq -e 'has("doctor_checks")' "$file" >/dev/null 2>&1; then
+    errors="${errors:+$errors; }doctor_checks is not an array"
+  fi
+
   if ! in_enum "$host" "$KNOWN_HOSTS"; then
     errors="${errors:+$errors; }host=$host not in known set ($KNOWN_HOSTS)"
   fi
 
+  # Empty-string capability values are NOT valid even though the key
+  # exists. Codex caught the empty-passes-through hole on the PR 6
+  # first review pass: a README-listed adapter with bash_guard=""
+  # used to come back OK.
   for field in bash_guard write_guard phase_gate; do
     val=$(eval echo "\$$field")
-    if [ -n "$val" ] && ! in_enum "$val" "$ENFORCEMENT_ENUM"; then
+    if [ -z "$val" ]; then
+      errors="${errors:+$errors; }$field is empty"
+    elif ! in_enum "$val" "$ENFORCEMENT_ENUM"; then
       errors="${errors:+$errors; }$field=$val not in enum ($ENFORCEMENT_ENUM)"
     fi
   done
 
-  if [ -n "$discovery" ] && ! in_enum "$discovery" "$DISCOVERY_ENUM"; then
+  if [ -z "$discovery" ]; then
+    # Already reported as missing above when the key was absent. Only
+    # flag here if the key exists but the value is empty.
+    if jq -e 'has("skill_discovery")' "$file" >/dev/null 2>&1; then
+      errors="${errors:+$errors; }skill_discovery is empty"
+    fi
+  elif ! in_enum "$discovery" "$DISCOVERY_ENUM"; then
     errors="${errors:+$errors; }skill_discovery=$discovery not in enum ($DISCOVERY_ENUM)"
   fi
 
   local age_days="unknown"
   if [ -n "$last_verified" ]; then
+    # Suppress set -e for the parse so we always reach record_result.
+    # Codex flagged the silent-exit on the PR 6 first review pass.
     local then_epoch
+    set +e
     then_epoch=$(parse_iso_date "$last_verified")
+    set -e
     if [ -z "$then_epoch" ]; then
       errors="${errors:+$errors; }last_verified=$last_verified does not parse as a date"
     else

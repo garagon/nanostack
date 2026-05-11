@@ -190,6 +190,73 @@ echo "$out" | grep -q "override active" && \
   assert_eq "override message present" "yes" "yes" || \
   assert_eq "override message present" "yes" "no"
 
+# Cell 7a: documented capability values from
+# reference/host-adapter-schema.md (detectable, hooked, host_dependent)
+# must be accepted, not rejected. Codex flagged the enum drift on
+# the PR 6 first review pass.
+echo "[7a] documented capability enum is honored"
+root=$(new_repo "cell7a-enum")
+cat > "$root/README.md" <<'EOF'
+README mentions `claude` only.
+EOF
+# Use the full enum across three different capabilities.
+write_adapter "$root" claude "$NOW_ISO" '
+  .bash_guard = "detectable"
+  | .write_guard = "hooked"
+  | .phase_gate = "host_dependent"
+'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "documented capability enum passes (rc 0)" "0" "$rc"
+
+# Cell 7b: empty string for a required capability is treated as a
+# failure even though the key exists. Codex flagged the empty-bypass
+# on the PR 6 first review pass.
+echo "[7b] empty capability value fails (does not silently pass)"
+root=$(new_repo "cell7b-empty")
+cat > "$root/README.md" <<'EOF'
+README mentions `claude` only.
+EOF
+write_adapter "$root" claude "$NOW_ISO" '.bash_guard = ""'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "empty bash_guard fails (rc 1)" "1" "$rc"
+echo "$out" | grep -q "bash_guard is empty" && \
+  assert_eq "empty-field message present" "yes" "yes" || \
+  assert_eq "empty-field message present" "yes" "no"
+
+# Cell 7c: missing verification block fails the schema check.
+# Codex caught the truncated required-field list on the PR 6 first
+# review pass.
+echo "[7c] missing verification block fails"
+root=$(new_repo "cell7c-no-verification")
+cat > "$root/README.md" <<'EOF'
+README mentions `claude` only.
+EOF
+write_adapter "$root" claude "$NOW_ISO" 'del(.verification)'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "missing verification exits 1" "1" "$rc"
+echo "$out" | grep -q "missing verification" && \
+  assert_eq "missing-verification message present" "yes" "yes" || \
+  assert_eq "missing-verification message present" "yes" "no"
+
+# Cell 7d: unparseable last_verified surfaces a clear error and still
+# completes the run (does not silent-exit under set -e). Codex P3
+# from the PR 6 first review pass.
+echo "[7d] unparseable last_verified is reported (no silent exit)"
+root=$(new_repo "cell7d-bad-date")
+cat > "$root/README.md" <<'EOF'
+README mentions `claude` only.
+EOF
+write_adapter "$root" claude "not-a-date"
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "unparseable date exits 1" "1" "$rc"
+echo "$out" | grep -q "does not parse as a date" && \
+  assert_eq "unparseable-date message present" "yes" "yes" || \
+  assert_eq "unparseable-date message present" "yes" "no"
+
 # Cell 8: --json output emits a parseable summary object.
 echo "[8] --json output is parseable"
 root=$(new_repo "cell8")
