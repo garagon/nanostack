@@ -1,0 +1,408 @@
+#!/usr/bin/env bash
+# render-artifact.sh — Render a Nanostack JSON artifact as a static
+# HTML view under $NANOSTACK_STORE/visual/. JSON remains canonical;
+# this script is strictly downstream and writes only to the visual
+# root. See reference/visual-artifact-contract.md for the full
+# contract.
+#
+# Usage:
+#   render-artifact.sh <phase> [artifact-path|--latest] [--strict]
+#                              [--interactive] [--out <path>]
+#                              [--manifest-only]
+#
+# PR 1 scope: /plan renderer + manifest + safety locks. Other phases
+# exit 1 with a clear "phase not yet supported" message; PR 2 wires
+# think/review/security/qa/ship. journal/stack are reserved for PR 3
+# (exit 2). --interactive is reserved for PR 4 (exit 2).
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/store-path.sh"
+source "$SCRIPT_DIR/lib/html-escape.sh"
+source "$SCRIPT_DIR/lib/visual-render.sh"
+source "$SCRIPT_DIR/lib/artifact-trust.sh"
+[ -f "$SCRIPT_DIR/lib/artifact-schemas.sh" ] && source "$SCRIPT_DIR/lib/artifact-schemas.sh"
+
+usage() {
+  cat <<USAGE
+Usage: render-artifact.sh <phase> [artifact-path|--latest] [--strict]
+                                  [--interactive] [--out <path>]
+                                  [--manifest-only]
+
+PR 1 scope:
+  phase = plan               render the latest or explicit /plan artifact
+  phase = think|review|security|qa|ship
+                             reserved for PR 2 (exit 1)
+  phase = journal            reserved for PR 3 (exit 2)
+  phase = stack              reserved for PR 3 (exit 2)
+
+Flags:
+  --strict                   require nano_artifact_trust == verified
+  --interactive              reserved for PR 4 (exit 2)
+  --out <path>               write HTML to explicit path under \$NANOSTACK_STORE/visual
+  --manifest-only            write manifest only, skip HTML
+  --latest                   resolve via find-artifact.sh (default if no path)
+
+Exit codes:
+  0  success
+  1  input error
+  2  feature reserved for a later PR
+  3  trust failure
+  4  unsafe output path
+USAGE
+}
+
+if [ $# -eq 0 ]; then
+  usage >&2
+  exit 1
+fi
+
+PHASE="$1"
+shift
+
+ART_PATH=""
+USE_LATEST=false
+STRICT=false
+INTERACTIVE=false
+MANIFEST_ONLY=false
+OUT_PATH=""
+
+# Reserved phase kinds. Surface a clear message and use the contract
+# exit code so CI can categorize.
+case "$PHASE" in
+  journal)
+    echo "render-artifact: 'journal' is reserved for PR 3 (sprint journal renderer)" >&2
+    exit 2
+    ;;
+  stack)
+    echo "render-artifact: 'stack' is reserved for PR 3 (custom stack graph renderer)" >&2
+    exit 2
+    ;;
+esac
+
+# Argument parsing. The first non-flag argument after <phase> is the
+# explicit artifact path. Flags can appear before or after.
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --latest)         USE_LATEST=true ;;
+    --strict)         STRICT=true ;;
+    --interactive)
+      echo "render-artifact: --interactive is reserved for PR 4 (copy-only interactive mode)" >&2
+      exit 2
+      ;;
+    --manifest-only)  MANIFEST_ONLY=true ;;
+    --out)
+      shift
+      [ -z "${1:-}" ] && { echo "render-artifact: --out requires a path" >&2; exit 1; }
+      OUT_PATH="$1"
+      ;;
+    --help|-h)        usage; exit 0 ;;
+    -*)
+      echo "render-artifact: unknown flag: $1" >&2
+      exit 1
+      ;;
+    *)
+      if [ -n "$ART_PATH" ]; then
+        echo "render-artifact: extra positional argument: $1" >&2
+        exit 1
+      fi
+      ART_PATH="$1"
+      ;;
+  esac
+  shift
+done
+
+# Validate phase. Core phases supported by PR 1: plan. The rest of the
+# core phases will be wired in PR 2; report a clear message.
+case "$PHASE" in
+  plan) ;;
+  think|review|security|qa|ship)
+    echo "render-artifact: phase '$PHASE' is reserved for PR 2 (core phase renderers)" >&2
+    exit 1
+    ;;
+  *)
+    echo "render-artifact: unsupported phase: $PHASE" >&2
+    exit 1
+    ;;
+esac
+
+# Resolve the source artifact.
+if [ -z "$ART_PATH" ] || [ "$USE_LATEST" = true ]; then
+  ART_PATH=$("$SCRIPT_DIR/find-artifact.sh" "$PHASE" 30 2>/dev/null || true)
+  if [ -z "$ART_PATH" ]; then
+    echo "render-artifact: no $PHASE artifact found in the last 30 days" >&2
+    exit 1
+  fi
+fi
+
+if [ ! -f "$ART_PATH" ]; then
+  echo "render-artifact: artifact not found: $ART_PATH" >&2
+  exit 1
+fi
+
+# JSON must parse.
+if ! jq -e '.' "$ART_PATH" >/dev/null 2>&1; then
+  echo "render-artifact: artifact is not valid JSON: $ART_PATH" >&2
+  exit 1
+fi
+
+# .phase field must match the requested phase.
+ART_PHASE=$(jq -r '.phase // ""' "$ART_PATH")
+if [ "$ART_PHASE" != "$PHASE" ]; then
+  echo "render-artifact: artifact phase '$ART_PHASE' does not match requested phase '$PHASE': $ART_PATH" >&2
+  exit 1
+fi
+
+# Trust check. integrity_mismatch always fails (exit 3). Under
+# --strict, integrity_missing also fails. integrity_missing without
+# strict renders with an "unverified" badge.
+TRUST=$(nano_artifact_trust "$ART_PATH" 2>/dev/null || echo "not_found")
+case "$TRUST" in
+  verified) ;;
+  integrity_missing)
+    if [ "$STRICT" = true ]; then
+      echo "render-artifact: --strict requires verified trust; source is integrity_missing: $ART_PATH" >&2
+      exit 3
+    fi
+    ;;
+  integrity_mismatch)
+    echo "render-artifact: source artifact integrity check failed: $ART_PATH" >&2
+    exit 3
+    ;;
+  *)
+    echo "render-artifact: artifact unreadable: $ART_PATH" >&2
+    exit 1
+    ;;
+esac
+
+# Determine output paths.
+TS=$(nano_visual_timestamp)
+nano_visual_assert_safe_root
+
+if [ -n "$OUT_PATH" ]; then
+  nano_visual_assert_safe_output "$OUT_PATH"
+  HTML_PATH="$OUT_PATH"
+else
+  HTML_PATH=$(nano_visual_html_path "$PHASE" "$TS")
+fi
+MANIFEST_PATH=$(nano_visual_manifest_path "phase" "$PHASE" "$TS")
+
+mkdir -p "$(dirname "$HTML_PATH")"
+mkdir -p "$(dirname "$MANIFEST_PATH")"
+
+# Pull the stored integrity hash. It is recorded in the manifest so a
+# later check can decide whether the rendered view's source still
+# matches what was on disk at render time.
+SRC_INTEGRITY=$(jq -r '.integrity // ""' "$ART_PATH" 2>/dev/null || echo "")
+
+# Optional schema validation. A failing schema does not block the
+# render; it adds a visible warning to the HTML and is recorded in the
+# manifest. This is intentional: a malformed artifact still benefits
+# from being inspectable.
+SCHEMA_OK=true
+SCHEMA_ERR=""
+if declare -F nano_validate_artifact >/dev/null 2>&1; then
+  if ! SCHEMA_ERR=$(nano_validate_artifact "$PHASE" "$(cat "$ART_PATH")" 2>&1); then
+    SCHEMA_OK=false
+  fi
+fi
+
+# ─── Phase renderers ────────────────────────────────────────
+#
+# Each function emits the body between page_start and page_end. They
+# read named fields with jq, escape every scalar before printing, and
+# render "Not recorded" / "None recorded" for absent values.
+
+render_plan_body() {
+  local artifact="$1"
+
+  local goal scope approval
+  goal=$(jq -r '.summary.goal // "Not recorded"' "$artifact" | nano_html_escape)
+  scope=$(jq -r '.summary.scope // "Not recorded"' "$artifact" | nano_html_escape)
+  approval=$(jq -r '.summary.plan_approval // "Not recorded"' "$artifact" | nano_html_escape)
+
+  cat <<HTML
+    <section class="card">
+      <h2>Summary</h2>
+      <dl class="kvgrid">
+        <dt>Goal</dt><dd>$goal</dd>
+        <dt>Scope</dt><dd>$scope</dd>
+        <dt>Approval</dt><dd>$approval</dd>
+      </dl>
+    </section>
+HTML
+
+  # Planned files. Grouped by top-level directory for readability on
+  # plans that touch many files.
+  local files_count
+  files_count=$(jq -r '(.summary.planned_files // []) | length' "$artifact")
+  printf '    <section class="card">\n      <h2>Planned files (%s)</h2>\n' \
+    "$(printf '%s' "$files_count" | nano_html_escape)"
+  if [ "$files_count" = "0" ]; then
+    printf '      <p class="muted">None recorded</p>\n'
+  else
+    # Group: jq emits "dir<TAB>file" pairs sorted by dir.
+    printf '      <ul>\n'
+    # shellcheck disable=SC2016
+    jq -r '
+      (.summary.planned_files // [])
+      | map(tostring)
+      | sort
+      | .[]
+    ' "$artifact" | while IFS= read -r f; do
+      printf '        <li><code>%s</code></li>\n' "$(printf '%s' "$f" | nano_html_escape)"
+    done
+    printf '      </ul>\n'
+  fi
+  printf '    </section>\n'
+
+  # Risks
+  local risks_count
+  risks_count=$(jq -r '(.summary.risks // []) | length' "$artifact")
+  printf '    <section class="card">\n      <h2>Risks (%s)</h2>\n' \
+    "$(printf '%s' "$risks_count" | nano_html_escape)"
+  if [ "$risks_count" = "0" ]; then
+    printf '      <p class="muted">None recorded</p>\n'
+  else
+    printf '      <ul>\n'
+    jq -r '(.summary.risks // []) | .[] | tostring' "$artifact" | while IFS= read -r r; do
+      printf '        <li>%s</li>\n' "$(printf '%s' "$r" | nano_html_escape)"
+    done
+    printf '      </ul>\n'
+  fi
+  printf '    </section>\n'
+
+  # Out-of-scope
+  local oos_count
+  oos_count=$(jq -r '(.summary.out_of_scope // []) | length' "$artifact")
+  printf '    <section class="card">\n      <h2>Out of scope (%s)</h2>\n' \
+    "$(printf '%s' "$oos_count" | nano_html_escape)"
+  if [ "$oos_count" = "0" ]; then
+    printf '      <p class="muted">None recorded</p>\n'
+  else
+    printf '      <ul>\n'
+    jq -r '(.summary.out_of_scope // []) | .[] | tostring' "$artifact" | while IFS= read -r item; do
+      printf '        <li>%s</li>\n' "$(printf '%s' "$item" | nano_html_escape)"
+    done
+    printf '      </ul>\n'
+  fi
+  printf '    </section>\n'
+
+  # Context checkpoint
+  local ck_summary
+  ck_summary=$(jq -r '.context_checkpoint.summary // "Not recorded"' "$artifact" | nano_html_escape)
+  printf '    <section class="card">\n      <h2>Context checkpoint</h2>\n'
+  printf '      <p>%s</p>\n' "$ck_summary"
+  local kf_count
+  kf_count=$(jq -r '(.context_checkpoint.key_files // []) | length' "$artifact")
+  if [ "$kf_count" != "0" ]; then
+    printf '      <h3>Key files</h3>\n      <ul>\n'
+    jq -r '(.context_checkpoint.key_files // []) | .[] | tostring' "$artifact" | while IFS= read -r kf; do
+      printf '        <li><code>%s</code></li>\n' "$(printf '%s' "$kf" | nano_html_escape)"
+    done
+    printf '      </ul>\n'
+  fi
+  local dec_count
+  dec_count=$(jq -r '(.context_checkpoint.decisions_made // []) | length' "$artifact")
+  if [ "$dec_count" != "0" ]; then
+    printf '      <h3>Decisions made</h3>\n      <ul>\n'
+    jq -r '(.context_checkpoint.decisions_made // []) | .[] | tostring' "$artifact" | while IFS= read -r d; do
+      printf '        <li>%s</li>\n' "$(printf '%s' "$d" | nano_html_escape)"
+    done
+    printf '      </ul>\n'
+  fi
+  local oq_count
+  oq_count=$(jq -r '(.context_checkpoint.open_questions // []) | length' "$artifact")
+  if [ "$oq_count" != "0" ]; then
+    printf '      <h3>Open questions</h3>\n      <ul>\n'
+    jq -r '(.context_checkpoint.open_questions // []) | .[] | tostring' "$artifact" | while IFS= read -r q; do
+      printf '        <li>%s</li>\n' "$(printf '%s' "$q" | nano_html_escape)"
+    done
+    printf '      </ul>\n'
+  fi
+  printf '    </section>\n'
+}
+
+# ─── Atomic write ───────────────────────────────────────────
+TMP_HTML="$HTML_PATH.tmp.$$"
+TMP_MFST="$MANIFEST_PATH.tmp.$$"
+cleanup() {
+  rm -f "$TMP_HTML" "$TMP_MFST" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+# ─── Manifest ───────────────────────────────────────────────
+# Build manifest first; if the HTML render fails we can still leave a
+# clean state. We move both files into place at the very end.
+
+CREATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+# Use jq to construct the manifest so all string escaping is correct.
+jq -n \
+  --arg schema_version "1" \
+  --arg kind "phase" \
+  --arg phase "$PHASE" \
+  --argjson custom_phase false \
+  --arg format "html" \
+  --argjson interactive false \
+  --argjson strict "$($STRICT && echo true || echo false)" \
+  --arg src_phase "$ART_PHASE" \
+  --arg src_path "$ART_PATH" \
+  --arg src_integrity "$SRC_INTEGRITY" \
+  --arg src_trust "$TRUST" \
+  --arg output_path "$HTML_PATH" \
+  --arg renderer_name "$NANO_VISUAL_RENDERER_NAME" \
+  --arg renderer_version "$NANO_VISUAL_RENDERER_VERSION" \
+  --arg created_at "$CREATED_AT" \
+  --argjson schema_valid "$($SCHEMA_OK && echo true || echo false)" \
+  --arg schema_error "$SCHEMA_ERR" \
+  '{
+    schema_version: $schema_version,
+    kind: $kind,
+    phase: $phase,
+    custom_phase: $custom_phase,
+    format: $format,
+    interactive: $interactive,
+    strict: $strict,
+    source_artifacts: [{
+      phase: $src_phase,
+      path: $src_path,
+      integrity: $src_integrity,
+      trust: $src_trust
+    }],
+    output_path: $output_path,
+    renderer: { name: $renderer_name, version: $renderer_version },
+    schema_valid: $schema_valid,
+    schema_error: (if $schema_error == "" then null else $schema_error end),
+    created_at: $created_at
+  }' > "$TMP_MFST"
+
+if [ "$MANIFEST_ONLY" = true ]; then
+  mv "$TMP_MFST" "$MANIFEST_PATH"
+  trap - EXIT
+  echo "$MANIFEST_PATH"
+  exit 0
+fi
+
+# ─── HTML ───────────────────────────────────────────────────
+{
+  nano_visual_page_start "$PHASE" "$TRUST" "static"
+
+  if [ "$SCHEMA_OK" = false ]; then
+    printf '    <div class="schema-warning" data-testid="schema-warning">%s</div>\n' \
+      "$(printf 'Schema validation: %s' "$SCHEMA_ERR" | nano_html_escape)"
+  fi
+
+  case "$PHASE" in
+    plan)   render_plan_body "$ART_PATH" ;;
+  esac
+
+  nano_visual_page_end "$ART_PATH" "$MANIFEST_PATH" "$SRC_INTEGRITY"
+} > "$TMP_HTML"
+
+mv "$TMP_HTML" "$HTML_PATH"
+mv "$TMP_MFST" "$MANIFEST_PATH"
+trap - EXIT
+
+echo "$HTML_PATH"
