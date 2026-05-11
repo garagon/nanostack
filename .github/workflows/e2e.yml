@@ -171,7 +171,7 @@ jobs:
           ci/e2e-onboarding-flows.sh
 
   e2e-structured-artifacts:
-    name: E2E Structured Artifact Contract (8 cells)
+    name: E2E Structured Artifact Contract (9 cells)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # PR 3 of the 2026-05-10 architecture audit. Locks the per-phase

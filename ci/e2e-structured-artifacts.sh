@@ -203,6 +203,22 @@ grep -qF 'nano_validate_artifact' "$script" && \
   assert_eq "save-artifact.sh calls nano_validate_artifact" "yes" "yes" || \
   assert_eq "save-artifact.sh calls nano_validate_artifact" "yes" "no"
 
+# Cell 9: nano_validate_artifact stays callable from set -e callers
+# even on malformed ship artifacts. A ship payload with a string
+# summary and no top-level run_mode used to crash the jq probe
+# (rc 5), so an errexit caller exited before the validator could
+# return its documented schema error. Codex caught this on the
+# PR 3 sixth review pass.
+echo "[9] nano_validate_artifact survives jq probes on malformed ship"
+ship_loose='{"phase":"ship","summary":"loose string"}'
+set +e
+bash -ec "source '$REPO/bin/lib/artifact-schemas.sh'; nano_validate_artifact ship '$ship_loose' 2>/dev/null" >/dev/null
+rc=$?
+set -e
+# Schema failure must return 1 (the documented value), not 5 (jq crash)
+# or any other non-1 non-0 value.
+assert_eq "validator returns 1 (schema fail), not 5 (jq crash)" "1" "$rc"
+
 cd "$TMP_ROOT"
 
 echo

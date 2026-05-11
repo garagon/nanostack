@@ -129,7 +129,12 @@ nano_validate_artifact() {
       # structured summary and a context_checkpoint so /compound and
       # post-deploy verification can read PR / status fields by name.
       local run_mode
-      run_mode=$(printf '%s' "$json" | jq -r '.run_mode // .summary.run_mode // ""' 2>/dev/null)
+      # `?` swallows the "cannot index string with run_mode" jq error
+      # so a ship artifact with a string summary still classifies
+      # cleanly. Without `?`, jq exits 5 and a caller running under
+      # set -e never reaches the validator's documented schema error.
+      # Codex caught the contract violation on the PR 3 sixth pass.
+      run_mode=$(printf '%s' "$json" | jq -r '.run_mode // (.summary.run_mode? // "")' 2>/dev/null) || run_mode=""
       if [ "$run_mode" = "report_only" ]; then
         _nano_validate_field "$json" '.summary' 'any'
       else
