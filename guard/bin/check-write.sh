@@ -243,14 +243,22 @@ check_path() {
   local base is_template=false
   base=$(basename "$p")
   for pat in "${TEMPLATE_ALLOW[@]}"; do
-    if printf '%s' "$base" | grep -qE -- "$pat"; then
+    # Case-insensitive match so the deny side and the allow side
+    # share the same case policy. credentials.Example.json must
+    # still pass even when the deny grep below is -i too.
+    if printf '%s' "$base" | grep -qiE -- "$pat"; then
       is_template=true
       break
     fi
   done
   if [ "$is_template" = false ]; then
     for pat in "${BASENAME_DENY[@]}"; do
-      if printf '%s' "$p" | grep -qE -- "$pat"; then
+      # Case-insensitive match: read-side G-035 in guard/rules.json
+      # is `grep -qiE`, so mixed-case filenames like
+      # Credentials.json, AWS-Credentials.json, or ID_RSA must not
+      # become a bypass. Codex flagged the case gap on the PR 7
+      # third review pass.
+      if printf '%s' "$p" | grep -qiE -- "$pat"; then
         MATCHED_RULE="secret_basename:$pat"
         MATCHED_PATH="$p"
         return 0

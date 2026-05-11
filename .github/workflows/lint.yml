@@ -861,6 +861,18 @@ jobs:
           run_case 1 'secret-prod.json'
           run_case 1 'secrets-backup.json'
           run_case 1 'credentials.dev.json'
+          # Mixed-case credential JSON. Codex caught the case gap on
+          # the PR 7 third review pass: read-side G-035 is case-
+          # insensitive, so the write side must match too.
+          run_case 1 'Credentials.json'
+          run_case 1 'Service-Account.json'
+          run_case 1 'AWS-Credentials.json'
+          run_case 1 'Firebase-Adminsdk.json'
+          run_case 1 'SECRETS.json'
+          run_case 1 '.ENV'
+          # Mixed-case templates stay allowed.
+          run_case 0 'credentials.Example.json'
+          run_case 0 'Service-Account.Template.json'
           # Protected directories still block even when the leaf has
           # a template-looking basename. Codex caught the over-broad
           # template exemption on the PR 7 first review pass:
