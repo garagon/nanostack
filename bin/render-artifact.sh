@@ -611,7 +611,11 @@ HTML
   pr_url_raw=$(printf '%s' "$norm" | jq -r '.summary.pr_url // ""')
   title=$(printf '%s' "$norm" | jq -r '.summary.title // "Not recorded"' | nano_html_escape)
   status=$(printf '%s' "$norm" | jq -r '.summary.status // "Not recorded"' | nano_html_escape)
-  ci_passed=$(printf '%s' "$norm" | jq -r '.summary.ci_passed // false')
+  # Escape ci_passed even though the schema documents it as a
+  # boolean. /ship's validator only requires summary to be an object,
+  # so a malformed artifact with ci_passed as a string would inject
+  # raw HTML otherwise. Codex PR 2 pass 1 caught the gap.
+  ci_passed=$(printf '%s' "$norm" | jq -r '.summary.ci_passed // false' | nano_html_escape)
 
   url_safety=$(nano_visual_safe_pr_url "$pr_url_raw")
 

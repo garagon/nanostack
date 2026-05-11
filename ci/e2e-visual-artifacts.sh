@@ -637,6 +637,18 @@ assert_not_contains "security fix no raw <img" "$HTML" '<img src=x onerror=alert
 assert_contains "security PoC escaped" "$HTML" '&lt;script&gt;'
 assert_contains "security PoC stays in <pre>" "$HTML" '<details><summary>Proof of concept</summary><pre>'
 
+# Malicious ship.ci_passed (PR 2 pass 1 regression: ci_passed was
+# interpolated unescaped because the schema documents it as a
+# boolean; a malformed artifact stored it as a string).
+(cd "$PROJ" && NANOSTACK_STORE="$NANOSTACK_STORE" "$REPO/bin/save-artifact.sh" ship '{
+  "phase":"ship",
+  "summary":{"pr_number":1,"pr_url":"https://github.com/x/y/pull/1","title":"t","status":"created","ci_passed":"<script>alert(\"ci\")</script>"},
+  "context_checkpoint":{"summary":"x","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" ship --latest)
+assert_not_contains "ship ci_passed no raw script" "$HTML" '<script>alert("ci")</script>'
+assert_contains "ship ci_passed escaped" "$HTML" '&lt;script&gt;alert(&quot;ci&quot;)&lt;/script&gt;'
+
 # Malicious qa (reproduce + root_cause)
 (cd "$PROJ" && NANOSTACK_STORE="$NANOSTACK_STORE" "$REPO/bin/save-artifact.sh" qa '{
   "phase":"qa","summary":{"mode":"browser","status":"fail","tests_run":1,"tests_passed":0,"tests_failed":1,"bugs_found":1,"bugs_fixed":0},
