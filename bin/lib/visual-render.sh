@@ -134,6 +134,12 @@ nano_visual_assert_safe_descend() {
     echo "render-artifact: visual root is a symlink: $current" >&2
     return 4
   fi
+  # Disable globbing for the split (codex PR 1 pass 8). Same risk
+  # as nano_visual_normalize_path: an unquoted set -- expands * and
+  # ? against the cwd, which could mask symlink components from the
+  # check.
+  local restore_glob=0
+  case $- in *f*) ;; *) restore_glob=1; set -f ;; esac
   local IFS=/
   # shellcheck disable=SC2086
   set -- $rel
@@ -149,9 +155,11 @@ nano_visual_assert_safe_descend() {
     current="$current/$part"
     if [ -L "$current" ]; then
       echo "render-artifact: refusing to descend into symlinked subdirectory: $current" >&2
+      [ "$restore_glob" -eq 1 ] && set +f
       return 4
     fi
   done
+  [ "$restore_glob" -eq 1 ] && set +f
   # Leaf check. Codex PR 1 pass 5 caught the gap: if the leaf itself
   # is a symlink to a directory, the later atomic mv moves the temp
   # file INTO the link target instead of overwriting the link, so
@@ -185,6 +193,13 @@ nano_visual_normalize_path() {
     /*) ;;
     *) raw="$PWD/$raw" ;;
   esac
+  # Disable globbing for the split. Codex PR 1 pass 8 caught that an
+  # unquoted `set -- $raw` performs pathname expansion against the
+  # current working directory; an --out containing `*` or `?` could
+  # be silently rewritten to a matching real filename, producing a
+  # manifest output_path that disagrees with the caller's request.
+  local restore_glob=0
+  case $- in *f*) ;; *) restore_glob=1; set -f ;; esac
   local out=""
   local IFS=/
   # shellcheck disable=SC2086
@@ -204,6 +219,7 @@ nano_visual_normalize_path() {
         ;;
     esac
   done
+  [ "$restore_glob" -eq 1 ] && set +f
   [ -z "$out" ] && out="/"
   printf '%s\n' "$out"
 }

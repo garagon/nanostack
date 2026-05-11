@@ -562,6 +562,48 @@ PLAN_LOGGED=$(jq -r '.phase_log // [] | map(.phase) | contains(["plan"])' "$NANO
 assert_true "plan not registered as in_progress by render" \
   sh -c "[ '$PLAN_LOGGED' = 'false' ]"
 
+# ─── Cell 9m: glob metachars in --out preserved literally ──
+# PR 1 pass 8 P3 regression. nano_visual_normalize_path used to
+# perform pathname expansion during the IFS split; an --out with `*`
+# or `?` could be silently rewritten to a matching real filename.
+printf "\n  ${DIM}Cell 9m: glob metachars in --out (PR 1 pass 8)${NC}\n"
+PROJ="$TMP_ROOT/cell9m"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/visual/plan"
+# Pre-create a real file that would match a glob if expansion ran.
+touch "$NANOSTACK_STORE/visual/plan/starA.html"
+touch "$NANOSTACK_STORE/visual/plan/starB.html"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+# Use a quoted literal "star*.html" as --out; this must NOT expand.
+TARGET="$NANOSTACK_STORE/visual/plan/star?special.html"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest --out "$TARGET")
+assert_true "literal glob path preserved (no expansion)" \
+  sh -c "[ '$HTML' = '$TARGET' ]"
+assert_true "literal file exists at requested path" test -f "$TARGET"
+
+# ─── Cell 9n: predictable temp file not used ───────────────
+# PR 1 pass 8 P2 regression. The pre-fix render created a temp file
+# at $HTML_PATH.tmp.$$, which an attacker could pre-symlink. Verify
+# the renderer no longer creates files with the predictable pattern
+# and that any race-created symlink at .tmp.<pid> does not get
+# followed.
+printf "\n  ${DIM}Cell 9n: secure temp file (PR 1 pass 8)${NC}\n"
+PROJ="$TMP_ROOT/cell9n"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/visual/plan"
+mkdir -p "$TMP_ROOT/cell9n-outside"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+# Race: pre-create a symlink at the *new* mktemp-format path. We
+# cannot guess the random suffix; what we CAN do is verify that the
+# render still works when there is no symlink hijack, and that
+# leftover .tmp.* files are cleaned up.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest)
+TMP_LEFTOVER=$(find "$NANOSTACK_STORE/visual" -name "*.tmp.*" 2>/dev/null | wc -l | tr -d ' ')
+assert_true "render succeeds with mktemp" test -f "$HTML"
+assert_true "no leftover tmp files" sh -c "[ '$TMP_LEFTOVER' = '0' ]"
+
 # ─── Cell 9: symlinked visual root rejected ─────────────────
 printf "\n  ${DIM}Cell 9: symlinked visual root rejected${NC}\n"
 PROJ="$TMP_ROOT/cell9"

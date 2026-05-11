@@ -396,8 +396,21 @@ HTML
 }
 
 # ─── Atomic write ───────────────────────────────────────────
-TMP_HTML="$HTML_PATH.tmp.$$"
-TMP_MFST="$MANIFEST_PATH.tmp.$$"
+# Codex PR 1 pass 8: a predictable temp name (HTML_PATH.tmp.$$) lets
+# an attacker pre-create a symlink at that path; the redirect would
+# follow it and write outside visual/. Use mktemp to create the
+# files inside the already-validated parent directory; mktemp uses
+# O_EXCL so a symlink-pre-creation race fails with a clear error
+# instead of silently following the link.
+TMP_HTML=$(mktemp "$HTML_PATH.tmp.XXXXXX" 2>/dev/null) || {
+  echo "render-artifact: failed to create secure temp for HTML: $HTML_PATH" >&2
+  exit 4
+}
+TMP_MFST=$(mktemp "$MANIFEST_PATH.tmp.XXXXXX" 2>/dev/null) || {
+  rm -f "$TMP_HTML"
+  echo "render-artifact: failed to create secure temp for manifest: $MANIFEST_PATH" >&2
+  exit 4
+}
 cleanup() {
   rm -f "$TMP_HTML" "$TMP_MFST" 2>/dev/null || true
 }
