@@ -265,18 +265,17 @@ if [ -n "$OUT_PATH" ]; then
   nano_visual_assert_safe_output "$OUT_PATH"
   HTML_PATH="$OUT_PATH"
 else
+  # Codex PR 3 pass 4: do not mkdir under visual/ before the descend
+  # safety check runs. A symlinked visual/stack or visual/journal
+  # would otherwise be followed and the renderer would write the
+  # node directory outside the root before exit 4 fires. The post-
+  # validation `mkdir -p "$(dirname "$HTML_PATH")"` later in the
+  # script creates the directory only after the descend check
+  # confirms no component is a symlink.
   case "$PHASE" in
-    journal)
-      mkdir -p "$(nano_visual_root)/journal"
-      HTML_PATH="$(nano_visual_root)/journal/${TS}-journal-${JOURNAL_DATE}.html"
-      ;;
-    stack)
-      mkdir -p "$(nano_visual_root)/stack/$STACK_NAME"
-      HTML_PATH="$(nano_visual_root)/stack/$STACK_NAME/${TS}-stack-${STACK_NAME}.html"
-      ;;
-    *)
-      HTML_PATH=$(nano_visual_html_path "$PHASE" "$TS")
-      ;;
+    journal) HTML_PATH="$(nano_visual_root)/journal/${TS}-journal-${JOURNAL_DATE}.html" ;;
+    stack)   HTML_PATH="$(nano_visual_root)/stack/$STACK_NAME/${TS}-stack-${STACK_NAME}.html" ;;
+    *)       HTML_PATH=$(nano_visual_html_path "$PHASE" "$TS") ;;
   esac
 fi
 case "$PHASE" in
@@ -930,17 +929,14 @@ render_journal_body() {
     esac
     # Find the latest artifact for this phase on the requested date.
     # _journal_latest_on_date filters by filename prefix YYYYMMDD,
-    # which matches save-artifact.sh's naming convention. Falls back
-    # to find-artifact.sh (last 30 days) when no date prefix matches,
-    # because legacy artifacts may have different shapes. The first
-    # match wins.
+    # which matches save-artifact.sh's naming convention. Codex PR 3
+    # pass 4 caught the gap: an earlier "fall back to find-artifact.sh
+    # for today" branch would return any artifact in the last 30
+    # days, so a fresh day's journal showed yesterday's artifacts as
+    # present. Strict date filtering now applies to both --today and
+    # --date so the journal banner is honest.
     local art_path trust status_label sev_class summary
     art_path=$(_journal_latest_on_date "$ph" "$date_compact")
-    if [ -z "$art_path" ] && [ "$date" = "$(date -u +%Y-%m-%d)" ]; then
-      # For today, fall back to find-artifact.sh to catch artifacts
-      # not yet committed to disk under the convention.
-      art_path=$("$SCRIPT_DIR/find-artifact.sh" "$ph" 30 --no-session-sync 2>/dev/null || true)
-    fi
     if [ -z "$art_path" ] || [ ! -f "$art_path" ]; then
       status_label="missing"
       sev_class="sev-warn"

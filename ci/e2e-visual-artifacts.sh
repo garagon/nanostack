@@ -951,6 +951,54 @@ for n in c1 c5 c10 c13; do
   assert_contains "stack svg contains $n" "$HTML" "data-phase=\"$n\""
 done
 
+# ─── Cell 22j: symlinked visual/stack rejected without leak (PR 3 pass 4) ─
+printf "\n  ${DIM}Cell 22j: symlinked visual/stack rejected (PR 3 pass 4)${NC}\n"
+PROJ="$TMP_ROOT/cell22j"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/visual"
+mkdir -p "$TMP_ROOT/cell22j-outside"
+ln -s "$TMP_ROOT/cell22j-outside" "$NANOSTACK_STORE/visual/stack"
+assert_exit "stack with symlinked visual/stack exits 4" 4 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack compliance-release"
+# No directory was created at the symlink target.
+LEAK=$(find "$TMP_ROOT/cell22j-outside" -maxdepth 1 -type d -name "compliance-release" 2>/dev/null | wc -l | tr -d ' ')
+assert_true "no directory leaked through symlinked visual/stack" sh -c "[ '$LEAK' = '0' ]"
+
+# Same for visual/journal symlink.
+PROJ="$TMP_ROOT/cell22k"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/visual"
+mkdir -p "$TMP_ROOT/cell22k-outside"
+ln -s "$TMP_ROOT/cell22k-outside" "$NANOSTACK_STORE/visual/journal"
+assert_exit "journal with symlinked visual/journal exits 4" 4 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today"
+
+# ─── Cell 22l: --today does not pull stale artifacts (PR 3 pass 4) ─
+printf "\n  ${DIM}Cell 22l: --today strict-date filter (PR 3 pass 4)${NC}\n"
+PROJ="$TMP_ROOT/cell22l"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/plan"
+# Save a plan with yesterday's date.
+YEST_DATE=$(date -u -v-1d +%Y%m%d 2>/dev/null || date -u -d "yesterday" +%Y%m%d 2>/dev/null || echo "20260510")
+YEST_FILE="$NANOSTACK_STORE/plan/${YEST_DATE}-120000.json"
+jq -n --arg p "$PROJ" '{
+  schema_version: "1",
+  phase: "plan",
+  timestamp: "2026-05-10T12:00:00Z",
+  project: $p,
+  branch: "main",
+  summary: {goal:"yesterday", scope:"small", planned_files:[], plan_approval:"manual"},
+  context_checkpoint: {summary:"x", key_files:[], decisions_made:[], open_questions:[]}
+}' > "$YEST_FILE"
+# Render today's journal; plan must show as missing, not yesterday's.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_not_contains "today's journal does not show yesterday's plan" "$HTML" "${YEST_DATE}-120000.json"
+# Plan row says missing.
+assert_contains "today's journal shows plan as missing" "$HTML" 'data-phase="plan"'
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"
