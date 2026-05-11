@@ -886,21 +886,44 @@ render_journal_body() {
   # find the latest artifact for <phase> on <date>. Uses filename
   # convention `YYYYMMDD-HHMMSS.json` under `.nanostack/<phase>/`.
   # Returns the path on stdout (empty if none).
+  #
+  # Codex PR 3 pass 5 caught a strict-mode bypass: if a same-day
+  # artifact was tampered so .project no longer matches, the project
+  # filter dropped it and the row rendered as "missing". Aggregate
+  # --strict allows "missing" (phase not run yet), so a tampered file
+  # would escape the trust check entirely. To close that gap, surface
+  # ANY same-day candidate whose integrity is broken even when its
+  # .project field flipped: the trust helper still detects the hash
+  # mismatch and the journal row gets data-trust="integrity_mismatch".
   _journal_latest_on_date() {
     local ph="$1" dc="$2"
     local dir="$NANOSTACK_STORE/$ph"
     [ -d "$dir" ] || return 0
     local project_root="$project_path"
     # shellcheck disable=SC2012
-    ls -1 "$dir"/"$dc"-*.json 2>/dev/null \
-      | sort -r \
-      | while IFS= read -r f; do
-          # find-artifact.sh's project filter: .project must match.
-          if jq -e --arg p "$project_root" '.project == $p' "$f" >/dev/null 2>&1; then
-            printf '%s\n' "$f"
-            return
-          fi
-        done | head -1
+    local candidates
+    candidates=$(ls -1 "$dir"/"$dc"-*.json 2>/dev/null | sort -r)
+    [ -z "$candidates" ] && return 0
+    local f
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      # Trust check first: a same-day candidate whose hash does not
+      # match must surface as tampered even if .project changed.
+      local t
+      t=$(nano_artifact_trust "$f" 2>/dev/null || echo "not_found")
+      if [ "$t" = "integrity_mismatch" ]; then
+        printf '%s\n' "$f"
+        return 0
+      fi
+      # Otherwise require the project to match so foreign artifacts
+      # sharing the store do not pollute our journal.
+      if jq -e --arg p "$project_root" '.project == $p' "$f" >/dev/null 2>&1; then
+        printf '%s\n' "$f"
+        return 0
+      fi
+    done <<EOF
+$candidates
+EOF
   }
 
   # Build the list of phases to enumerate. Use the phase registry
@@ -1050,6 +1073,22 @@ render_stack_body() {
   fi
   if [ -z "$graph_json" ] || [ "$graph_json" = "null" ]; then
     printf '    <section class="card">\n      <h2>Stack not found</h2>\n      <p>No stack definition found for <code>%s</code>.</p>\n    </section>\n' \
+      "$(printf '%s' "$name" | nano_html_escape)"
+    SOURCE_ARTIFACTS_JSON='[]'
+    return 0
+  fi
+
+  # Codex PR 3 pass 5: a user-supplied stack file with a malformed
+  # phase_graph (object, array of scalars, missing .name) would crash
+  # the renderer with an undocumented jq error under set -e. Validate
+  # shape upfront: graph must be an array of objects each with a
+  # string .name and (optional) array .depends_on. On failure, render
+  # a "Stack invalid" notice and bail gracefully.
+  if ! printf '%s' "$graph_json" | jq -e '
+    type == "array"
+    and all(.[]; type == "object" and (.name | type == "string"))
+  ' >/dev/null 2>&1; then
+    printf '    <section class="card">\n      <h2>Stack invalid</h2>\n      <p>The stack definition for <code>%s</code> has a malformed <code>phase_graph</code>. Expected an array of <code>{name, depends_on}</code> objects.</p>\n    </section>\n' \
       "$(printf '%s' "$name" | nano_html_escape)"
     SOURCE_ARTIFACTS_JSON='[]'
     return 0

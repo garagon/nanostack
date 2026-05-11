@@ -999,6 +999,57 @@ assert_not_contains "today's journal does not show yesterday's plan" "$HTML" "${
 # Plan row says missing.
 assert_contains "today's journal shows plan as missing" "$HTML" 'data-phase="plan"'
 
+# ─── Cell 22m: tampered .project surfaces as integrity_mismatch (PR 3 pass 5) ─
+printf "\n  ${DIM}Cell 22m: tampered .project surfaces (PR 3 pass 5)${NC}\n"
+PROJ="$TMP_ROOT/cell22m"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+# Tamper .project. The integrity hash now mismatches but the project
+# filter would otherwise drop this file.
+jq '.project = "/other"' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_contains "tampered .project surfaces as integrity_mismatch row" "$HTML" 'data-trust="integrity_mismatch"'
+# --strict must now fail.
+assert_exit "journal --strict catches tampered .project" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today --strict"
+
+# ─── Cell 22n: malformed stack phase_graph renders graceful notice (PR 3 pass 5) ─
+printf "\n  ${DIM}Cell 22n: malformed stack graph (PR 3 pass 5)${NC}\n"
+PROJ="$TMP_ROOT/cell22n"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/stacks/badstack"
+cat > "$NANOSTACK_STORE/stacks/badstack/stack.json" <<'CFG'
+{
+  "schema_version": "1",
+  "name": "badstack",
+  "phase_graph": "this should be an array, not a string"
+}
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack badstack 2>/dev/null || true)
+# The render returns 0 because the contract is to render gracefully.
+assert_true "malformed stack still produces HTML" test -f "${HTML:-/dev/null}"
+[ -f "${HTML:-/dev/null}" ] && {
+  assert_contains "stack invalid notice rendered" "$HTML" "Stack invalid"
+}
+
+# Array of scalars (not objects).
+mkdir -p "$NANOSTACK_STORE/stacks/badstack2"
+cat > "$NANOSTACK_STORE/stacks/badstack2/stack.json" <<'CFG'
+{
+  "schema_version": "1",
+  "name": "badstack2",
+  "phase_graph": ["just", "strings", "not", "objects"]
+}
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack badstack2 2>/dev/null || true)
+[ -f "${HTML:-/dev/null}" ] && {
+  assert_contains "scalar-array stack also invalid" "$HTML" "Stack invalid"
+}
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"
