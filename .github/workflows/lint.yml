@@ -3356,3 +3356,43 @@ jobs:
             exit 1
           fi
           echo "OK: guard concurrency tier uses the phase registry."
+
+  core-skills-save-structured:
+    name: Core skills save structured artifacts (no --from-session normal path)
+    runs-on: ubuntu-latest
+    # PR 3 of the 2026-05-10 architecture audit: core skills
+    # (plan, review, qa, security, ship) must document the structured
+    # save form. --from-session is retained in save-artifact.sh for
+    # manual recovery, but the normal-flow guidance in SKILL.md must
+    # not reference it for these five phases. The lint matches the
+    # acceptance regex from the spec verbatim so a single rg locally
+    # gives the same answer CI does.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: No --from-session save in core normal flows
+        run: |
+          set -e
+          # Acceptance regex from the spec.
+          if grep -nE -- '--from-session (plan|review|qa|security|ship)' \
+              plan/SKILL.md review/SKILL.md qa/SKILL.md security/SKILL.md ship/SKILL.md; then
+            echo "FAIL: core SKILL.md still documents --from-session for a core phase."
+            echo "Use the structured save form (see reference/artifact-schema.md)."
+            exit 1
+          fi
+          echo "OK: core SKILL.md files document the structured save form only."
+      - name: save-artifact.sh validator wiring
+        run: |
+          set -e
+          script=bin/save-artifact.sh
+          # The validator helper must be sourced and called.
+          if ! grep -qF 'artifact-schemas.sh' "$script"; then
+            echo "FAIL: $script does not source bin/lib/artifact-schemas.sh."
+            exit 1
+          fi
+          if ! grep -qF 'nano_validate_artifact' "$script"; then
+            echo "FAIL: $script does not call nano_validate_artifact."
+            exit 1
+          fi
+          echo "OK: save-artifact.sh wires the per-phase validator."

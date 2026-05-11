@@ -146,15 +146,31 @@ When a conflict is detected, mark it inline:
 **In `--standard` mode:** Document conflicts inline in output.
 **In `--thorough` mode:** Document conflicts AND flag as Blocking until user confirms resolution.
 
-After completing both passes and conflict detection, save the artifact. Run this command now — do not skip it:
+After completing both passes and conflict detection, save the artifact. Run this command now — do not skip it. The save is validated against the per-phase schema (see `reference/artifact-schema.md`); a review artifact requires `summary` (object), `scope_drift`, `findings` (array), and `context_checkpoint`.
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh --from-session review 'N findings (X blocking). Scope drift: none/detected. Conflicts: none/N.'
-```
-
-Or pass full JSON for richer detail:
-```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh review '<json with phase, mode, summary, scope_drift, findings, conflicts, context_checkpoint>'
+REVIEW_JSON=$(jq -n \
+  --arg  mode        "$REVIEW_MODE" \
+  --argjson summary  '{"blocking":0,"should_fix":0,"nitpicks":0,"positive":0}' \
+  --arg  scope_drift "none" \
+  --argjson findings '[]' \
+  --argjson conflicts '[]' \
+  --arg  checkpoint_summary "Review found N issues, scope drift status, conflict count." \
+  '{
+     phase: "review",
+     mode: $mode,
+     summary: $summary,
+     scope_drift: $scope_drift,
+     findings: $findings,
+     conflicts: $conflicts,
+     context_checkpoint: {
+       summary: $checkpoint_summary,
+       key_files: [],
+       decisions_made: [],
+       open_questions: []
+     }
+   }')
+~/.claude/skills/nanostack/bin/save-artifact.sh review "$REVIEW_JSON"
 ```
 
 ## Mode Summary

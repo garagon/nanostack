@@ -223,16 +223,33 @@ Before creating the PR, verify the standards in `ship/references/repo-quality-st
 
 After shipping, do these steps in order:
 
-**Step 1: Save the artifact.** Run this command now — do not skip it:
+**Step 1: Save the artifact.** Run this command now — do not skip it. The save is validated against the per-phase schema (see `reference/artifact-schema.md`); a normal-mode ship artifact requires `summary` (object) and `context_checkpoint`. Report-only ship runs may save a looser shape with `run_mode: "report_only"`.
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh --from-session ship 'PR #N: title. Status: merged/open. CI: passed/failed.'
-~/.claude/skills/nanostack/bin/sprint-journal.sh
-```
-
-Or pass full JSON for richer detail:
-```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh ship '<json with phase, summary including pr_number, pr_url, title, status, ci_passed, context_checkpoint>'
+SHIP_JSON=$(jq -n \
+  --argjson pr_number "$PR_NUMBER" \
+  --arg     pr_url    "$PR_URL" \
+  --arg     title     "$PR_TITLE" \
+  --arg     status    "$PR_STATUS" \
+  --argjson ci_passed "$CI_PASSED" \
+  --arg     checkpoint_summary "PR #N <title> shipped, CI status, deploy result." \
+  '{
+     phase: "ship",
+     summary: {
+       pr_number: $pr_number,
+       pr_url:    $pr_url,
+       title:     $title,
+       status:    $status,
+       ci_passed: $ci_passed
+     },
+     context_checkpoint: {
+       summary: $checkpoint_summary,
+       key_files: [],
+       decisions_made: [],
+       open_questions: []
+     }
+   }')
+~/.claude/skills/nanostack/bin/save-artifact.sh ship "$SHIP_JSON"
 ~/.claude/skills/nanostack/bin/sprint-journal.sh
 ```
 

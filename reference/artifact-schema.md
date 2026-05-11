@@ -1,5 +1,29 @@
 # Artifact Schema
 
+## Save modes
+
+`bin/save-artifact.sh` has two modes:
+
+- **Structured (normal path)**: `save-artifact.sh <phase> '<json>'`. The JSON is validated against the per-phase contract in `bin/lib/artifact-schemas.sh` before write. Core SKILL.md files (`plan`, `review`, `qa`, `security`, `ship`) document only this form. See "Required fields per phase" below for the contract each phase must satisfy.
+- **Legacy `--from-session` (manual recovery)**: `save-artifact.sh --from-session <phase> '<prose summary>'`. Builds a minimal JSON from git state plus the prose summary, marks it with `schema_legacy: true`, emits a deprecation warning to stderr, and writes without strict validation. Use this only when an artifact must be reconstructed after the fact (for example, `/think` ran but did not save, and `/plan` needs the artifact to exist). Normal flows never call this form.
+
+Legacy artifacts saved before this contract are still readable by `bin/find-artifact.sh` and `bin/resolve.sh`; only the write path enforces the structured contract.
+
+## Required fields per phase
+
+| Phase | Required fields |
+|-------|-----------------|
+| `think` | `summary` (object). The `/think` autopilot brief gate enforces the rich set (`value_proposition`, `scope_mode`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`); the schema validator only checks summary shape. |
+| `plan` | `summary` (object) with `planned_files` (array) and `plan_approval`; `context_checkpoint` (object). |
+| `review` | `summary` (object); `scope_drift` (any non-null value); `findings` (array); `context_checkpoint` (object). |
+| `qa` | `summary` (object); `findings` (array); `context_checkpoint` (object). |
+| `security` | `summary` (object); `findings` (array); `context_checkpoint` (object). |
+| `ship` (normal mode) | `summary` (object); `context_checkpoint` (object). Typical summary fields: `pr_number`, `pr_url`, `title`, `status`, `ci_passed`. |
+| `ship` (`run_mode == "report_only"`) | `summary` (any value). Report-only ship runs are reports, not release records; no `context_checkpoint` is required. |
+| Custom phases | `phase` and `summary` only (the base contract; no per-phase shape enforced). |
+
+A failing validator prints the missing fields to stderr and `save-artifact.sh` exits 1 before any file is written. Existing artifacts in the store are unaffected.
+
 ## Common fields
 
 All artifacts share this base structure:

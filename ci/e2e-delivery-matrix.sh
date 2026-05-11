@@ -148,8 +148,25 @@ fake_complete() {
 
   # save-artifact creates the artifact file the phase gate looks for.
   # Use the real save-artifact so the on-disk shape matches production.
-  "$REPO/bin/save-artifact.sh" "$phase" \
-    "{\"phase\":\"$phase\",\"summary\":{\"v\":1}}" >/dev/null 2>&1 || true
+  # PR 3 of the 2026-05-10 audit added per-phase validators; this
+  # fixture must include the strict-mode required fields so the save
+  # succeeds for review/qa/security/ship (plan is not exercised here).
+  local payload
+  case "$phase" in
+    review)
+      payload="{\"phase\":\"review\",\"summary\":{\"v\":1},\"scope_drift\":\"none\",\"findings\":[],\"context_checkpoint\":{\"summary\":\"matrix $phase\"}}"
+      ;;
+    qa|security)
+      payload="{\"phase\":\"$phase\",\"summary\":{\"v\":1},\"findings\":[],\"context_checkpoint\":{\"summary\":\"matrix $phase\"}}"
+      ;;
+    ship)
+      payload="{\"phase\":\"ship\",\"summary\":{\"v\":1,\"status\":\"merged\"},\"context_checkpoint\":{\"summary\":\"matrix ship\"}}"
+      ;;
+    *)
+      payload="{\"phase\":\"$phase\",\"summary\":{\"v\":1}}"
+      ;;
+  esac
+  "$REPO/bin/save-artifact.sh" "$phase" "$payload" >/dev/null 2>&1 || true
 }
 
 # ─── Cell 1: Claude + git => professional ─────────────────────────────

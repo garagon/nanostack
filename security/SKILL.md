@@ -207,15 +207,29 @@ In `--quick` mode, apply default precedence (security > review) without document
 In `--standard` mode, document conflicts inline.
 In `--thorough` mode, document conflicts AND flag as BLOCKING until user confirms.
 
-After completing the audit and conflict detection, save the artifact. Run this command now — do not skip it:
+After completing the audit and conflict detection, save the artifact. Run this command now — do not skip it. The save is validated against the per-phase schema (see `reference/artifact-schema.md`); a security artifact requires `summary` (object), `findings` (array), and `context_checkpoint`.
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh --from-session security 'N findings (X critical). OWASP: covered A01-A10. Conflicts: none/N.'
-```
-
-Or pass full JSON for richer detail:
-```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh security '<json with phase, mode, summary, findings, conflicts, context_checkpoint>'
+SEC_JSON=$(jq -n \
+  --arg  mode              "$SEC_MODE" \
+  --argjson summary        '{"total_findings":0,"critical":0,"high":0,"medium":0,"low":0}' \
+  --argjson findings       '[]' \
+  --argjson conflicts      '[]' \
+  --arg  checkpoint_summary "Security audit found N findings across OWASP categories." \
+  '{
+     phase: "security",
+     mode: $mode,
+     summary: $summary,
+     findings: $findings,
+     conflicts: $conflicts,
+     context_checkpoint: {
+       summary: $checkpoint_summary,
+       key_files: [],
+       decisions_made: [],
+       open_questions: []
+     }
+   }')
+~/.claude/skills/nanostack/bin/save-artifact.sh security "$SEC_JSON"
 ```
 
 ## Mode Summary

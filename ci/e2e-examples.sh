@@ -134,15 +134,30 @@ save_sprint() {
     '{phase:"think", summary:{value_proposition:$vp, scope_mode:"reduce", target_user:$tu, narrowest_wedge:$nw, key_risk:$kr, premise_validated:true, out_of_scope:[], manual_delivery_test:{possible:true, steps:["run start state"]}, search_summary:{mode:"local_only", result:"", existing_solution:"none"}}, context_checkpoint:{summary:"sandbox think"}}')
   "$REPO/bin/save-artifact.sh" think "$think_json" >/dev/null
 
+  # PR 3 of the 2026-05-10 architecture audit added per-phase
+  # validators. plan requires summary.planned_files + plan_approval +
+  # context_checkpoint; review/qa/security require findings (+ scope_drift
+  # for review) + context_checkpoint; ship requires context_checkpoint.
   plan_json=$(jq -n --arg f "$first_file" '{
     phase:"plan",
-    summary:{goal:"first feature", scope:"small", step_count:3, planned_files:[$f], risks:[], out_of_scope:[]}
+    summary:{goal:"first feature", scope:"small", step_count:3, planned_files:[$f], plan_approval:"manual", risks:[], out_of_scope:[]},
+    context_checkpoint:{summary:"sandbox plan", key_files:[$f]}
   }')
   "$REPO/bin/save-artifact.sh" plan "$plan_json" >/dev/null
 
   for phase in review security qa ship; do
     local payload
-    payload=$(jq -n --arg p "$phase" '{phase:$p, summary:{v:1, status:"clean"}}')
+    case "$phase" in
+      review)
+        payload=$(jq -n --arg p "$phase" '{phase:$p, summary:{v:1, status:"clean"}, scope_drift:"none", findings:[], context_checkpoint:{summary:"sandbox review"}}')
+        ;;
+      qa|security)
+        payload=$(jq -n --arg p "$phase" '{phase:$p, summary:{v:1, status:"clean"}, findings:[], context_checkpoint:{summary:"sandbox check"}}')
+        ;;
+      ship)
+        payload=$(jq -n --arg p "$phase" '{phase:$p, summary:{v:1, status:"merged"}, context_checkpoint:{summary:"sandbox ship"}}')
+        ;;
+    esac
     "$REPO/bin/save-artifact.sh" "$phase" "$payload" >/dev/null
   done
 }

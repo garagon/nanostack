@@ -173,15 +173,27 @@ Behavior depends on `PLAN_APPROVAL` (read above):
 
 After the plan is approved (or auto-approved), do these two steps in order:
 
-**Step 1: Save the artifact.** Run this command now — do not skip it. Include the resolved `plan_approval` so reviewers can see how the plan was approved:
+**Step 1: Save the artifact.** Run this command now — do not skip it. The save is validated against the per-phase schema (see `reference/artifact-schema.md`); a plan artifact requires `summary.planned_files` (array), `summary.plan_approval`, and `context_checkpoint`. `/review` uses `planned_files` for scope drift.
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh --from-session plan 'N files planned: file1, file2, ... Key decisions: X, Y. plan_approval: '"$PLAN_APPROVAL"'.'
-```
-
-Or pass full JSON for richer detail (recommended — `/review` uses `planned_files` for scope drift):
-```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh plan '<json with phase, summary including planned_files array, plan_approval, context_checkpoint>'
+PLAN_JSON=$(jq -n \
+  --argjson planned_files '["file1.ts","file2.ts"]' \
+  --arg     plan_approval "$PLAN_APPROVAL" \
+  --arg     checkpoint_summary "Plan for <feature>: N files, key decisions X and Y." \
+  '{
+     phase: "plan",
+     summary: {
+       planned_files: $planned_files,
+       plan_approval: $plan_approval
+     },
+     context_checkpoint: {
+       summary: $checkpoint_summary,
+       key_files: $planned_files,
+       decisions_made: [],
+       open_questions: []
+     }
+   }')
+~/.claude/skills/nanostack/bin/save-artifact.sh plan "$PLAN_JSON"
 ```
 
 **Step 2: Build and proceed.**
