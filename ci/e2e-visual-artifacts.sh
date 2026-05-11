@@ -363,6 +363,56 @@ set -e
 assert_exit "string-summary artifact still renders" 0 test "$RC" = 0
 assert_contains "string-summary html has schema warning" "$HTML" 'data-testid="schema-warning"'
 
+# ─── Cell 9d: relative NANOSTACK_STORE -> absolute manifest paths ─
+# PR 1 pass 3 regression: a relative store override must still
+# produce an absolute output_path in the manifest.
+printf "\n  ${DIM}Cell 9d: relative store -> absolute manifest (PR 1 pass 3 regression)${NC}\n"
+PROJ="$TMP_ROOT/cell9d"
+setup_project "$PROJ"
+cd "$PROJ"
+export NANOSTACK_STORE=".nano-rel"
+mkdir -p "$NANOSTACK_STORE"
+save_valid_plan "$NANOSTACK_STORE"
+HTML=$("$REPO/bin/render-artifact.sh" plan --latest)
+cd "$REPO"
+# Stdout path must be absolute.
+case "$HTML" in
+  /*)
+    PASS=$((PASS+1))
+    printf "    ${GREEN}OK${NC}    stdout path is absolute\n"
+    ;;
+  *)
+    FAIL=$((FAIL+1))
+    printf "    ${RED}FAIL${NC}  stdout path is relative: %s\n" "$HTML"
+    ;;
+esac
+# Manifest output_path must be absolute and equal the stdout path.
+MFST_REL=$(ls "$PROJ/$NANOSTACK_STORE/visual/manifests/"*.manifest.json | head -1)
+MFST_OUT=$(jq -r .output_path "$MFST_REL")
+case "$MFST_OUT" in
+  /*)
+    PASS=$((PASS+1))
+    printf "    ${GREEN}OK${NC}    manifest output_path is absolute\n"
+    ;;
+  *)
+    FAIL=$((FAIL+1))
+    printf "    ${RED}FAIL${NC}  manifest output_path is relative: %s\n" "$MFST_OUT"
+    ;;
+esac
+# Source path must be absolute too.
+SRC_OUT=$(jq -r '.source_artifacts[0].path' "$MFST_REL")
+case "$SRC_OUT" in
+  /*)
+    PASS=$((PASS+1))
+    printf "    ${GREEN}OK${NC}    manifest source path is absolute\n"
+    ;;
+  *)
+    FAIL=$((FAIL+1))
+    printf "    ${RED}FAIL${NC}  manifest source path is relative: %s\n" "$SRC_OUT"
+    ;;
+esac
+unset NANOSTACK_STORE
+
 # ─── Cell 9: symlinked visual root rejected ─────────────────
 printf "\n  ${DIM}Cell 9: symlinked visual root rejected${NC}\n"
 PROJ="$TMP_ROOT/cell9"

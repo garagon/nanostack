@@ -198,6 +198,32 @@ MANIFEST_PATH=$(nano_visual_manifest_path "phase" "$PHASE" "$TS")
 mkdir -p "$(dirname "$HTML_PATH")"
 mkdir -p "$(dirname "$MANIFEST_PATH")"
 
+# Manifest contract requires output_path to be absolute. If
+# NANOSTACK_STORE was set to a relative path the derived HTML and
+# manifest paths inherit the relativity, so canonicalize both before
+# they reach the manifest body or the stdout that the caller sees.
+# Codex PR 1 pass 3 caught the contract violation in the relative-
+# store case.
+nano_resolve_abs() {
+  local p="$1"
+  case "$p" in
+    /*) printf '%s\n' "$p" ;;
+    *)
+      local dir base
+      dir="$(cd "$(dirname "$p")" 2>/dev/null && pwd)"
+      base="$(basename "$p")"
+      if [ -n "$dir" ]; then
+        printf '%s/%s\n' "$dir" "$base"
+      else
+        printf '%s\n' "$p"
+      fi
+      ;;
+  esac
+}
+HTML_PATH="$(nano_resolve_abs "$HTML_PATH")"
+MANIFEST_PATH="$(nano_resolve_abs "$MANIFEST_PATH")"
+ART_PATH="$(nano_resolve_abs "$ART_PATH")"
+
 # Pull the stored integrity hash. It is recorded in the manifest so a
 # later check can decide whether the rendered view's source still
 # matches what was on disk at render time.
