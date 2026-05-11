@@ -70,8 +70,12 @@ VERIFICATION_METHOD_ENUM="ci manual unknown"
 
 # Adapter names listed in the README. Adapters in this list get the
 # strict fail-after-60 policy; an adapter not listed in the README is
-# advisory only.
-README_LISTED=$(grep -oE '`(claude|cursor|codex|opencode|gemini)`' README.md 2>/dev/null \
+# advisory only. Path is anchored at $NANOSTACK_ROOT so the lookup
+# does not depend on the caller's cwd (Codex flagged this on the
+# PR 6 third review pass — a script invoked from outside the repo
+# was producing an empty list and silently downgrading fails to
+# warns).
+README_LISTED=$(grep -oE '`(claude|cursor|codex|opencode|gemini)`' "$NANOSTACK_ROOT/README.md" 2>/dev/null \
   | tr -d '`' | sort -u | tr '\n' ' ')
 
 NOW_EPOCH=$(date -u +%s)
@@ -152,10 +156,16 @@ check_adapter() {
     errors="${errors:+$errors; }verification is not an object"
   fi
 
-  # doctor_checks must be a non-empty array of strings.
+  # doctor_checks must be a non-empty array of strings. The schema in
+  # reference/host-adapter-schema.md says `string[]`; non-string
+  # entries pass to downstream doctor/setup code as check names so a
+  # numeric or object entry would break runtime lookups. Codex flagged
+  # the missing element-type check on the PR 6 third review pass.
   if jq -e 'has("doctor_checks") and (.doctor_checks | type == "array")' "$file" >/dev/null 2>&1; then
     if ! jq -e '.doctor_checks | length > 0' "$file" >/dev/null 2>&1; then
       errors="${errors:+$errors; }doctor_checks is empty"
+    elif ! jq -e '.doctor_checks | all(type == "string" and length > 0)' "$file" >/dev/null 2>&1; then
+      errors="${errors:+$errors; }doctor_checks must be a non-empty array of strings"
     fi
   elif jq -e 'has("doctor_checks")' "$file" >/dev/null 2>&1; then
     errors="${errors:+$errors; }doctor_checks is not an array"

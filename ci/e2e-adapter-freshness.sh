@@ -275,6 +275,42 @@ echo "$out" | grep -q "does not match filename" && \
   assert_eq "mislabel message present" "yes" "yes" || \
   assert_eq "mislabel message present" "yes" "no"
 
+# Cell 7f: README path anchors at the repo root, not the caller's
+# cwd. A script invoked from outside the repo used to compute an
+# empty README_LISTED, which silently downgraded the fail-after-60
+# policy to a warn. Codex caught the cwd-dependent path on the PR 6
+# third review pass.
+echo "[7f] check-adapters.sh reads README from the repo root, not cwd"
+root=$(new_repo "cell7f-cwd")
+cat > "$root/README.md" <<'EOF'
+README mentions `claude`.
+EOF
+stale=$(date -u -v-90d +%Y-%m-%d 2>/dev/null || date -u --date='90 days ago' +%Y-%m-%d)
+write_adapter "$root" claude "$stale"
+# Run from a totally unrelated cwd; the README at $root must still
+# be the one consulted.
+elsewhere=$(mktemp -d "$TMP_ROOT/elsewhere.XXXX")
+out=$(cd "$elsewhere" && bash "$root/bin/check-adapters.sh" 2>&1; echo "RC=$?")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "stale README-listed adapter still fails from a foreign cwd" "1" "$rc"
+
+# Cell 7g: doctor_checks must be string[]. Non-string entries
+# (numbers, objects) would break downstream doctor/setup code that
+# uses each entry as a check name. Codex caught the missing
+# element check on the PR 6 third review pass.
+echo "[7g] doctor_checks rejects non-string entries"
+root=$(new_repo "cell7g-doctor-types")
+cat > "$root/README.md" <<'EOF'
+README mentions `claude`.
+EOF
+write_adapter "$root" claude "$NOW_ISO" '.doctor_checks = [123]'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "non-string doctor_checks fails (rc 1)" "1" "$rc"
+echo "$out" | grep -q "must be a non-empty array of strings" && \
+  assert_eq "doctor_checks message present" "yes" "yes" || \
+  assert_eq "doctor_checks message present" "yes" "no"
+
 # Cell 8: --json output emits a parseable summary object.
 echo "[8] --json output is parseable"
 root=$(new_repo "cell8")
