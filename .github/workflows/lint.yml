@@ -3366,6 +3366,122 @@ jobs:
           fi
           echo "OK: guard concurrency tier uses the phase registry."
 
+  ai-facing-docs-consistency:
+    name: AI-facing docs agree on adapters, sprint, guard, privacy
+    runs-on: ubuntu-latest
+    # PR 6 of the 2026-05-10 architecture audit. llms.txt, AGENTS.md,
+    # bin/about.sh, guard/SKILL.md, and the public READMEs must not
+    # ship stale overclaims and must agree on the verified adapter
+    # set, the default sprint order, the layered guard structure,
+    # and the privacy posture. Lint catches drift; the architect
+    # round audited the surface state once.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: No forbidden overclaims in agent-facing docs
+        run: |
+          set -e
+          fail=0
+          patterns='any AI coding agent|any agent that reads SKILL|zero dependencies|full engineering team|no telemetry, no remote calls|three-tier guard|three-tier safety|three-tier permission system'
+          for f in llms.txt AGENTS.md bin/about.sh guard/SKILL.md README.md README.es.md; do
+            [ -f "$f" ] || continue
+            if grep -nEi "$patterns" "$f"; then
+              echo "FAIL: $f contains a forbidden overclaim above."
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Verified adapters set is the same across surfaces
+        run: |
+          set -e
+          fail=0
+          # Source of truth: filenames under adapters/.
+          adapters_truth=$(find adapters -maxdepth 1 -name "*.json" -type f \
+            | sed 's|.*/||; s|\.json$||' | sort | tr '\n' ' ')
+          # Every public surface that names verified adapters must
+          # mention each one shipped under adapters/. Codex flagged
+          # the partial coverage on the PR 6 sixth review pass: the
+          # READMEs are the load-bearing public claim, and they were
+          # not in this loop.
+          for name in $adapters_truth; do
+            [ -z "$name" ] && continue
+            for f in AGENTS.md llms.txt README.md README.es.md; do
+              if ! grep -qi -- "$name" "$f"; then
+                echo "FAIL: $f does not mention adapter '$name'"
+                fail=1
+              fi
+            done
+          done
+          # Reverse direction: AGENTS.md and llms.txt must NOT
+          # advertise a verified adapter that adapters/ no longer
+          # ships. Codex flagged the one-directional check on the
+          # PR 6 second review pass: a removed adapter could stay
+          # advertised in the agent-facing docs forever.
+          known_adapters="claude cursor codex opencode gemini"
+          for candidate in $known_adapters; do
+            case " $adapters_truth " in
+              *" $candidate "*) ;;
+              *)
+                for f in AGENTS.md llms.txt README.md README.es.md; do
+                  # Match three shapes:
+                  #   - inline backticked  -> `cursor`
+                  #   - "verified adapter" copy -> "verified adapter cursor"
+                  #   - bullet entry under a "Verified adapters" header -> "- Cursor"
+                  # Codex flagged the bare-bullet miss on the PR 6
+                  # fifth review pass and the README omission on the
+                  # sixth review pass.
+                  if grep -qiE "(\`${candidate}\`|verified adapter[^.]*${candidate}|^[[:space:]]*[-*][[:space:]]+${candidate}\b)" "$f"; then
+                    echo "FAIL: $f advertises adapter '$candidate' but adapters/${candidate}.json is missing."
+                    fail=1
+                  fi
+                done
+                ;;
+            esac
+          done
+          exit $fail
+      - name: Default sprint order matches across surfaces
+        run: |
+          set -e
+          fail=0
+          # The canonical order is documented as
+          # /think -> /nano -> build -> /review -> /security -> /qa -> /ship.
+          # Spot-check that bin/about.sh keeps the same arrows shape.
+          if ! grep -qE '/think.*/nano.*build.*/review.*/security.*/qa.*/ship' bin/about.sh; then
+            echo "FAIL: bin/about.sh sprint order does not match the canonical default."
+            fail=1
+          fi
+          exit $fail
+      - name: Guard doc references rules.json instead of a hand-maintained count
+        run: |
+          set -e
+          # Hand-maintained "28 block rules and 9 warn rules" used to
+          # live in guard/SKILL.md. PR 6 of the audit removed that
+          # hardcoding. If a future commit adds back any specific
+          # block-rule count, the lint fails so the count never drifts
+          # from the JSON. (We allow generic "rule count" mentions
+          # that refer to guard/rules.json explicitly.)
+          if grep -nE '[0-9]+ (block|warn) rules' guard/SKILL.md README.md README.es.md AGENTS.md llms.txt bin/about.sh 2>/dev/null; then
+            echo "FAIL: a numeric block/warn rule count was found in a public doc."
+            echo "      Replace with guard/rules.json as the source of truth."
+            exit 1
+          fi
+          echo "OK: no hardcoded rule counts."
+
+  adapter-freshness:
+    name: Adapter schema + freshness
+    runs-on: ubuntu-latest
+    # PR 6 of the 2026-05-10 architecture audit. Runs bin/check-adapters.sh
+    # so a stale or malformed adapter cannot ship to main.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run check-adapters.sh
+        run: |
+          chmod +x bin/check-adapters.sh
+          bin/check-adapters.sh
+
   custom-routing-contract:
     name: Custom routing contract wired into resolve.sh
     runs-on: ubuntu-latest

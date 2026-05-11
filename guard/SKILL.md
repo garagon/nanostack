@@ -100,13 +100,21 @@ When the user says `/unfreeze` or `/guard unfreeze`:
 
 ## The Check Script
 
-`guard/bin/check-dangerous.sh` uses a three-tier permission system inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude-code-auto-mode):
+`guard/bin/check-dangerous.sh` runs every Bash call through a layered check pipeline. The order is deliberate: block rules run first so commands whose binary is on the allowlist (`cat`, `find`, `head`, `tail`) still get matched against known-bad patterns (e.g. `cat .env`, `find . -delete`).
 
-**Tier 1: Allowlist.** Commands like `git status`, `ls`, `cat`, `jq` skip all checks. Safe by definition.
+**Block rules** (run first, no exceptions). Matched against the full command string. The current rule counts are loaded from `guard/rules.json`; this doc does not hand-maintain them.
 
-**Tier 2: In-project.** Operations that only touch files inside the current git repo pass through. They're reviewable via version control.
+**Allowlist.** Commands like `git status`, `ls`, `jq` short-circuit when no block rule matched.
 
-**Tier 3: Pattern matching.** Everything else is checked against block and warn rules in `guard/rules.json`.
+**Phase-aware concurrency.** When a session is active and the current phase declares `concurrency: read` (built-in or custom), write commands are blocked with category `concurrency-safety`. The active phase's `SKILL.md` is resolved through `bin/lib/phases.sh` so custom phases get the same protection as built-in ones.
+
+**In-project fast-path.** Operations that only touch files inside the current git repo pass through. Reviewable via version control. Runs after the concurrency check so an in-project `touch ./foo` cannot bypass a read-phase block.
+
+**Sprint phase gate.** Blocks `git commit` / `git push` until the required-before-ship ancestors of the active `phase_graph` have completed. The built-in sprint defaults to review + security + qa; custom graphs gate on their own ancestor list.
+
+**Budget gate.** Blocks all commands when the configured budget is exceeded.
+
+**Warn rules.** Final pass: matched commands are allowed but flagged in the output so the user is reminded what they're doing.
 
 When a command is blocked, guard suggests a safer alternative instead of just failing:
 
@@ -120,9 +128,9 @@ Safer alternative: git push --force-with-lease (safer, fails if remote changed)
 
 ### Configurable rules
 
-Rules live in `guard/rules.json`. 28 block rules and 9 warn rules ship by default across 7 categories: mass-deletion, history-destruction, database-destruction, infra-destruction, production-access, remote-code-execution, security-degradation, safety-bypass.
+Rules live in `guard/rules.json`. Each rule has an ID, regex pattern, category, description, and (for block rules) a safer alternative. The shipped categories include mass-deletion, history-destruction, database-destruction, infra-destruction, production-access, remote-code-execution, security-degradation, and safety-bypass. Run `jq '[.tiers.block.rules[].id] | length' guard/rules.json` (or the equivalent for warn rules) to inspect the live counts; the CI lint job derives them from this file.
 
-Users can add custom rules by editing `guard/rules.json`. Each rule has an ID, regex pattern, category, description, and (for block rules) a safer alternative.
+Users can add custom rules by editing `guard/rules.json`.
 
 ## Telemetry finalize
 

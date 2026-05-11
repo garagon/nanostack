@@ -170,6 +170,24 @@ jobs:
           chmod +x ci/e2e-onboarding-flows.sh
           ci/e2e-onboarding-flows.sh
 
+  e2e-adapter-freshness:
+    name: E2E Adapter Schema + Freshness (8 cells)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # PR 6 of the 2026-05-10 architecture audit. Locks bin/check-adapters.sh
+    # end-to-end against tmp adapters/ fixtures: malformed JSON fails,
+    # README-listed adapter missing fails, stale beyond 60 days fails
+    # for README-listed hosts, NANOSTACK_ALLOW_STALE_ADAPTERS=1
+    # downgrades to warn, --json output parses.
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq is present
+        run: jq --version
+      - name: Run adapter freshness E2E
+        run: |
+          chmod +x ci/e2e-adapter-freshness.sh
+          ci/e2e-adapter-freshness.sh
+
   e2e-custom-routing:
     name: E2E Custom Routing Contract (8 cells)
     runs-on: ubuntu-latest

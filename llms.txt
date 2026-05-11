@@ -1,42 +1,54 @@
 # Nanostack
 
-Nanostack is a set of AI coding agent skills for the full engineering workflow. It works with Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI and any agent that reads SKILL.md files.
+Nanostack is a local workflow framework for AI coding agents. It ships the default sprint (think -> plan -> build -> review -> security -> qa -> ship -> compound) plus a framework for declaring your own custom workflow stacks. Each phase is a skill that the agent reads from disk; downstream skills cross-reference each other through structured artifacts in `.nanostack/`.
 
-## What it does
+## Verified adapters
 
-Nanostack gives an AI coding agent a structured sprint process: think, plan, build, review, test, secure, ship. Each skill acts as a specialist (CEO, engineer, QA lead, security auditor) that finds the right problem, scopes the solution, catches bugs and enforces quality before code reaches production.
+These hosts have a tested adapter in `adapters/` with documented capability evidence. The `adapters/<host>.json` files are the single source of truth.
 
-## Skills
+- Claude Code
+- Cursor
+- OpenAI Codex
+- OpenCode
+- Gemini CLI
 
-- /think: Strategic product thinking. Three intensity modes: Founder (full pushback for experienced entrepreneurs), Startup (challenges scope but respects pain points), Builder (minimal pushback, focus on simplest solution). Six forcing questions including manual delivery test and community validation.
-- /nano: Implementation planning. Scope, steps, files, risks, architecture checkpoint, product standards (shadcn/ui, SEO, LLM SEO).
-- /review: Two-pass code review. Structural correctness then adversarial edge-case hunting. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan artifact.
-- /qa: Quality assurance. Browser, API, CLI and debug testing. Fixes bugs with atomic commits. WTF heuristic stops when further fixes would introduce regressions.
-- /security: Security audit. Auto-detects stack, scans for secrets, injection, auth flaws, CI/CD misconfigs, AI/LLM vulnerabilities. Graded report (A-F). Cross-references /review findings for conflict detection.
-- /ship: Ship to production. Pre-flight checks, PR creation, CI monitoring, post-deploy verification, rollback plan. Generates sprint journal automatically.
-- /guard: Three-tier safety. Tier 1: allowlist of safe commands. Tier 2: in-project operations pass (reviewable via git). Tier 3: pattern matching against 28 block rules and 9 warn rules. Blocked commands get a safer alternative. Rules configurable in guard/rules.json.
-- /conductor: Multi-agent sprint orchestrator. Coordinates parallel sessions through claim/complete protocol with atomic file locking.
+Other agents may read the SKILL.md files directly, but are not verified adapters unless they appear in this list. Capabilities (hook enforcement, write guard, phase gate) vary by host; the JSON files spell out what each adapter actually enforces.
 
-## Know-how
+## Default sprint
 
-Skills automatically save structured artifacts to .nanostack/ after every run. Skills cross-reference each other: /review reads /nano for scope drift, /security reads /review for conflict detection. /ship generates a sprint journal from all phase artifacts. The know-how vault at .nanostack/know-how/ works as an Obsidian vault with linked journals, analytics dashboards and learnings. Bad sessions can be discarded with bin/discard-sprint.sh.
+- /think: Strategic product thinking with calibrated intensity per archetype (founder validation, CLI tooling, API backend, landing experience). Saves a structured artifact with value proposition, scope mode, target user, narrowest wedge, key risk, and premise validation.
+- /nano (alias /plan): Implementation plan with planned_files, plan approval, scope assessment, and product standards.
+- build: The agent's own dev work. Not a saved phase; the artifact appears on review.
+- /review: Two-pass code review (structural + adversarial). Detects scope drift against the plan and conflict-precedence against prior /security.
+- /security: OWASP Top 10 + STRIDE audit, stack-aware. Cross-references /review for conflict resolution.
+- /qa: Browser, API, CLI, or debug testing. WTF heuristic to stop when further fixes regress.
+- /ship: Pre-flight, PR creation, CI monitoring, post-deploy verification. Generates the sprint journal.
+- /compound: Reflection and learning capture after /ship.
+
+## Framework for custom workflow stacks
+
+Custom stacks declare their own phases in `.nanostack/config.json` (`custom_phases` + `phase_graph`) and live under `<store>/skills/<name>/`. The conductor, guard, session, next-step, and resolver all consume the same phase registry, so a custom stack such as `build -> license-audit -> privacy-check -> release-readiness -> ship` gets the same lifecycle support as the built-in sprint: graph-aware progression, concurrency enforcement, artifact trust, schema validation, and routing intent through `phase_context`.
+
+See `reference/custom-stack-contract.md` for the contract, `examples/custom-stack-template/compliance-release/` for a worked example, and `EXTENDING.md` for the new-user walkthrough.
+
+## Guard
+
+`guard/` enforces block rules and warn rules on Bash and Write/Edit calls. Rules live in `guard/rules.json` and are loaded at runtime; counts are not hand-maintained in docs. Block rules run before the allowlist so commands whose binary is allowlisted (cat, find, head, tail) still hit pattern checks for known-bad arguments. Phase concurrency, the sprint phase gate, and the budget gate run inside the same check pipeline.
+
+## Artifacts and trust
+
+Every artifact written by `bin/save-artifact.sh` carries a SHA-256 integrity field. `bin/find-artifact.sh` has a `--require-integrity` flag for strict consumers, and `bin/resolve.sh` exposes per-upstream trust state in its `upstream_status` field (`verified`, `integrity_missing`, `integrity_mismatch`, `missing`, `not_applicable`).
+
+## Privacy
+
+There is no Nanostack cloud. Artifacts, journals, and analytics stay under `.nanostack/` on disk. Telemetry is opt-in and documented in `reference/telemetry.md`; the on-by-default behavior is no remote calls.
 
 ## Install
 
+```
 git clone https://github.com/garagon/nanostack.git ~/.claude/skills/nanostack
 cd ~/.claude/skills/nanostack && ./setup
-
-## Key differentiators
-
-- Questions what you're building before you build it (not just a coding assistant)
-- Calibrated intensity: full pushback for founders, respectful diagnostic for users with clear pain
-- Structured sprint: think, plan, build, review, qa, security, ship
-- Cross-skill coordination: scope drift detection, conflict resolution with 10 built-in precedents
-- Know-how pipeline: artifacts auto-save, skills cross-reference, sprint journals generate on ship
-- Three-tier guard with deny-and-continue (suggests safer alternatives)
-- Product standards enforced at planning time (shadcn/ui, SEO, LLM SEO)
-- Zero dependencies, zero build step, works with any AI coding agent
-- Privacy: no telemetry, no remote calls, all data stays local
+```
 
 ## Links
 
