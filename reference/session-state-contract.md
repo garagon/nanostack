@@ -63,7 +63,7 @@ Read `.user_message` for the next action and `.next_phase` for the phase name. T
 | `next_phase` | string | The single phase the skill should suggest next. For the default sprint this picks the first phase in graph order. For a custom workflow stack this is the next ready phase from the project's `phase_graph`. |
 | `pending_phases` | array | Every phase that is ready to run right now (the legacy name). Mirrors `ready_phases` for forward compatibility. |
 | `ready_phases` | array | Every phase whose dependencies are met. Use this when the skill wants to surface "you could run any of these in parallel" instead of a single suggestion. |
-| `required_before_ship` | array | The set of phases ship depends on (transitively). For the default sprint it is `["review","security","qa"]`. For a custom graph it reflects the actual chain (for example `["license-audit","privacy-check","release-readiness"]`). |
+| `required_before_ship` | array | The set of phases ship depends on (transitively), emitted in the graph's declared node order. For the default sprint it is `["review","qa","security"]`; for a custom graph it reflects the actual chain (for example `["license-audit","privacy-check","release-readiness"]`). Treat the field as a set; consumers that compare the array exactly should sort before comparing. |
 | `user_message` | string | The next-action prose shaped by profile. For phases the script does not have specific copy for, it falls back to `"I will run the <phase> step next."` (guided) or `"Run /<phase> next."` (professional) and never exposes phase-graph jargon. |
 | `can_ship` | boolean | True when nothing in `required_before_ship` is still pending. |
 

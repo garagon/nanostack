@@ -140,6 +140,12 @@ print_block() {
       review)   echo "  /review   — Code review" ;;
       security) echo "  /security — Security audit" ;;
       qa)       echo "  /qa       — Testing" ;;
+      # PR 4 of the 2026-05-10 audit made the gate graph-aware, so the
+      # missing list can include custom phases (license-audit, etc).
+      # The default case keeps the remediation actionable for those
+      # users instead of printing a blank section. Codex caught the
+      # empty-section regression on the fifteenth review pass.
+      *)        echo "  /$phase — custom workflow phase (run its skill)" ;;
     esac
   done
   echo ""
@@ -156,6 +162,7 @@ print_warning() {
       review)   echo "  /review   — Code review" ;;
       security) echo "  /security — Security audit" ;;
       qa)       echo "  /qa       — Testing" ;;
+      *)        echo "  /$phase — custom workflow phase (run its skill)" ;;
     esac
   done
   echo ""
