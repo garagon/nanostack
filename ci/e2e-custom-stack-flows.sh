@@ -14,6 +14,16 @@
 #  10. Conductor batch reads concurrency=read from the custom skill.
 #  11. agents/openai.yaml is present and parses.
 #  12. The copied skill has no repo-relative example paths.
+#  13. Scaffolding from a git subdirectory lands in the repo root store.
+#  14. Scaffolding outside any git repo lands in $HOME/.nanostack.
+#  15. Validator rejects mismatched frontmatter name.
+#  16. Guard blocks writes during a read-only custom phase.
+#  17. Custom write phase does not trigger the concurrency block.
+#  18. Built-in review phase still blocks (regression check).
+#  19. Guard finds repo-bundled non-core skills (feature, doctor).
+#  20. Registered custom skill wins over bundled non-core fallback.
+#  21. Unrelated user-installed skill does not shadow a bundled phase.
+#  22. Guard still works when the store path contains a space.
 #
 # This harness is the contract Codex's spec calls for in PR 6: a clean
 # sandbox user can complete the entire workflow without reading source.
@@ -253,6 +263,172 @@ sed 's/^name:.*/name: audit-licenses/' "$DRIFT_SKILL/SKILL.md" > "$DRIFT_SKILL/S
 mv "$DRIFT_SKILL/SKILL.md.tmp" "$DRIFT_SKILL/SKILL.md"
 assert_false "check-custom-skill rejects mismatched frontmatter name" \
   bash -c "HOME='$DRIFT_HOME' '$REPO/bin/check-custom-skill.sh' '$DRIFT_SKILL'"
+
+cd "$PROJ"
+
+# Cell 16: guard concurrency is registry-aware. A read-only custom phase
+# must block writes the same way a built-in read phase does. Without the
+# registry lookup, guard fell back to $NANOSTACK_ROOT/<phase>/SKILL.md
+# and silently no-oped for every custom skill (which lives under the
+# store's skills/, not the repo). Also exercises the in-project bypass
+# (./ prefix + absolute in-project path) that Codex flagged on the
+# PR 1 review — Tier 2.4 must run before the in-project fast-path or
+# `touch ./x` inside a git worktree slips through.
+echo "[16] guard blocks writes during a read-only custom phase"
+GUARD_HOME="$TMP_ROOT/guard-home"
+GUARD_PROJ="$TMP_ROOT/guard-project"
+mkdir -p "$GUARD_HOME" "$GUARD_PROJ"
+cd "$GUARD_PROJ"
+git init -q
+HOME="$GUARD_HOME" "$REPO/bin/create-skill.sh" license-audit --concurrency read >/dev/null
+GUARD_STORE="$GUARD_PROJ/.nanostack"
+[ -d "$GUARD_STORE/skills/license-audit" ] || GUARD_STORE="$GUARD_HOME/.nanostack"
+echo '{"current_phase":"license-audit"}' > "$GUARD_STORE/session.json"
+for case_cmd in "touch should-not-pass" "touch ./should-not-pass" "touch $GUARD_PROJ/should-not-pass"; do
+  set +e
+  NANOSTACK_STORE="$GUARD_STORE" HOME="$GUARD_HOME" \
+    "$REPO/guard/bin/check-dangerous.sh" "$case_cmd" >/dev/null 2>&1
+  guard_rc=$?
+  set -e
+  assert_eq "blocks: $case_cmd" "1" "$guard_rc"
+done
+
+# Cell 17: switching the same custom phase to concurrency: write lifts
+# the concurrency block. (Other guard tiers may still object to specific
+# commands; here we use a path outside the project so Tier 2 in-project
+# fast-path does not auto-pass.)
+echo "[17] custom write phase does not trigger the concurrency block"
+sed_target="$GUARD_STORE/skills/license-audit/SKILL.md"
+sed 's/^concurrency: read$/concurrency: write/' "$sed_target" > "$sed_target.tmp"
+mv "$sed_target.tmp" "$sed_target"
+OUT_TMP=$(mktemp -d /tmp/guard-outside.XXXXXX)
+set +e
+NANOSTACK_STORE="$GUARD_STORE" HOME="$GUARD_HOME" \
+  "$REPO/guard/bin/check-dangerous.sh" "touch $OUT_TMP/x" >/dev/null 2>&1
+guard_rc=$?
+set -e
+rm -rf "$OUT_TMP"
+assert_eq "custom write phase does not block on concurrency (exit 0)" "0" "$guard_rc"
+
+# Cell 18: built-in read phases keep working unchanged. /review is the
+# canonical case: it must keep blocking touch even after the lookup
+# moved through the phase registry.
+echo "[18] built-in review phase still blocks writes"
+echo '{"current_phase":"review"}' > "$GUARD_STORE/session.json"
+set +e
+NANOSTACK_STORE="$GUARD_STORE" HOME="$GUARD_HOME" \
+  "$REPO/guard/bin/check-dangerous.sh" "touch should-not-pass" >/dev/null 2>&1
+guard_rc=$?
+set -e
+assert_eq "built-in review phase blocks write (exit 1)" "1" "$guard_rc"
+
+# Cell 19: repo-bundled non-core skills (feature, doctor, help, ...)
+# also have concurrency: read frontmatter. The guard's previous raw
+# lookup at $NANOSTACK_ROOT/<phase>/SKILL.md saw them directly; the
+# registry-aware lookup must keep finding them. Codex caught the
+# regression on PR 1's fourth pass — without the repo-root fallback,
+# `current_phase=feature` left SKILL_CONC empty and the guard allowed
+# writes.
+echo "[19] guard finds repo-bundled non-core skills"
+BUNDLED_PROJ="$TMP_ROOT/bundled-project"
+mkdir -p "$BUNDLED_PROJ/.nanostack"
+cd "$BUNDLED_PROJ"
+git init -q
+for bundled in feature doctor; do
+  echo "{\"current_phase\":\"$bundled\"}" > "$BUNDLED_PROJ/.nanostack/session.json"
+  set +e
+  NANOSTACK_STORE="$BUNDLED_PROJ/.nanostack" \
+    "$REPO/guard/bin/check-dangerous.sh" "touch should-not-pass" >/dev/null 2>&1
+  guard_rc=$?
+  set -e
+  assert_eq "bundled $bundled phase blocks write" "1" "$guard_rc"
+done
+cd "$PROJ"
+
+# Cell 20: a registered custom phase that reuses a repo-bundled
+# directory name (feature, doctor, ...) must win over the bundled
+# fallback. create-skill.sh does not reserve bundled names, so a
+# user can legitimately register `feature` themselves with their own
+# concurrency. Codex caught the precedence regression on the PR 1
+# fifth pass; this cell locks the correct order.
+echo "[20] registered custom skill wins over bundled non-core fallback"
+PREC_PROJ="$TMP_ROOT/precedence-project"
+mkdir -p "$PREC_PROJ/.nanostack/skills/feature"
+cd "$PREC_PROJ"
+git init -q
+cat > "$PREC_PROJ/.nanostack/config.json" <<'EOF'
+{"custom_phases":["feature"]}
+EOF
+cat > "$PREC_PROJ/.nanostack/skills/feature/SKILL.md" <<'EOF'
+---
+name: feature
+description: user-registered feature override
+concurrency: write
+---
+body
+EOF
+echo '{"current_phase":"feature"}' > "$PREC_PROJ/.nanostack/session.json"
+PREC_OUT=$(mktemp -d /tmp/precedence-out.XXXXXX)
+set +e
+NANOSTACK_STORE="$PREC_PROJ/.nanostack" \
+  "$REPO/guard/bin/check-dangerous.sh" "touch $PREC_OUT/x" >/dev/null 2>&1
+guard_rc=$?
+set -e
+rm -rf "$PREC_OUT"
+cd "$PROJ"
+assert_eq "custom feature (write) shadows bundled feature (read)" "0" "$guard_rc"
+
+# Cell 21: an unrelated user-installed skill under ~/.claude/skills or
+# ~/.agents/skills that happens to share a name with a bundled non-core
+# phase must NOT silently shadow the bundled SKILL.md. Only an
+# explicitly registered custom phase (in .nanostack/config.json's
+# custom_phases) is allowed to override. Codex caught this on the
+# PR 1 sixth pass.
+echo "[21] unrelated user-installed skill does not shadow bundled phase"
+SHADOW_HOME="$TMP_ROOT/shadow-home"
+SHADOW_PROJ="$TMP_ROOT/shadow-project"
+mkdir -p "$SHADOW_HOME/.claude/skills/feature" "$SHADOW_PROJ/.nanostack"
+cat > "$SHADOW_HOME/.claude/skills/feature/SKILL.md" <<'EOF'
+---
+name: feature
+description: unrelated user-installed skill (no registration)
+concurrency: write
+---
+body
+EOF
+cd "$SHADOW_PROJ"
+git init -q
+echo '{"current_phase":"feature"}' > "$SHADOW_PROJ/.nanostack/session.json"
+set +e
+HOME="$SHADOW_HOME" NANOSTACK_STORE="$SHADOW_PROJ/.nanostack" \
+  "$REPO/guard/bin/check-dangerous.sh" "touch x" >/dev/null 2>&1
+guard_rc=$?
+set -e
+cd "$PROJ"
+assert_eq "bundled feature still wins when no registered custom" "1" "$guard_rc"
+
+# Cell 22: a HOME (or store) path that contains a space must not break
+# the guard. The previous space-separated root iteration in
+# nano_phase_skill_path silently dropped path halves and made the
+# concurrency block a no-op for these users. Codex caught the
+# regression on PR 1 of the architecture round; this cell locks it.
+echo "[22] guard works when store path contains a space"
+SPACE_TMP=$(mktemp -d /tmp/nanostack-space.XXXXXX)
+SPACE_HOME="$SPACE_TMP/home with space"
+SPACE_PROJ="$SPACE_TMP/nogit"
+mkdir -p "$SPACE_HOME" "$SPACE_PROJ"
+cd "$SPACE_PROJ"
+HOME="$SPACE_HOME" "$REPO/bin/create-skill.sh" license-audit --concurrency read >/dev/null
+SPACE_STORE="$SPACE_HOME/.nanostack"
+echo '{"current_phase":"license-audit"}' > "$SPACE_STORE/session.json"
+set +e
+NANOSTACK_STORE="$SPACE_STORE" HOME="$SPACE_HOME" \
+  "$REPO/guard/bin/check-dangerous.sh" "touch should-not-pass" >/dev/null 2>&1
+guard_rc=$?
+set -e
+cd "$PROJ"
+rm -rf "$SPACE_TMP"
+assert_eq "store path with space still blocks (exit 1)" "1" "$guard_rc"
 
 cd "$PROJ"
 

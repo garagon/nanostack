@@ -285,41 +285,100 @@ nano_phase_skill_path() {
       return 1
       ;;
   esac
-  local roots=""
+
+  # Membership in nano_custom_phases is the trust boundary: only an
+  # explicitly registered custom phase is allowed to search user-owned
+  # skill roots (skill_roots, store/skills, ~/.claude/skills, ~/.agents/
+  # skills). An unregistered phase that happens to share a name with an
+  # unrelated user-installed skill must NOT be silently shadowed,
+  # otherwise the bundled `feature`/`doctor` read-only behavior could
+  # be overridden by an arbitrary same-named directory. Codex flagged
+  # this on the PR 1 sixth pass.
+  local is_registered_custom=0
+  local _custom_list
+  _custom_list=$(nano_custom_phases "$config" 2>/dev/null)
+  case " $_custom_list " in
+    *" $phase "*) is_registered_custom=1 ;;
+  esac
+
+  if [ "$is_registered_custom" = "0" ]; then
+    # Not core, not registered as custom — fall back to repo-bundled
+    # non-core skills only. This preserves the old raw lookup behavior
+    # for feature/doctor/help/compound/start while preventing shadowing
+    # by unrelated user-installed skills with the same directory name.
+    if [ -n "$repo_root" ] && [ -d "$repo_root/$phase" ] && [ -f "$repo_root/$phase/SKILL.md" ]; then
+      printf '%s\n' "$repo_root/$phase"
+      return 0
+    fi
+    return 1
+  fi
+
+  # Build a newline-delimited candidate list so paths with spaces (a
+  # $HOME like "Hello World" or a store under "My Drive") survive
+  # iteration. Previous form was a single space-separated string fed
+  # into `for root in $list`, which silently dropped split halves and
+  # made guard concurrency a no-op for those users. Codex caught this
+  # while reviewing the registry-aware guard tier.
+  local candidates=""
+  _phases_append_root() {
+    local candidate="$1"
+    # Both early returns are successful no-ops, not errors. A bare
+    # `return` would inherit the previous test's exit status (1 when
+    # the candidate is non-empty), and callers running under `set -e`
+    # would treat the helper as failed. Codex caught this on the
+    # PR 1 second pass with the standard $NANOSTACK_STORE == config_dir
+    # case where the dedup branch fires.
+    [ -z "$candidate" ] && return 0
+    # Dedup: skip if the exact path is already on the list.
+    case $'\n'"$candidates"$'\n' in
+      *$'\n'"$candidate"$'\n'*) return 0 ;;
+    esac
+    if [ -z "$candidates" ]; then
+      candidates="$candidate"
+    else
+      candidates="$candidates"$'\n'"$candidate"
+    fi
+    return 0
+  }
+
+  # 1. Configured skill_roots (user override), newline-separated from jq.
   if [ -n "$config" ] && command -v jq >/dev/null 2>&1; then
-    roots=$(jq -r '.skill_roots // [] | .[]' "$config" 2>/dev/null)
+    while IFS= read -r line; do
+      [ -z "$line" ] && continue
+      _phases_append_root "$line"
+    done < <(jq -r '.skill_roots // [] | .[]' "$config" 2>/dev/null)
   fi
-  # Build the search order from most-specific to least:
-  #   1. configured skill_roots (user override)
-  #   2. <store>/skills — the resolved store, same path bin/create-skill.sh
-  #      writes to. This is the load-bearing one: a scaffold from a git
-  #      subdir or a no-git project lives here, not under cwd/.nanostack.
-  #   3. <config-dir>/skills — covers a global config under $HOME/.nanostack
-  #      that the resolver picked up via _nano_phases_resolve_config.
-  #   4. cwd-relative .nanostack/skills (legacy, retained for back-compat).
-  #   5. $HOME/.claude/skills + $HOME/.agents/skills (agent install
-  #      locations for skills shipped outside .nanostack).
-  local default_roots=""
+  # 2. <store>/skills — same path bin/create-skill.sh writes to. This is
+  #    the load-bearing one: a scaffold from a git subdir or a no-git
+  #    project lives here, not under cwd/.nanostack.
   if [ -n "${NANOSTACK_STORE:-}" ]; then
-    default_roots="$NANOSTACK_STORE/skills"
+    _phases_append_root "$NANOSTACK_STORE/skills"
   fi
+  # 3. <config-dir>/skills — covers a global config under $HOME/.nanostack
+  #    that the resolver picked up via _nano_phases_resolve_config.
   if [ -n "$config" ]; then
     local config_dir
     config_dir=$(dirname "$config")
-    case " $default_roots " in
-      *" $config_dir/skills "*) ;;
-      *) default_roots="${default_roots:+$default_roots }$config_dir/skills" ;;
-    esac
+    _phases_append_root "$config_dir/skills"
   fi
-  default_roots="${default_roots:+$default_roots }.nanostack/skills $HOME/.claude/skills $HOME/.agents/skills"
-  for root in $roots $default_roots; do
+  # 4. cwd-relative .nanostack/skills (legacy, retained for back-compat).
+  _phases_append_root ".nanostack/skills"
+  # 5. $HOME/.claude/skills + $HOME/.agents/skills (agent install
+  #    locations for skills shipped outside .nanostack).
+  _phases_append_root "$HOME/.claude/skills"
+  _phases_append_root "$HOME/.agents/skills"
+
+  while IFS= read -r root; do
+    [ -z "$root" ] && continue
     case "$root" in
       "~/"*) root="$HOME/${root#~/}" ;;
     esac
     if [ -d "$root/$phase" ] && [ -f "$root/$phase/SKILL.md" ]; then
+      unset -f _phases_append_root
       printf '%s\n' "$root/$phase"
       return 0
     fi
-  done
+  done <<< "$candidates"
+  unset -f _phases_append_root
   return 1
 }

@@ -3322,3 +3322,37 @@ jobs:
           run_case 0 'cat wrangler.json'
           run_case 0 'jq . package.json'
           exit $fail
+
+  guard-uses-phase-registry:
+    name: Guard resolves current-phase SKILL.md via the phase registry
+    runs-on: ubuntu-latest
+    # Tier 2.5 concurrency enforcement must go through nano_phase_skill_path
+    # (bin/lib/phases.sh) so custom phases get the same write-block
+    # protection as built-in ones. The 2026-05-10 audit caught a raw
+    # $NANOSTACK_ROOT/$CURRENT_PHASE/SKILL.md lookup that silently no-oped
+    # for every custom skill (their SKILL.md lives under the store, not
+    # the repo). This lock blocks any reintroduction of the raw lookup.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: No raw repo-root SKILL.md lookup in guard
+        run: |
+          set -e
+          script=guard/bin/check-dangerous.sh
+          # Strip comment lines so the explanatory header (which quotes
+          # the forbidden pattern as context) does not trigger the lock.
+          code_only=$(grep -vE '^[[:space:]]*#' "$script")
+          if echo "$code_only" | grep -E '\$NANOSTACK_ROOT/\$[A-Z_]*PHASE[A-Z_]*/SKILL\.md'; then
+            echo "FAIL: $script contains a raw \$NANOSTACK_ROOT/<phase>/SKILL.md lookup."
+            echo "Use nano_phase_skill_path from bin/lib/phases.sh so custom phases"
+            echo "get the same concurrency protection as built-in ones."
+            exit 1
+          fi
+          if ! grep -qF 'nano_phase_skill_path' "$script"; then
+            echo "FAIL: $script does not reference nano_phase_skill_path."
+            echo "The concurrency tier must resolve SKILL.md through the phase"
+            echo "registry so custom skills under <store>/skills/ are honored."
+            exit 1
+          fi
+          echo "OK: guard concurrency tier uses the phase registry."

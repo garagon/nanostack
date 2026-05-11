@@ -106,16 +106,78 @@ if [ -n "$TIER1" ]; then
   fi
 fi
 
-# ─── Tier 2: In-project operations ──────────────────────────
+# ─── Tier 2.4: Phase-aware concurrency enforcement ─────────
+# Runs BEFORE the in-project fast-path. A read-only phase must block
+# write commands even when they only touch in-project paths, otherwise
+# `touch ./foo` or `mv ./a ./b` slip through the git-reviewable
+# allowlist and silently mutate files during a phase that promised no
+# writes. Codex caught this on the PR 1 review by testing `touch ./x`
+# from a git worktree while concurrency was set to read.
+#
+# Skill resolution goes through bin/lib/phases.sh so custom phases are
+# protected the same way built-in ones are. The previous lookup did a
+# raw $NANOSTACK_ROOT/$CURRENT_PHASE/SKILL.md, which silently no-oped
+# for any phase whose SKILL.md lived outside the repo (every custom
+# skill under $NANOSTACK_STORE/skills, ~/.claude/skills, etc.).
+if [ -n "${NANOSTACK_STORE:-}" ]; then
+  SESSION_CHECK="$NANOSTACK_STORE/session.json"
+
+  if [ -f "$SESSION_CHECK" ]; then
+    CURRENT_PHASE=$(jq -r '.current_phase // ""' "$SESSION_CHECK" 2>/dev/null)
+
+    if [ -n "$CURRENT_PHASE" ] && [ "$CURRENT_PHASE" != "build" ]; then
+      # Resolve the skill directory through the phase registry. Returns
+      # silently for unknown phases so the guard never blocks because of
+      # a stale session pointing at a removed skill.
+      SKILL_MD=""
+      PHASES_LIB="$NANOSTACK_ROOT/bin/lib/phases.sh"
+      if [ -f "$PHASES_LIB" ]; then
+        # shellcheck disable=SC1090
+        source "$PHASES_LIB" 2>/dev/null || true
+        if command -v nano_phase_skill_path >/dev/null 2>&1; then
+          SKILL_DIR=$(nano_phase_skill_path "$CURRENT_PHASE" 2>/dev/null || true)
+          if [ -n "$SKILL_DIR" ] && [ -f "$SKILL_DIR/SKILL.md" ]; then
+            SKILL_MD="$SKILL_DIR/SKILL.md"
+          fi
+        fi
+      fi
+
+      SKILL_CONC=""
+      if [ -n "$SKILL_MD" ]; then
+        SKILL_CONC=$(sed -n '/^---$/,/^---$/p' "$SKILL_MD" | grep '^concurrency:' | head -1 | sed 's/^concurrency: *//')
+      fi
+
+      # Block writes during read-only phases
+      if [ "$SKILL_CONC" = "read" ]; then
+        case "$CMD" in
+          *rm\ *|*mv\ *|*cp\ *|*mkdir\ *|*touch\ *|*chmod\ *|*git\ add*|*git\ commit*|*git\ push*|*git\ reset*)
+            echo "BLOCKED [PHASE] Write operation during read-only phase '$CURRENT_PHASE'"
+            echo "Category: concurrency-safety"
+            echo "Command: $CMD"
+            echo ""
+            echo "Action: report this as a finding instead of auto-fixing. The current phase is read-only to prevent race conditions when multiple agents run in parallel."
+            echo "Bypass: complete the current phase first (\`bin/session.sh phase-complete $CURRENT_PHASE\`), or end the session if you're not in a sprint."
+            audit_trail_append blocked "PHASE-RO"
+            exit 1
+            ;;
+        esac
+      fi
+    fi
+  fi
+fi
+
+# ─── Tier 2.5: In-project operations ────────────────────────
 # If the command only touches files inside the current git repo,
-# it's reviewable via version control. Let it through.
+# it's reviewable via version control. Let it through. Phase
+# concurrency above already prevented in-project writes during a
+# read phase, so this fast-path only fires when writes are allowed.
 PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
 
 if [ -n "$PROJECT_ROOT" ]; then
-  # Commands that write files but stay in-project are Tier 2
+  # Commands that write files but stay in-project are Tier 2.5
   # We only check simple file-targeting commands, not pipes or chains
   case "$CMD" in
-    # Skip tier 2 for chained/piped commands (too hard to analyze)
+    # Skip tier 2.5 for chained/piped commands (too hard to analyze)
     *\|*|*\;*|*\&\&*) ;;
     *)
       # If command references files, check they're all in-project
@@ -141,47 +203,6 @@ if [ -n "$PROJECT_ROOT" ]; then
       fi
       ;;
   esac
-fi
-
-# ─── Tier 2.5: Phase-aware concurrency enforcement ─────────
-# If a session is active and the current phase is read-only,
-# block write operations to prevent race conditions in parallel execution.
-# Store path already resolved at the top of the script.
-if [ -n "${NANOSTACK_STORE:-}" ]; then
-  SESSION_CHECK="$NANOSTACK_STORE/session.json"
-
-  if [ -f "$SESSION_CHECK" ]; then
-    CURRENT_PHASE=$(jq -r '.current_phase // ""' "$SESSION_CHECK" 2>/dev/null)
-
-    if [ -n "$CURRENT_PHASE" ]; then
-      # Get concurrency from skill frontmatter
-      SKILL_CONC=""
-      case "$CURRENT_PHASE" in
-        plan) SKILL_MD="$NANOSTACK_ROOT/plan/SKILL.md" ;;
-        build) SKILL_MD="" ;;
-        *) SKILL_MD="$NANOSTACK_ROOT/$CURRENT_PHASE/SKILL.md" ;;
-      esac
-
-      if [ -n "${SKILL_MD:-}" ] && [ -f "$SKILL_MD" ]; then
-        SKILL_CONC=$(sed -n '/^---$/,/^---$/p' "$SKILL_MD" | grep '^concurrency:' | head -1 | sed 's/^concurrency: *//')
-      fi
-
-      # Block writes during read-only phases
-      if [ "$SKILL_CONC" = "read" ]; then
-        case "$CMD" in
-          *rm\ *|*mv\ *|*cp\ *|*mkdir\ *|*touch\ *|*chmod\ *|*git\ add*|*git\ commit*|*git\ push*|*git\ reset*)
-            echo "BLOCKED [PHASE] Write operation during read-only phase '$CURRENT_PHASE'"
-            echo "Category: concurrency-safety"
-            echo "Command: $CMD"
-            echo ""
-            echo "Action: report this as a finding instead of auto-fixing. The current phase is read-only to prevent race conditions when multiple agents run in parallel."
-            echo "Bypass: complete the current phase first (\`bin/session.sh phase-complete $CURRENT_PHASE\`), or end the session if you're not in a sprint."
-            exit 1
-            ;;
-        esac
-      fi
-    fi
-  fi
 fi
 
 # ─── Tier 2.75: Sprint phase gate ──────────────────────────
