@@ -1339,6 +1339,36 @@ HTML=$(cd "$PROJ_OURS" && "$REPO/bin/render-artifact.sh" stack compliance-releas
 assert_contains "stack finds OUR plan past 30 newer foreign artifacts" "$HTML" "$OUR_PLAN"
 unset NANOSTACK_STORE
 
+# ─── Cell 22z: invalid stack manifest has >= 1 source (PR 3 pass 15) ─
+printf "\n  ${DIM}Cell 22z: invalid stack manifest sources (PR 3 pass 15)${NC}\n"
+PROJ="$TMP_ROOT/cell22z"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+
+# Stack invalid: malformed stack file.
+mkdir -p "$NANOSTACK_STORE/stacks/inv_manifest"
+printf '{"name":"inv_manifest","phase_graph":[' > "$NANOSTACK_STORE/stacks/inv_manifest/stack.json"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack inv_manifest)
+MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*inv_manifest*.manifest.json | head -1)
+LEN=$(jq -r '.source_artifacts | length' "$MFST")
+assert_true "invalid-stack manifest has >= 1 source" sh -c "[ '$LEN' -ge 1 ]"
+assert_true "invalid-stack source phase begins with stack:" \
+  sh -c "jq -re '.source_artifacts[0].phase | startswith(\"stack:\")' '$MFST' >/dev/null"
+
+# Stack not found: typo.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack does_not_exist_typo)
+MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*does_not_exist_typo*.manifest.json | head -1)
+LEN=$(jq -r '.source_artifacts | length' "$MFST")
+assert_true "not-found-stack manifest has >= 1 source" sh -c "[ '$LEN' -ge 1 ]"
+
+# Graph validation error: empty graph.
+mkdir -p "$NANOSTACK_STORE/stacks/empty_graph2"
+echo '{"name":"empty_graph2","phase_graph":[]}' > "$NANOSTACK_STORE/stacks/empty_graph2/stack.json"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack empty_graph2)
+MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*empty_graph2*.manifest.json | head -1)
+LEN=$(jq -r '.source_artifacts | length' "$MFST")
+assert_true "graph-invalid manifest has >= 1 source" sh -c "[ '$LEN' -ge 1 ]"
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"

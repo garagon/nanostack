@@ -1164,10 +1164,21 @@ render_stack_body() {
   # graph under the requested stack's name and hide the broken
   # definition. The fallback is only for the bare `stack` / `stack
   # default` form when no stack file was found at all.
+  # Codex PR 3 pass 15: every manifest must have at least one
+  # source entry per the visual artifact contract. For stack
+  # failure modes (invalid file, not found), emit a synthetic
+  # source pointing at the stack file (when present) or the
+  # requested name. This keeps downstream manifest consumers happy.
+  _stack_synthetic_source() {
+    local path="$1" trust="$2"
+    jq -n --arg phase "stack:$name" --arg path "$path" --arg trust "$trust" \
+      '[{phase: $phase, path: $path, integrity: "", trust: $trust}]'
+  }
+
   if [ "$named_stack_file_present" = true ] && { [ -z "$graph_json" ] || [ "$graph_json" = "null" ]; }; then
     printf '    <section class="card">\n      <h2>Stack invalid</h2>\n      <p>The stack file <code>%s</code> exists but its <code>phase_graph</code> is missing or unreadable.</p>\n    </section>\n' \
       "$(printf '%s' "$stack_file" | nano_html_escape)"
-    SOURCE_ARTIFACTS_JSON='[]'
+    SOURCE_ARTIFACTS_JSON=$(_stack_synthetic_source "$stack_file" "integrity_missing")
     return 0
   fi
 
@@ -1184,7 +1195,7 @@ render_stack_body() {
   if [ -z "$graph_json" ] || [ "$graph_json" = "null" ]; then
     printf '    <section class="card">\n      <h2>Stack not found</h2>\n      <p>No stack definition found for <code>%s</code>.</p>\n    </section>\n' \
       "$(printf '%s' "$name" | nano_html_escape)"
-    SOURCE_ARTIFACTS_JSON='[]'
+    SOURCE_ARTIFACTS_JSON=$(_stack_synthetic_source "" "not_found")
     return 0
   fi
 
@@ -1266,7 +1277,7 @@ render_stack_body() {
     printf '    <section class="card">\n      <h2>Stack invalid</h2>\n      <p>The stack definition for <code>%s</code> has a malformed <code>phase_graph</code>: %s.</p>\n    </section>\n' \
       "$(printf '%s' "$name" | nano_html_escape)" \
       "$(printf '%s' "$graph_validation_error" | nano_html_escape)"
-    SOURCE_ARTIFACTS_JSON='[]'
+    SOURCE_ARTIFACTS_JSON=$(_stack_synthetic_source "$stack_file" "integrity_missing")
     return 0
   fi
 
