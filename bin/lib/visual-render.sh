@@ -148,6 +148,20 @@ nano_visual_assert_safe_descend() {
       return 4
     fi
   done
+  # Leaf check. Codex PR 1 pass 5 caught the gap: if the leaf itself
+  # is a symlink to a directory, the later atomic mv moves the temp
+  # file INTO the link target instead of overwriting the link, so
+  # the render escapes the visual root despite every directory
+  # component being safe. Refuse symlinks and directories at the
+  # leaf; the contract is to write a regular file at that path.
+  if [ -L "$path" ]; then
+    echo "render-artifact: refusing to overwrite symlinked output leaf: $path" >&2
+    return 4
+  fi
+  if [ -d "$path" ]; then
+    echo "render-artifact: refusing to overwrite directory at output leaf: $path" >&2
+    return 4
+  fi
   return 0
 }
 

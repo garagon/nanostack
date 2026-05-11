@@ -444,6 +444,33 @@ assert_exit "symlinked visual/manifests exits 4" 4 \
 MFST_COUNT=$(find "$TMP_ROOT/cell9f-outside" -maxdepth 1 -name "*.manifest.json" 2>/dev/null | wc -l | tr -d ' ')
 assert_true "no manifest written through symlinked subdir" sh -c "[ '$MFST_COUNT' = '0' ]"
 
+# ─── Cell 9g: symlinked output leaf rejected ───────────────
+# PR 1 pass 5 regression: an --out whose leaf component is a
+# pre-existing symlink to a directory must be rejected. Otherwise
+# atomic mv would move the temp file INTO the symlink target.
+printf "\n  ${DIM}Cell 9g: symlinked output leaf (PR 1 pass 5 regression)${NC}\n"
+PROJ="$TMP_ROOT/cell9g"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/visual/plan"
+mkdir -p "$TMP_ROOT/cell9g-outside"
+ln -s "$TMP_ROOT/cell9g-outside" "$NANOSTACK_STORE/visual/plan/explicit.html"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+assert_exit "symlinked output leaf exits 4" 4 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan --latest --out '$NANOSTACK_STORE/visual/plan/explicit.html'"
+LEAK_COUNT=$(find "$TMP_ROOT/cell9g-outside" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
+assert_true "no file leaked through symlinked leaf" sh -c "[ '$LEAK_COUNT' = '0' ]"
+
+# A leaf that is already a directory must also be rejected so the
+# mv doesn't move the temp file INTO the directory.
+PROJ="$TMP_ROOT/cell9h"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/visual/plan/explicit.html"  # leaf is a directory
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+assert_exit "directory at output leaf exits 4" 4 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan --latest --out '$NANOSTACK_STORE/visual/plan/explicit.html'"
+
 # ─── Cell 9: symlinked visual root rejected ─────────────────
 printf "\n  ${DIM}Cell 9: symlinked visual root rejected${NC}\n"
 PROJ="$TMP_ROOT/cell9"
