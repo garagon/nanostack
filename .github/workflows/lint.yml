@@ -842,6 +842,24 @@ jobs:
           run_case 1 'supabase-service-role.json'
           run_case 1 'client-secrets.json'
           run_case 1 'client_secret.json'
+          # Separator-less credential JSON variants. Codex caught
+          # the missing optional separator on the PR 7 first review
+          # pass: G-035 read-side allows [-_]? but the initial
+          # write patterns required the separator.
+          run_case 1 'serviceaccount.json'
+          run_case 1 'firebaseadminsdk.json'
+          run_case 1 'googlecredentials.json'
+          run_case 1 'clientsecret.json'
+          run_case 1 'awscredentials.json'
+          run_case 1 'gcpcredentials.json'
+          # Protected directories still block even when the leaf has
+          # a template-looking basename. Codex caught the over-broad
+          # template exemption on the PR 7 first review pass:
+          # $HOME/.ssh/config.example must not become a bypass.
+          run_case 1 "$HOME/.ssh/config.example"
+          run_case 1 "$HOME/.ssh/config.template"
+          run_case 1 "/etc/foo.template"
+          run_case 1 "/etc/foo.sample"
           # Allowed: templates + regular project files. Template
           # basenames (.example, .sample, .template, with or without
           # extension) MUST pass even when the rest of the name looks

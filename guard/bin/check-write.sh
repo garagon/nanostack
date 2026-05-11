@@ -160,18 +160,20 @@ BASENAME_DENY=(
   # SDK conventions: credentials.json, secrets.json, service-account
   # /service_account, firebase-adminsdk, google-credentials,
   # gcp-credentials, aws-credentials, supabase-service-role,
-  # client-secret(s) / client_secret. The base patterns match the
-  # plain name and any same-stem variant such as
-  # service-account-prod.json or aws-credentials-staging.json.
+  # client-secret(s) / client_secret. Word-separator is optional so
+  # names without a hyphen/underscore (serviceaccount.json,
+  # firebaseadminsdk.json, googlecredentials.json, clientsecret.json)
+  # are caught too. Codex flagged the missing separator-less forms
+  # on the PR 7 first review pass.
   '(^|/)credentials?\.json$'
   '(^|/)secrets?\.json$'
-  '(^|/)service[-_]account[^/]*\.json$'
-  '(^|/)firebase[-_]adminsdk[^/]*\.json$'
-  '(^|/)google[-_]credentials[^/]*\.json$'
-  '(^|/)gcp[-_]credentials[^/]*\.json$'
-  '(^|/)aws[-_]credentials[^/]*\.json$'
-  '(^|/)supabase[-_]service[-_]role[^/]*\.json$'
-  '(^|/)client[-_]secret[s]?[^/]*\.json$'
+  '(^|/)service[-_]?account[^/]*\.json$'
+  '(^|/)firebase[-_]?adminsdk[^/]*\.json$'
+  '(^|/)google[-_]?credentials[^/]*\.json$'
+  '(^|/)gcp[-_]?credentials[^/]*\.json$'
+  '(^|/)aws[-_]?credentials[^/]*\.json$'
+  '(^|/)supabase[-_]?service[-_]?role[^/]*\.json$'
+  '(^|/)client[-_]?secret[s]?[^/]*\.json$'
   # Private cryptographic material.
   '\.pem$'
   '\.key$'
@@ -222,24 +224,34 @@ check_path() {
   local p="$1" pat
   # Template short-circuit: files whose basename ends in `.example`,
   # `.sample`, `.template` (with or without an extension after) pass
-  # through, even if the rest of the name matches a credential
-  # pattern. This is the safe surface for first-run onboarding
-  # (credentials.example.json, service-account.template.json,
-  # .env.example, etc.).
-  local base
+  # the BASENAME deny check, even when the rest of the name matches a
+  # credential pattern. This is the safe surface for first-run
+  # onboarding (credentials.example.json, service-account.template.
+  # json, .env.example, etc.).
+  #
+  # The template exemption deliberately does NOT apply to
+  # PATH_PREFIX_DENY: a write to $HOME/.ssh/config.example or
+  # /etc/foo.template must still block because the protected
+  # directory is what makes the path sensitive, not the filename.
+  # Codex flagged the over-broad exemption on the PR 7 first review
+  # pass.
+  local base is_template=false
   base=$(basename "$p")
   for pat in "${TEMPLATE_ALLOW[@]}"; do
     if printf '%s' "$base" | grep -qE -- "$pat"; then
-      return 1
+      is_template=true
+      break
     fi
   done
-  for pat in "${BASENAME_DENY[@]}"; do
-    if printf '%s' "$p" | grep -qE -- "$pat"; then
-      MATCHED_RULE="secret_basename:$pat"
-      MATCHED_PATH="$p"
-      return 0
-    fi
-  done
+  if [ "$is_template" = false ]; then
+    for pat in "${BASENAME_DENY[@]}"; do
+      if printf '%s' "$p" | grep -qE -- "$pat"; then
+        MATCHED_RULE="secret_basename:$pat"
+        MATCHED_PATH="$p"
+        return 0
+      fi
+    done
+  fi
   for pat in "${PATH_PREFIX_DENY[@]}"; do
     if printf '%s' "$p" | grep -qE -- "$pat"; then
       MATCHED_RULE="system_path:$pat"
