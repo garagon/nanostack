@@ -275,14 +275,21 @@ nano_phase_ready_from_graph() {
     . as $graph
     | $done as $base
     # Auto-promote "build" when its declared deps (if any) are all
-    # already completed. Treat a "build"-less graph as a no-op for
-    # this step.
+    # already completed AND build itself is not currently in_progress.
+    # The in_progress check is the load-bearing piece: a caller can
+    # record the build handoff with session.sh phase-start build, and
+    # treating that as satisfied would unblock review/qa/security
+    # while build is still running. Codex caught the racy promotion
+    # on the PR 4 sixth review pass. Treat a "build"-less graph as a
+    # no-op for this step.
     | (
         ($graph | map(select(.name == "build")) | first // null) as $build_node
         | if $build_node == null then $base
           else
             ($build_node.depends_on // []) as $bdeps
-            | if ($bdeps | all(. as $d | $base | any(. == $d))) then ($base + ["build"] | unique)
+            | if (($bdeps | all(. as $d | $base | any(. == $d)))
+                  and (($active | any(. == "build")) | not))
+              then ($base + ["build"] | unique)
               else $base
               end
           end

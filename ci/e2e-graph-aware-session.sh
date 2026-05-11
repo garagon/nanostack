@@ -449,6 +449,29 @@ assert_eq "after r+q+s: can_ship = true (deps met)" "true" "$(echo "$out" | jq -
 assert_eq "after r+q+s: ready_phases = [ship]" \
   '["ship"]' "$(echo "$out" | jq -c '.ready_phases')"
 
+# Cell 9f: build is the conductor's no-artifact stage and is auto-
+# promoted to "satisfied" once its declared deps land, but only when
+# it is not currently in_progress. Codex caught the racy promotion
+# on the PR 4 sixth review pass: a caller that did session.sh
+# phase-start build still unblocked review/qa/security right away.
+echo "[9f] in-progress build does not unblock downstream phases"
+new_project "cell9f-build-running"
+"$SESSION_SH" init development >/dev/null
+for ph in think plan; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+"$SESSION_SH" phase-start build >/dev/null
+ready_during_build=$(jq -c '.ready_phases' "$NANOSTACK_STORE/session.json")
+assert_eq "build in_progress: ready_phases is empty" '[]' "$ready_during_build"
+# Once build is conceptually done (the user finishes the dev work and
+# the next phase-start lands), review/qa/security come back online.
+# We simulate the dev finishing build by completing it explicitly.
+"$SESSION_SH" phase-complete build >/dev/null
+ready_after_build=$(jq -c '.ready_phases | sort' "$NANOSTACK_STORE/session.json")
+assert_eq "build completed: post-build phases ready" \
+  '["qa","review","security"]' "$ready_after_build"
+
 # Cell 10: default sprint user_message remains exactly the historical
 # wording. No regression for built-in flows.
 echo "[10] default sprint user_message is unchanged"
