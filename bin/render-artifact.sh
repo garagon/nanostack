@@ -489,6 +489,40 @@ HTML
   printf '    </section>\n'
 }
 
+# Shared helper: find the latest artifact for <phase>, surfacing
+# tampered candidates even when their .project no longer matches.
+# Used by stack (no date filter) and indirectly by journal (which
+# has its own helper that adds the date prefix). Codex PR 3 pass 6
+# extended the tampered-surface logic from journal to stack so
+# `stack --strict` cannot be bypassed by flipping .project.
+_latest_safe_artifact_for_stack() {
+  local ph="$1"
+  local dir="$NANOSTACK_STORE/$ph"
+  [ -d "$dir" ] || return 0
+  local project_root
+  project_root="$(pwd)"
+  # shellcheck disable=SC2012
+  local candidates
+  candidates=$(ls -1t "$dir"/*.json 2>/dev/null | head -30)
+  [ -z "$candidates" ] && return 0
+  local f
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    local t
+    t=$(nano_artifact_trust "$f" 2>/dev/null || echo "not_found")
+    if [ "$t" = "integrity_mismatch" ]; then
+      printf '%s\n' "$f"
+      return 0
+    fi
+    if jq -e --arg p "$project_root" '.project == $p' "$f" >/dev/null 2>&1; then
+      printf '%s\n' "$f"
+      return 0
+    fi
+  done <<EOF
+$candidates
+EOF
+}
+
 render_think_body() {
   local artifact="$1"
   local norm
@@ -1078,18 +1112,36 @@ render_stack_body() {
     return 0
   fi
 
-  # Codex PR 3 pass 5: a user-supplied stack file with a malformed
-  # phase_graph (object, array of scalars, missing .name) would crash
-  # the renderer with an undocumented jq error under set -e. Validate
-  # shape upfront: graph must be an array of objects each with a
-  # string .name and (optional) array .depends_on. On failure, render
-  # a "Stack invalid" notice and bail gracefully.
-  if ! printf '%s' "$graph_json" | jq -e '
-    type == "array"
-    and all(.[]; type == "object" and (.name | type == "string"))
+  # Codex PR 3 pass 5+6: tighten graph validation. Required shape:
+  #   - non-empty array
+  #   - each entry is an object
+  #   - .name is a non-empty string
+  #   - .depends_on is an array of strings (default [])
+  #   - every name in depends_on exists as a node name (no dangling
+  #     references; cycle detection is bounded by the SVG loop cap)
+  # On failure render a "Stack invalid" notice with the validation
+  # reason and bail gracefully.
+  local graph_validation_error=""
+  if ! printf '%s' "$graph_json" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
+    graph_validation_error="phase_graph must be a non-empty array"
+  elif ! printf '%s' "$graph_json" | jq -e '
+    all(.[]; type == "object"
+              and (.name | type == "string") and (.name | length > 0)
+              and ((.depends_on // []) | type == "array")
+              and ((.depends_on // []) | all(type == "string")))
   ' >/dev/null 2>&1; then
-    printf '    <section class="card">\n      <h2>Stack invalid</h2>\n      <p>The stack definition for <code>%s</code> has a malformed <code>phase_graph</code>. Expected an array of <code>{name, depends_on}</code> objects.</p>\n    </section>\n' \
-      "$(printf '%s' "$name" | nano_html_escape)"
+    graph_validation_error="every node needs string .name and array-of-string .depends_on"
+  elif ! printf '%s' "$graph_json" | jq -e '
+    . as $g
+    | ([.[].name] | unique) as $names
+    | all(.[]; (.depends_on // []) | all(. as $d | $names | index($d) != null))
+  ' >/dev/null 2>&1; then
+    graph_validation_error="phase_graph has a dangling dependency (depends_on points at an undeclared phase)"
+  fi
+  if [ -n "$graph_validation_error" ]; then
+    printf '    <section class="card">\n      <h2>Stack invalid</h2>\n      <p>The stack definition for <code>%s</code> has a malformed <code>phase_graph</code>: %s.</p>\n    </section>\n' \
+      "$(printf '%s' "$name" | nano_html_escape)" \
+      "$(printf '%s' "$graph_validation_error" | nano_html_escape)"
     SOURCE_ARTIFACTS_JSON='[]'
     return 0
   fi
@@ -1112,7 +1164,9 @@ render_stack_body() {
     local nname deps_csv art_path trust label
     nname=$(printf '%s' "$node" | jq -r '.name')
     deps_csv=$(printf '%s' "$node" | jq -r '.depends_on // [] | join(", ")')
-    art_path=$("$SCRIPT_DIR/find-artifact.sh" "$nname" 30 --no-session-sync 2>/dev/null || true)
+    # Use the tampered-aware lookup so a flipped .project cannot hide
+    # a tampered artifact as "missing" (codex PR 3 pass 6).
+    art_path=$(_latest_safe_artifact_for_stack "$nname")
     if [ -n "$art_path" ] && [ -f "$art_path" ]; then
       art_path=$(nano_resolve_abs "$art_path")
       trust=$(nano_artifact_trust "$art_path" 2>/dev/null || echo "not_found")
@@ -1160,7 +1214,7 @@ render_stack_body() {
   while IFS= read -r nm; do
     [ -z "$nm" ] && continue
     local ap tr ig
-    ap=$("$SCRIPT_DIR/find-artifact.sh" "$nm" 30 --no-session-sync 2>/dev/null || true)
+    ap=$(_latest_safe_artifact_for_stack "$nm")
     if [ -n "$ap" ] && [ -f "$ap" ]; then
       ap=$(nano_resolve_abs "$ap")
       tr=$(nano_artifact_trust "$ap" 2>/dev/null || echo "not_found")
@@ -1264,11 +1318,12 @@ render_stack_svg() {
       fi
   done
 
-  # Draw nodes with trust class.
+  # Draw nodes with trust class. Tampered-aware lookup so a flipped
+  # .project surfaces visually rather than appearing as missing.
   while IFS=$'\t' read -r nm x y; do
     local trust label fill stroke
     local ap
-    ap=$("$SCRIPT_DIR/find-artifact.sh" "$nm" 30 --no-session-sync 2>/dev/null || true)
+    ap=$(_latest_safe_artifact_for_stack "$nm")
     if [ -n "$ap" ]; then
       trust=$(nano_artifact_trust "$ap" 2>/dev/null || echo "not_found")
     else

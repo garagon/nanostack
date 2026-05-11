@@ -1050,6 +1050,65 @@ HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack badstack2 2>/dev/null 
   assert_contains "scalar-array stack also invalid" "$HTML" "Stack invalid"
 }
 
+# ─── Cell 22o: stack --strict surfaces tampered .project (PR 3 pass 6) ─
+printf "\n  ${DIM}Cell 22o: stack --strict surfaces tampered .project (PR 3 pass 6)${NC}\n"
+PROJ="$TMP_ROOT/cell22o"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+jq '.project = "/other-project"' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
+assert_exit "stack --strict catches tampered .project" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack compliance-release --strict"
+# Without --strict, the row must show data-trust=integrity_mismatch.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+assert_contains "stack table shows tampered .project as integrity_mismatch" "$HTML" 'data-phase="plan" data-trust="integrity_mismatch"'
+
+# ─── Cell 22p: stricter graph validation (PR 3 pass 6) ──────
+printf "\n  ${DIM}Cell 22p: strict graph validation (PR 3 pass 6)${NC}\n"
+PROJ="$TMP_ROOT/cell22p"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+
+# depends_on as a string (not array).
+mkdir -p "$NANOSTACK_STORE/stacks/bad_deps"
+cat > "$NANOSTACK_STORE/stacks/bad_deps/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"bad_deps",
+  "phase_graph": [ {"name":"a","depends_on":"not-array"} ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack bad_deps)
+assert_contains "depends_on string rejected with invalid notice" "$HTML" "Stack invalid"
+
+# Empty array.
+mkdir -p "$NANOSTACK_STORE/stacks/empty_graph"
+cat > "$NANOSTACK_STORE/stacks/empty_graph/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"empty_graph", "phase_graph": [] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack empty_graph)
+assert_contains "empty phase_graph rejected" "$HTML" "non-empty array"
+
+# Dangling dependency.
+mkdir -p "$NANOSTACK_STORE/stacks/dangling"
+cat > "$NANOSTACK_STORE/stacks/dangling/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"dangling",
+  "phase_graph": [
+    {"name":"a","depends_on":[]},
+    {"name":"b","depends_on":["nonexistent"]}
+  ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack dangling)
+assert_contains "dangling dependency rejected" "$HTML" "dangling dependency"
+
+# Empty name string.
+mkdir -p "$NANOSTACK_STORE/stacks/empty_name"
+cat > "$NANOSTACK_STORE/stacks/empty_name/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"empty_name",
+  "phase_graph": [ {"name":"","depends_on":[]} ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack empty_name)
+assert_contains "empty name rejected" "$HTML" "Stack invalid"
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"
