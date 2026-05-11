@@ -761,6 +761,69 @@ assert_exit "journal --date with shell metachars exits 1" 1 \
 HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --date 2026-05-11)
 assert_true "journal --date valid shape works" test -f "$HTML"
 
+# ─── Cell 22a: --date filters by date, not last 30 days (PR 3 pass 1) ─
+printf "\n  ${DIM}Cell 22a: journal --date filter (PR 3 pass 1)${NC}\n"
+PROJ="$TMP_ROOT/cell22a"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+# Rename today's artifact to look like it was saved on 2026-05-09.
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+NEW="$NANOSTACK_STORE/plan/20260509-100000.json"
+jq '.timestamp = "2026-05-09T10:00:00Z"' "$PLAN_PATH" > "$NEW"
+rm "$PLAN_PATH"
+# Now request the journal for 2026-05-09; the plan artifact must appear.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --date 2026-05-09)
+assert_contains "journal --date 2026-05-09 shows the dated plan" "$HTML" "20260509-100000.json"
+# Request another date with no artifacts; plan must show as missing.
+HTML2=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --date 2026-05-08)
+assert_contains "journal --date 2026-05-08 says missing" "$HTML2" "No artifact found"
+assert_not_contains "journal 2026-05-08 does NOT show 2026-05-09 plan path" "$HTML2" "20260509-100000.json"
+
+# ─── Cell 22b: stack falls back to project phase_graph (PR 3 pass 1) ─
+printf "\n  ${DIM}Cell 22b: stack falls back to project phase_graph (PR 3 pass 1)${NC}\n"
+PROJ="$TMP_ROOT/cell22b"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+cat > "$NANOSTACK_STORE/config.json" <<'CFG'
+{
+  "schema_version": "1",
+  "custom_phases": ["license-audit"],
+  "phase_graph": [
+    {"name": "think", "depends_on": []},
+    {"name": "plan", "depends_on": ["think"]},
+    {"name": "build", "depends_on": ["plan"]},
+    {"name": "review", "depends_on": ["build"]},
+    {"name": "license-audit", "depends_on": ["build"]},
+    {"name": "ship", "depends_on": ["review", "license-audit"]}
+  ]
+}
+CFG
+# No stack file under examples or stacks/; the fallback to the
+# registry's phase_graph must kick in.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack project)
+assert_true "stack from project graph renders" test -f "$HTML"
+assert_contains "stack shows the custom phase license-audit" "$HTML" 'data-phase="license-audit"'
+assert_contains "stack shows SVG" "$HTML" "<svg"
+
+# ─── Cell 22c: journal includes custom phases from registry (PR 3 pass 1) ─
+printf "\n  ${DIM}Cell 22c: journal lists custom phases (PR 3 pass 1)${NC}\n"
+PROJ="$TMP_ROOT/cell22c"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+cat > "$NANOSTACK_STORE/config.json" <<'CFG'
+{
+  "schema_version": "1",
+  "custom_phases": ["license-audit", "privacy-check"]
+}
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_contains "journal lists custom license-audit row" "$HTML" 'data-phase="license-audit"'
+assert_contains "journal lists custom privacy-check row" "$HTML" 'data-phase="privacy-check"'
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"

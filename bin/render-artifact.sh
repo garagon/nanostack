@@ -23,6 +23,13 @@ source "$SCRIPT_DIR/lib/html-escape.sh"
 source "$SCRIPT_DIR/lib/visual-render.sh"
 source "$SCRIPT_DIR/lib/artifact-trust.sh"
 [ -f "$SCRIPT_DIR/lib/artifact-schemas.sh" ] && source "$SCRIPT_DIR/lib/artifact-schemas.sh"
+# Sourced so render_journal_body / render_stack_body can ask the
+# registry for custom phases and the project's phase_graph. Codex
+# PR 3 pass 1 caught the missing source: nano_all_phases and
+# nano_phase_graph_json were never defined, so journal silently
+# skipped custom phases and stack fell back to "stack not found"
+# instead of the project graph.
+[ -f "$SCRIPT_DIR/lib/phases.sh" ] && source "$SCRIPT_DIR/lib/phases.sh"
 
 usage() {
   cat <<USAGE
@@ -856,6 +863,32 @@ render_journal_body() {
   local date="$1"
   local project_path
   project_path="$(pwd)"
+  # Codex PR 3 pass 1: --date <YYYY-MM-DD> previously called
+  # find-artifact.sh which returns the LATEST in the last N days, not
+  # the latest on the requested date. Compute the compact form
+  # (YYYYMMDD) so we can filter artifact filenames by date prefix.
+  local date_compact
+  date_compact="${date//-/}"
+
+  # find the latest artifact for <phase> on <date>. Uses filename
+  # convention `YYYYMMDD-HHMMSS.json` under `.nanostack/<phase>/`.
+  # Returns the path on stdout (empty if none).
+  _journal_latest_on_date() {
+    local ph="$1" dc="$2"
+    local dir="$NANOSTACK_STORE/$ph"
+    [ -d "$dir" ] || return 0
+    local project_root="$project_path"
+    # shellcheck disable=SC2012
+    ls -1 "$dir"/"$dc"-*.json 2>/dev/null \
+      | sort -r \
+      | while IFS= read -r f; do
+          # find-artifact.sh's project filter: .project must match.
+          if jq -e --arg p "$project_root" '.project == $p' "$f" >/dev/null 2>&1; then
+            printf '%s\n' "$f"
+            return
+          fi
+        done | head -1
+  }
 
   # Build the list of phases to enumerate. Use the phase registry
   # so custom phases declared in .nanostack/config.json appear too.
@@ -882,8 +915,18 @@ render_journal_body() {
       build) continue ;;  # Not a saved phase; build is editor work.
     esac
     # Find the latest artifact for this phase on the requested date.
+    # _journal_latest_on_date filters by filename prefix YYYYMMDD,
+    # which matches save-artifact.sh's naming convention. Falls back
+    # to find-artifact.sh (last 30 days) when no date prefix matches,
+    # because legacy artifacts may have different shapes. The first
+    # match wins.
     local art_path trust status_label sev_class summary
-    art_path=$("$SCRIPT_DIR/find-artifact.sh" "$ph" 30 --no-session-sync 2>/dev/null || true)
+    art_path=$(_journal_latest_on_date "$ph" "$date_compact")
+    if [ -z "$art_path" ] && [ "$date" = "$(date -u +%Y-%m-%d)" ]; then
+      # For today, fall back to find-artifact.sh to catch artifacts
+      # not yet committed to disk under the convention.
+      art_path=$("$SCRIPT_DIR/find-artifact.sh" "$ph" 30 --no-session-sync 2>/dev/null || true)
+    fi
     if [ -z "$art_path" ] || [ ! -f "$art_path" ]; then
       status_label="missing"
       sev_class="sev-warn"
