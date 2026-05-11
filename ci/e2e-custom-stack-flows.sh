@@ -22,7 +22,8 @@
 #  18. Built-in review phase still blocks (regression check).
 #  19. Guard finds repo-bundled non-core skills (feature, doctor).
 #  20. Registered custom skill wins over bundled non-core fallback.
-#  21. Guard still works when the store path contains a space.
+#  21. Unrelated user-installed skill does not shadow a bundled phase.
+#  22. Guard still works when the store path contains a space.
 #
 # This harness is the contract Codex's spec calls for in PR 6: a clean
 # sandbox user can complete the entire workflow without reading source.
@@ -377,12 +378,41 @@ rm -rf "$PREC_OUT"
 cd "$PROJ"
 assert_eq "custom feature (write) shadows bundled feature (read)" "0" "$guard_rc"
 
-# Cell 21: a HOME (or store) path that contains a space must not break
+# Cell 21: an unrelated user-installed skill under ~/.claude/skills or
+# ~/.agents/skills that happens to share a name with a bundled non-core
+# phase must NOT silently shadow the bundled SKILL.md. Only an
+# explicitly registered custom phase (in .nanostack/config.json's
+# custom_phases) is allowed to override. Codex caught this on the
+# PR 1 sixth pass.
+echo "[21] unrelated user-installed skill does not shadow bundled phase"
+SHADOW_HOME="$TMP_ROOT/shadow-home"
+SHADOW_PROJ="$TMP_ROOT/shadow-project"
+mkdir -p "$SHADOW_HOME/.claude/skills/feature" "$SHADOW_PROJ/.nanostack"
+cat > "$SHADOW_HOME/.claude/skills/feature/SKILL.md" <<'EOF'
+---
+name: feature
+description: unrelated user-installed skill (no registration)
+concurrency: write
+---
+body
+EOF
+cd "$SHADOW_PROJ"
+git init -q
+echo '{"current_phase":"feature"}' > "$SHADOW_PROJ/.nanostack/session.json"
+set +e
+HOME="$SHADOW_HOME" NANOSTACK_STORE="$SHADOW_PROJ/.nanostack" \
+  "$REPO/guard/bin/check-dangerous.sh" "touch x" >/dev/null 2>&1
+guard_rc=$?
+set -e
+cd "$PROJ"
+assert_eq "bundled feature still wins when no registered custom" "1" "$guard_rc"
+
+# Cell 22: a HOME (or store) path that contains a space must not break
 # the guard. The previous space-separated root iteration in
 # nano_phase_skill_path silently dropped path halves and made the
 # concurrency block a no-op for these users. Codex caught the
 # regression on PR 1 of the architecture round; this cell locks it.
-echo "[21] guard works when store path contains a space"
+echo "[22] guard works when store path contains a space"
 SPACE_TMP=$(mktemp -d /tmp/nanostack-space.XXXXXX)
 SPACE_HOME="$SPACE_TMP/home with space"
 SPACE_PROJ="$SPACE_TMP/nogit"

@@ -285,6 +285,34 @@ nano_phase_skill_path() {
       return 1
       ;;
   esac
+
+  # Membership in nano_custom_phases is the trust boundary: only an
+  # explicitly registered custom phase is allowed to search user-owned
+  # skill roots (skill_roots, store/skills, ~/.claude/skills, ~/.agents/
+  # skills). An unregistered phase that happens to share a name with an
+  # unrelated user-installed skill must NOT be silently shadowed,
+  # otherwise the bundled `feature`/`doctor` read-only behavior could
+  # be overridden by an arbitrary same-named directory. Codex flagged
+  # this on the PR 1 sixth pass.
+  local is_registered_custom=0
+  local _custom_list
+  _custom_list=$(nano_custom_phases "$config" 2>/dev/null)
+  case " $_custom_list " in
+    *" $phase "*) is_registered_custom=1 ;;
+  esac
+
+  if [ "$is_registered_custom" = "0" ]; then
+    # Not core, not registered as custom — fall back to repo-bundled
+    # non-core skills only. This preserves the old raw lookup behavior
+    # for feature/doctor/help/compound/start while preventing shadowing
+    # by unrelated user-installed skills with the same directory name.
+    if [ -n "$repo_root" ] && [ -d "$repo_root/$phase" ] && [ -f "$repo_root/$phase/SKILL.md" ]; then
+      printf '%s\n' "$repo_root/$phase"
+      return 0
+    fi
+    return 1
+  fi
+
   # Build a newline-delimited candidate list so paths with spaces (a
   # $HOME like "Hello World" or a store under "My Drive") survive
   # iteration. Previous form was a single space-separated string fed
@@ -352,19 +380,5 @@ nano_phase_skill_path() {
     fi
   done <<< "$candidates"
   unset -f _phases_append_root
-
-  # Repo-bundled non-core skills (feature, doctor, help, compound,
-  # start, ...) live at $NANOSTACK_ROOT/<phase>/SKILL.md. They are
-  # shipped with the repo and can be set as current_phase. The
-  # previous raw lookup in guard saw them directly; we preserve that
-  # behavior here as the LAST fallback so an explicitly registered
-  # custom skill with the same directory name wins (create-skill.sh
-  # does not reserve bundled names, so a user can legitimately
-  # register `feature` themselves). Codex flagged the original
-  # ordering on the PR 1 fifth pass.
-  if [ -n "$repo_root" ] && [ -d "$repo_root/$phase" ] && [ -f "$repo_root/$phase/SKILL.md" ]; then
-    printf '%s\n' "$repo_root/$phase"
-    return 0
-  fi
   return 1
 }
