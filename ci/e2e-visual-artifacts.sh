@@ -1269,6 +1269,45 @@ assert_not_contains "typo stack does NOT render default phases" "$HTML" 'data-ph
 HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack default)
 assert_contains "stack default falls back to project graph" "$HTML" 'data-phase="think"'
 
+# ─── Cell 22x: shared store does not surface other-project tamper (PR 3 pass 13) ─
+printf "\n  ${DIM}Cell 22x: shared store project isolation (PR 3 pass 13)${NC}\n"
+SHARED_STORE="$TMP_ROOT/cell22x-shared"
+mkdir -p "$SHARED_STORE"
+# Project A owns the store legitimately.
+PROJ_A="$TMP_ROOT/cell22x-projA"
+setup_project "$PROJ_A"
+(cd "$PROJ_A" && NANOSTACK_STORE="$SHARED_STORE" "$REPO/bin/save-artifact.sh" plan '{
+  "phase":"plan",
+  "summary":{"goal":"A","scope":"small","planned_files":[],"plan_approval":"manual"},
+  "context_checkpoint":{"summary":"x","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+# Some other project also saved here, then tampered. From project B's
+# perspective, this is foreign noise.
+PROJ_OTHER="$TMP_ROOT/cell22x-other"
+setup_project "$PROJ_OTHER"
+(cd "$PROJ_OTHER" && NANOSTACK_STORE="$SHARED_STORE" "$REPO/bin/save-artifact.sh" plan '{
+  "phase":"plan",
+  "summary":{"goal":"OTHER","scope":"small","planned_files":[],"plan_approval":"manual"},
+  "context_checkpoint":{"summary":"x","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+OTHER_PLAN=$(ls -t "$SHARED_STORE/plan/"*.json | head -1)
+jq 'del(.integrity)' "$OTHER_PLAN" > "$OTHER_PLAN.tmp" && mv "$OTHER_PLAN.tmp" "$OTHER_PLAN"
+
+# Project B renders its own journal against the shared store. It is
+# NOT the same git-root, so the store is "shared" from B's view.
+PROJ_B="$TMP_ROOT/cell22x-projB"
+setup_project "$PROJ_B"
+export NANOSTACK_STORE="$SHARED_STORE"
+HTML=$(cd "$PROJ_B" && "$REPO/bin/render-artifact.sh" journal --today)
+# Project B has no plan; the row should say missing, NOT surface the
+# OTHER project's tampered plan.
+assert_contains "B's journal shows plan as missing" "$HTML" "No artifact found"
+assert_not_contains "B's journal does NOT surface OTHER project's tampered plan" "$HTML" "OTHER"
+# Strict must also pass (no tampered source attributed to B).
+assert_exit "B's journal --strict succeeds despite shared-store tamper" 0 \
+  sh -c "cd '$PROJ_B' && '$REPO/bin/render-artifact.sh' journal --today --strict"
+unset NANOSTACK_STORE
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"

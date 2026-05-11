@@ -501,6 +501,28 @@ _latest_safe_artifact_for_stack() {
   [ -d "$dir" ] || return 0
   local project_root
   project_root="$(pwd)"
+  # Codex PR 3 pass 13: in a shared store (e.g. $HOME/.nanostack),
+  # other projects' tampered artifacts must not pollute this
+  # project's stack rows. Surface tamper aggressively ONLY when the
+  # store is project-local (the git-root/.nanostack path); for a
+  # shared store, require .project to match. Canonicalize both
+  # paths so macOS /tmp -> /private/tmp does not falsely report a
+  # mismatch.
+  local store_is_local=false
+  local git_root store_canon root_canon
+  git_root=$(git -C "$project_root" rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -n "$git_root" ]; then
+    if command -v realpath >/dev/null 2>&1; then
+      store_canon=$(realpath "$NANOSTACK_STORE" 2>/dev/null || echo "$NANOSTACK_STORE")
+      root_canon=$(realpath "$git_root" 2>/dev/null || echo "$git_root")
+    else
+      store_canon="$NANOSTACK_STORE"
+      root_canon="$git_root"
+    fi
+    if [ "$store_canon" = "$root_canon/.nanostack" ]; then
+      store_is_local=true
+    fi
+  fi
   # shellcheck disable=SC2012
   local candidates
   candidates=$(ls -1t "$dir"/*.json 2>/dev/null | head -30)
@@ -510,11 +532,11 @@ _latest_safe_artifact_for_stack() {
     [ -z "$f" ] && continue
     local t
     t=$(nano_artifact_trust "$f" 2>/dev/null || echo "not_found")
-    # Codex PR 3 pass 7: surface BOTH integrity_missing and
-    # integrity_mismatch before the project filter. A combined
-    # .integrity-strip + .project-flip attack would otherwise leave
-    # the artifact as "missing" and slip past aggregate --strict.
-    if [ "$t" = "integrity_mismatch" ] || [ "$t" = "integrity_missing" ]; then
+    # In a project-local store, any tampered file is suspect because
+    # no one else writes there. In a shared store, only consider it
+    # ours if .project matches.
+    if [ "$store_is_local" = true ] && \
+       { [ "$t" = "integrity_mismatch" ] || [ "$t" = "integrity_missing" ]; }; then
       printf '%s\n' "$f"
       return 0
     fi
@@ -938,6 +960,27 @@ render_journal_body() {
     local dir="$NANOSTACK_STORE/$ph"
     [ -d "$dir" ] || return 0
     local project_root="$project_path"
+    # Codex PR 3 pass 13: only surface tamper aggressively when the
+    # store is project-local (git-root/.nanostack). For a shared
+    # $HOME/.nanostack store, require .project to match so other
+    # projects' tampered artifacts cannot pollute this journal.
+    # Canonicalize both paths via realpath so macOS /tmp ->
+    # /private/tmp does not produce a false mismatch.
+    local store_is_local=false
+    local git_root store_canon root_canon
+    git_root=$(git -C "$project_root" rev-parse --show-toplevel 2>/dev/null || true)
+    if [ -n "$git_root" ]; then
+      if command -v realpath >/dev/null 2>&1; then
+        store_canon=$(realpath "$NANOSTACK_STORE" 2>/dev/null || echo "$NANOSTACK_STORE")
+        root_canon=$(realpath "$git_root" 2>/dev/null || echo "$git_root")
+      else
+        store_canon="$NANOSTACK_STORE"
+        root_canon="$git_root"
+      fi
+      if [ "$store_canon" = "$root_canon/.nanostack" ]; then
+        store_is_local=true
+      fi
+    fi
     # shellcheck disable=SC2012
     local candidates
     candidates=$(ls -1 "$dir"/"$dc"-*.json 2>/dev/null | sort -r)
@@ -945,20 +988,13 @@ render_journal_body() {
     local f
     while IFS= read -r f; do
       [ -z "$f" ] && continue
-      # Trust check first: a same-day candidate whose hash does not
-      # match must surface as tampered even if .project changed.
-      # Codex PR 3 pass 7: surface BOTH integrity_missing and
-      # integrity_mismatch so a combined .integrity-strip +
-      # .project-flip cannot leave the row as "missing" and slip past
-      # aggregate --strict.
       local t
       t=$(nano_artifact_trust "$f" 2>/dev/null || echo "not_found")
-      if [ "$t" = "integrity_mismatch" ] || [ "$t" = "integrity_missing" ]; then
+      if [ "$store_is_local" = true ] && \
+         { [ "$t" = "integrity_mismatch" ] || [ "$t" = "integrity_missing" ]; }; then
         printf '%s\n' "$f"
         return 0
       fi
-      # Otherwise require the project to match so foreign artifacts
-      # sharing the store do not pollute our journal.
       if jq -e --arg p "$project_root" '.project == $p' "$f" >/dev/null 2>&1; then
         printf '%s\n' "$f"
         return 0
