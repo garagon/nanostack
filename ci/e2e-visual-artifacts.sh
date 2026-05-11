@@ -248,6 +248,13 @@ assert_exit "--out outside visual root exits 4" 4 \
   sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan --latest --out /tmp/outside.html"
 assert_exit "--out relative path exits 4" 4 \
   sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan --latest --out foo.html"
+# PR 1 pass 2 regression: --out with .. that escapes visual/ through a
+# missing segment must be rejected even though every "existing
+# ancestor" lies inside the visual root.
+assert_exit "--out with .. escape exits 4 (PR 1 pass 2 regression)" 4 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan --latest --out '$NANOSTACK_STORE/visual/new/../../outside.html'"
+# Confirm the escape did NOT leave a file behind outside visual/.
+assert_true "no escaped file at .nanostack/outside.html" sh -c "[ ! -f '$NANOSTACK_STORE/outside.html' ]"
 # Inside the visual root should work.
 INSIDE="$NANOSTACK_STORE/visual/plan/explicit.html"
 mkdir -p "$(dirname "$INSIDE")"

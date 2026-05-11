@@ -99,9 +99,50 @@ nano_visual_assert_safe_root() {
   return 0
 }
 
-# Refuse output paths that escape the visual root. We compare the
-# canonical path of the parent directory (the file may not exist yet)
-# against the canonical visual root. Both are made absolute first.
+# Lexically normalize an absolute path: resolve "." and ".." components
+# without touching the filesystem. This defeats --out escapes through
+# missing directory segments followed by ".." (codex caught the gap
+# on PR 1 pass 2: a path like .../visual/new/../../outside.html passed
+# the previous "walk up to nearest existing ancestor" check because
+# the missing 'new' segment never appeared on disk for realpath to
+# resolve, leaving the comparison anchored at visual/).
+#
+# This implementation is pure shell so it runs on the same Bash 3.2
+# that ships with macOS without depending on `realpath -m`.
+nano_visual_normalize_path() {
+  local raw="$1"
+  case "$raw" in
+    /*) ;;
+    *) raw="$PWD/$raw" ;;
+  esac
+  local out=""
+  local IFS=/
+  # shellcheck disable=SC2086
+  set -- $raw
+  local part
+  for part in "$@"; do
+    case "$part" in
+      ""|.) ;;
+      ..)
+        # Pop the last segment from $out if any.
+        if [ -n "$out" ]; then
+          out="${out%/*}"
+        fi
+        ;;
+      *)
+        out="$out/$part"
+        ;;
+    esac
+  done
+  [ -z "$out" ] && out="/"
+  printf '%s\n' "$out"
+}
+
+# Refuse output paths that escape the visual root after lexical
+# normalization. The visual root is canonicalized through realpath
+# when present (so a real-but-non-symlinked root resolves cleanly);
+# the caller path is normalized lexically because it may include
+# directories that do not exist yet.
 nano_visual_assert_safe_output() {
   local path="$1"
   local root
@@ -113,33 +154,24 @@ nano_visual_assert_safe_output() {
       return 4
       ;;
   esac
-  local parent
-  parent="$(dirname "$path")"
-  # Resolve the parent directory if it exists; otherwise resolve its
-  # nearest existing ancestor. We do not want to require the parent
-  # to pre-exist because the renderer mkdir -p's it later, but we do
-  # want to defeat ../ escapes.
-  local probe="$parent"
-  while [ -n "$probe" ] && [ ! -d "$probe" ]; do
-    probe="$(dirname "$probe")"
-    [ "$probe" = "/" ] && break
-  done
-  local probe_canon root_canon
-  if command -v realpath >/dev/null 2>&1; then
-    probe_canon="$(realpath "$probe" 2>/dev/null || echo "$probe")"
-    root_canon="$(realpath "$root" 2>/dev/null || echo "$root")"
-  else
-    probe_canon="$(cd "$probe" 2>/dev/null && pwd || echo "$probe")"
-    if [ -d "$root" ]; then
-      root_canon="$(cd "$root" 2>/dev/null && pwd || echo "$root")"
-    else
-      root_canon="$root"
-    fi
-  fi
-  case "$probe_canon" in
-    "$root_canon"|"$root_canon"/*) return 0 ;;
+
+  # Both root and path are normalized lexically so a symlinked
+  # filesystem path (for example /tmp -> /private/tmp on macOS) does
+  # not produce a false mismatch: realpath would expand the root and
+  # not the not-yet-existing path, and the prefix check would fail.
+  # The renderer's threat model treats the visual root's symlink
+  # status as the one filesystem property worth checking
+  # (nano_visual_assert_safe_root); deeper symlink chains are out of
+  # scope for the path-safety check, which is purely about defeating
+  # ".." escape and absolute-path misrouting in --out.
+  local path_canon root_canon
+  path_canon="$(nano_visual_normalize_path "$path")"
+  root_canon="$(nano_visual_normalize_path "$root")"
+
+  case "$path_canon" in
+    "$root_canon"/*) return 0 ;;
     *)
-      echo "render-artifact: refusing to write outside $root_canon: $path" >&2
+      echo "render-artifact: refusing to write outside $root_canon: $path (normalized: $path_canon)" >&2
       return 4
       ;;
   esac
