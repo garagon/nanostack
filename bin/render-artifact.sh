@@ -1140,6 +1140,18 @@ render_stack_body() {
   ' >/dev/null 2>&1; then
     graph_validation_error="every node needs string .name and array-of-string .depends_on"
   elif ! printf '%s' "$graph_json" | jq -e '
+    # Phase names must match [A-Za-z0-9_-]+ so shell word-splitting
+    # in the depth/SVG loops cannot break them apart, and a `find`
+    # under .nanostack/<phase>/ stays well-defined. Codex PR 3 pass 8.
+    all(.[]; .name | test("^[A-Za-z0-9_-]+$"))
+  ' >/dev/null 2>&1; then
+    graph_validation_error="phase names must match [A-Za-z0-9_-]+ (no whitespace or path separators)"
+  elif ! printf '%s' "$graph_json" | jq -e '
+    # Reject duplicate names; otherwise dependencies are ambiguous.
+    ([.[].name] | length) == ([.[].name] | unique | length)
+  ' >/dev/null 2>&1; then
+    graph_validation_error="phase_graph has duplicate node names"
+  elif ! printf '%s' "$graph_json" | jq -e '
     . as $g
     | ([.[].name] | unique) as $names
     | all(.[]; (.depends_on // []) | all(. as $d | $names | index($d) != null))

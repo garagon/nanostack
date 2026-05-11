@@ -1167,6 +1167,46 @@ CFG
 HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack self_cycle)
 assert_contains "self-cycle rejected" "$HTML" "cycle"
 
+# ─── Cell 22s: malformed phase names rejected (PR 3 pass 8) ──
+printf "\n  ${DIM}Cell 22s: malformed phase names rejected (PR 3 pass 8)${NC}\n"
+PROJ="$TMP_ROOT/cell22s"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+
+# Whitespace in phase name.
+mkdir -p "$NANOSTACK_STORE/stacks/spacename"
+cat > "$NANOSTACK_STORE/stacks/spacename/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"spacename",
+  "phase_graph": [
+    {"name":"license audit","depends_on":[]}
+  ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack spacename)
+assert_contains "phase name with whitespace rejected" "$HTML" "phase names must match"
+
+# Path separator in phase name.
+mkdir -p "$NANOSTACK_STORE/stacks/slashname"
+cat > "$NANOSTACK_STORE/stacks/slashname/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"slashname",
+  "phase_graph": [
+    {"name":"bad/name","depends_on":[]}
+  ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack slashname)
+assert_contains "phase name with slash rejected" "$HTML" "phase names must match"
+
+# Duplicate names.
+mkdir -p "$NANOSTACK_STORE/stacks/dup"
+cat > "$NANOSTACK_STORE/stacks/dup/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"dup",
+  "phase_graph": [
+    {"name":"plan","depends_on":[]},
+    {"name":"plan","depends_on":[]}
+  ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack dup)
+assert_contains "duplicate phase names rejected" "$HTML" "duplicate node names"
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"
