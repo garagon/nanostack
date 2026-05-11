@@ -374,6 +374,36 @@ cmd_phase_start() {
      .last_updated = $date' "$SESSION_FILE" > "${SESSION_FILE}.tmp"
   mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
 
+  # Recompute ready_phases and next_phase so they exclude the phase
+  # we just moved to in_progress. Without this, a custom graph with
+  # multiple ready phases would keep advertising the active one and
+  # downstream schedulers could start it twice. Codex caught the
+  # stale-cache bug on the PR 4 third review pass.
+  if declare -F nano_phase_ready_from_graph >/dev/null 2>&1; then
+    local graph completed_now in_progress_now ready_list ready_json next_phase_value
+    graph=$(jq -c '.phase_graph // empty' "$SESSION_FILE" 2>/dev/null || echo "")
+    if [ -z "$graph" ] || [ "$graph" = "null" ] || [ "$graph" = "[]" ]; then
+      if declare -F nano_phase_graph_json >/dev/null 2>&1; then
+        graph=$(nano_phase_graph_json 2>/dev/null || echo "")
+      fi
+    fi
+    if [ -n "$graph" ] && [ "$graph" != "null" ] && [ "$graph" != "[]" ]; then
+      completed_now=$(jq -c '[(.phase_log // [])[] | select(.status == "completed") | .phase] | unique' "$SESSION_FILE" 2>/dev/null || echo "[]")
+      in_progress_now=$(jq -c '[(.phase_log // [])[] | select(.status == "in_progress") | .phase] | unique' "$SESSION_FILE" 2>/dev/null || echo "[]")
+      ready_list=$(nano_phase_ready_from_graph "$graph" "$completed_now" "$in_progress_now" 2>/dev/null || true)
+      ready_json="[]"
+      next_phase_value="null"
+      if [ -n "$ready_list" ]; then
+        ready_json=$(echo "$ready_list" | jq -R . | jq -sc 'map(select(length > 0))')
+        next_phase_value=$(echo "$ready_json" | jq -c '.[0] // "null"')
+      fi
+      jq --argjson ready "$ready_json" --argjson next "$next_phase_value" \
+        '.ready_phases = $ready | .next_phase = (if ($next | type) == "string" then $next else null end)' \
+        "$SESSION_FILE" > "${SESSION_FILE}.tmp"
+      mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
+    fi
+  fi
+
   rm -rf "$lockdir" 2>/dev/null || true
 
   audit_log "phase_start" "$phase"

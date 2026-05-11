@@ -361,6 +361,50 @@ session_next=$(jq -r '.next_phase' "$NANOSTACK_STORE/session.json")
 assert_eq "next-step agrees with session.json next_phase" \
   "$session_next" "$(echo "$out" | jq -r '.next_phase')"
 
+# Cell 9c: starting one of several ready phases drops it from
+# ready_phases so downstream schedulers do not start it twice. Codex
+# flagged the stale cache on the PR 4 third review pass: in a graph
+# where plan unblocks audit-a and audit-b in parallel, starting
+# audit-a used to leave session.json saying both were ready.
+echo "[9c] phase-start removes the active phase from ready_phases"
+new_project "cell9c-parallel"
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "custom_phases": ["audit-a","audit-b"],
+  "phase_graph": [
+    {"name":"think","depends_on":[]},
+    {"name":"plan","depends_on":["think"]},
+    {"name":"build","depends_on":["plan"]},
+    {"name":"audit-a","depends_on":["build"]},
+    {"name":"audit-b","depends_on":["build"]},
+    {"name":"ship","depends_on":["audit-a","audit-b"]}
+  ]
+}
+EOF
+mkdir -p "$NANOSTACK_STORE/skills/audit-a" "$NANOSTACK_STORE/skills/audit-b"
+for skill in audit-a audit-b; do
+  cat > "$NANOSTACK_STORE/skills/$skill/SKILL.md" <<EOF
+---
+name: $skill
+description: custom
+concurrency: read
+---
+EOF
+done
+"$SESSION_SH" init development >/dev/null
+for ph in think plan; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+ready_before=$(jq -c '.ready_phases | sort' "$NANOSTACK_STORE/session.json")
+assert_eq "after plan: both audits are ready" '["audit-a","audit-b"]' "$ready_before"
+
+"$SESSION_SH" phase-start audit-a >/dev/null
+ready_after=$(jq -c '.ready_phases' "$NANOSTACK_STORE/session.json")
+next_after=$(jq -r '.next_phase' "$NANOSTACK_STORE/session.json")
+assert_eq "after starting audit-a: ready drops audit-a" '["audit-b"]' "$ready_after"
+assert_eq "after starting audit-a: next_phase points at audit-b" "audit-b" "$next_after"
+
 # Cell 10: default sprint user_message remains exactly the historical
 # wording. No regression for built-in flows.
 echo "[10] default sprint user_message is unchanged"
