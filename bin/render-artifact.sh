@@ -463,6 +463,10 @@ jq -n \
   }' > "$TMP_MFST"
 
 if [ "$MANIFEST_ONLY" = true ]; then
+  # Codex PR 1 pass 9: the manifest-only branch must not leave the
+  # mktemp'd HTML temp file behind. Clean it before disabling the
+  # cleanup trap.
+  rm -f "$TMP_HTML"
   mv "$TMP_MFST" "$MANIFEST_PATH"
   trap - EXIT
   echo "$MANIFEST_PATH"

@@ -289,6 +289,9 @@ assert_true "manifest file exists" test -f "$MFST_OUT"
 # No HTML should be written in --manifest-only mode.
 HTML_COUNT=$(find "$NANOSTACK_STORE/visual/plan" -maxdepth 1 -name "*.html" 2>/dev/null | wc -l | tr -d ' ')
 assert_true "no html written under manifest-only" sh -c "[ '$HTML_COUNT' = '0' ]"
+# PR 1 pass 9: no temp file leftovers either.
+TMP_LEFTOVER=$(find "$NANOSTACK_STORE/visual" -name "*.tmp.*" 2>/dev/null | wc -l | tr -d ' ')
+assert_true "no tmp leftover under manifest-only" sh -c "[ '$TMP_LEFTOVER' = '0' ]"
 
 # ─── Cell 8: phase mismatch / reserved-PR-2 phases ──────────
 printf "\n  ${DIM}Cell 8: phase mismatch and reserved-PR-2 phases${NC}\n"
