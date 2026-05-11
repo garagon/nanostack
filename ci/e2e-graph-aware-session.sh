@@ -471,6 +471,40 @@ assert_eq "build in_progress: ready_phases is empty" '[]' "$ready_during_build"
 ready_after_build=$(jq -c '.ready_phases | sort' "$NANOSTACK_STORE/session.json")
 assert_eq "build completed: post-build phases ready" \
   '["qa","review","security"]' "$ready_after_build"
+# Cell 9g: a custom graph where ship has no post-build gates (only
+# depends on build/plan/think) must NOT report can_ship=true on a
+# fresh session. The previous form computed can_ship from "required
+# set minus completed" — empty required set collapsed to true even
+# before think/plan ran. Codex caught the premature-ship hazard on
+# the PR 4 eighth review pass.
+echo "[9g] ship-on-build-only graph gates can_ship on ship readiness"
+new_project "cell9g-no-gates"
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "phase_graph": [
+    {"name":"think","depends_on":[]},
+    {"name":"plan","depends_on":["think"]},
+    {"name":"build","depends_on":["plan"]},
+    {"name":"ship","depends_on":["build"]}
+  ]
+}
+EOF
+"$SESSION_SH" init development >/dev/null
+out=$("$NEXT_STEP" --json 2>/dev/null)
+assert_eq "fresh ship-on-build graph: can_ship = false" "false" \
+  "$(echo "$out" | jq -r '.can_ship')"
+assert_eq "fresh ship-on-build graph: next_phase = think" "think" \
+  "$(echo "$out" | jq -r '.next_phase')"
+# After think + plan, build auto-promotes and ship becomes ready
+for ph in think plan; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+out=$("$NEXT_STEP" --json 2>/dev/null)
+assert_eq "after plan: can_ship = true (ship is ready)" "true" \
+  "$(echo "$out" | jq -r '.can_ship')"
+assert_eq "after plan: next_phase = ship" "ship" \
+  "$(echo "$out" | jq -r '.next_phase')"
 
 # Cell 10: default sprint user_message remains exactly the historical
 # wording. No regression for built-in flows.

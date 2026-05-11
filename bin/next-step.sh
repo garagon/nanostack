@@ -125,22 +125,20 @@ fi
 # reports can_ship=true. Codex flagged the dependency-vs-display
 # mix-up on the PR 4 fifth review pass.
 compute_can_ship_from_session() {
-  # The `unique` on the completed-set is fine (set comparison) but the
-  # required-set is built by walking the graph in declared order to
-  # match required_before_ship's external contract. Both filters
-  # produce sets; the resulting boolean is order-insensitive.
+  # can_ship means "ship is actually ready to run or has already
+  # completed". The previous form computed it from "required set
+  # minus completed", but for a graph where ship depends only on
+  # think/plan/build (no post-build gates), the required set was
+  # empty after filtering and can_ship was true even before any
+  # phase ran. Codex caught this on the PR 4 eighth review pass.
+  # Reading from the session's ready_phases (which session.sh keeps
+  # current via nano_phase_ready_from_graph) is the single source
+  # of truth: ship is ready exactly when its declared deps are all
+  # completed and ship itself is neither completed nor in_progress.
   jq -r '
-    (.phase_graph // []) as $g
-    | def ancestors($name):
-        ($g | map(select(.name == $name)) | first // {depends_on:[]}).depends_on as $deps
-        | $deps + ($deps | map(ancestors(.)) | add // []);
-      ([.phase_log[]? | select(.status == "completed") | .phase] | unique) as $done
-      | (ancestors("ship")) as $ancs
-      | ([$g[].name
-            | select(. as $n | $ancs | any(. == $n))
-            | select(. != "think" and . != "plan" and . != "build")
-         ]) as $required
-      | ($required - $done | length == 0)
+    ((.ready_phases // []) | any(. == "ship")) as $ship_ready
+    | ([.phase_log[]? | select(.phase == "ship" and .status == "completed")] | length > 0) as $ship_done
+    | ($ship_ready or $ship_done)
   ' "$SESSION_FILE" 2>/dev/null || echo "false"
 }
 
@@ -241,10 +239,14 @@ if [ "$HAS_GRAPH_AWARE_SESSION" = "1" ]; then
           | select(. as $n | $ancs | any(. == $n))
           | select(. != "think" and . != "plan" and . != "build")
         ]
-  ' "$SESSION_FILE" 2>/dev/null || echo '["review","security","qa"]')
-  # Empty filter result (e.g. session has no phase_graph) keeps the
-  # legacy default so existing consumers do not see an empty array.
-  if [ -z "$REQUIRED_BEFORE_SHIP_JSON" ] || [ "$REQUIRED_BEFORE_SHIP_JSON" = "[]" ]; then
+  ' "$SESSION_FILE" 2>/dev/null)
+  # Only fall back to the legacy default when the jq filter failed
+  # outright (empty stdout). A legitimate empty array means the graph
+  # really has no post-build gates ahead of ship, which is unusual
+  # but valid; we keep it as-is so consumers see the graph's truth.
+  # The legacy default applies only when there is no session-level
+  # graph to read from.
+  if [ -z "$REQUIRED_BEFORE_SHIP_JSON" ]; then
     REQUIRED_BEFORE_SHIP_JSON='["review","security","qa"]'
   fi
 fi
