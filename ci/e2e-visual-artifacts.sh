@@ -1388,6 +1388,54 @@ assert_true "first source path is the stack file" \
 TOTAL=$(jq -r '.source_artifacts | length' "$MFST")
 assert_true "manifest has 11 sources (1 stack def + 10 phases)" sh -c "[ '$TOTAL' = '11' ]"
 
+# ─── Cell 23b: stack sorts by filename, not mtime (PR 3 pass 17) ─
+printf "\n  ${DIM}Cell 23b: stack sort by filename (PR 3 pass 17)${NC}\n"
+PROJ="$TMP_ROOT/cell23b"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+# Save plan first.
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+sleep 1
+# Save plan AGAIN to get a newer-timestamp file.
+(cd "$PROJ" && NANOSTACK_STORE="$NANOSTACK_STORE" "$REPO/bin/save-artifact.sh" plan '{
+  "phase":"plan",
+  "summary":{"goal":"NEWER","scope":"small","planned_files":[],"plan_approval":"manual"},
+  "context_checkpoint":{"summary":"x","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+NEWER=$(ls "$NANOSTACK_STORE/plan/"*.json | sort -r | head -1)
+OLDER=$(ls "$NANOSTACK_STORE/plan/"*.json | sort | head -1)
+# Touch the older file so its mtime is newer than the new one.
+touch "$OLDER"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+# The stack table should reference the file with the LATER FILENAME,
+# not the touched OLDER one.
+assert_contains "stack picks newer-by-filename plan" "$HTML" "$NEWER"
+
+# ─── Cell 23c: stack default records .nanostack/config.json (PR 3 pass 17) ─
+printf "\n  ${DIM}Cell 23c: default-stack manifest records config.json (PR 3 pass 17)${NC}\n"
+PROJ="$TMP_ROOT/cell23c"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+cat > "$NANOSTACK_STORE/config.json" <<'CFG'
+{
+  "schema_version": "1",
+  "custom_phases": ["audit"],
+  "phase_graph": [
+    {"name": "think", "depends_on": []},
+    {"name": "build", "depends_on": ["think"]},
+    {"name": "audit", "depends_on": ["build"]},
+    {"name": "ship",  "depends_on": ["audit"]}
+  ]
+}
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack default)
+MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*stack*default*.manifest.json | head -1)
+FIRST_PATH=$(jq -r '.source_artifacts[0].path' "$MFST")
+assert_true "default stack manifest records config.json" \
+  sh -c "echo '$FIRST_PATH' | grep -q '\.nanostack/config\.json$'"
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"

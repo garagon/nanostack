@@ -528,9 +528,16 @@ _latest_safe_artifact_for_stack() {
   # artifacts, the cap would hide this project's older legitimate
   # (or tampered) artifact and the stack row would render as missing.
   # The early-return inside the loop keeps the walk bounded.
+  #
+  # Codex PR 3 pass 17: sort by FILENAME descending (not mtime).
+  # save-artifact.sh names files YYYYMMDD-HHMMSS.json, so the
+  # filename is the canonical ordering. A copied/restored/touched
+  # artifact gets a fresh mtime but the same filename timestamp; the
+  # per-phase resolver and journal sort by filename, so the stack
+  # helper should too for consistent results.
   # shellcheck disable=SC2012
   local candidates
-  candidates=$(ls -1t "$dir"/*.json 2>/dev/null)
+  candidates=$(ls -1 "$dir"/*.json 2>/dev/null | sort -r)
   [ -z "$candidates" ] && return 0
   local f
   while IFS= read -r f; do
@@ -1346,14 +1353,21 @@ render_stack_body() {
   # escaped double quotes; a project path with a backslash or
   # control character produced invalid JSON.
   #
-  # Codex PR 3 pass 16: include the stack definition file itself as
-  # the first source so manifest consumers can spot a change to the
-  # graph. Stack files don't carry .integrity so we record them as
-  # not_applicable (trust is meaningful only for artifact JSON).
+  # Codex PR 3 pass 16: include the stack definition file as the
+  # first source. Pass 17: when `stack default` falls back to
+  # .nanostack/config.json via nano_phase_graph_json, record THAT
+  # config file as the source instead. Either way the manifest
+  # captures the file that determined the rendered DAG.
   sources='[]'
+  local config_src=""
   if [ -n "$stack_file" ] && [ -f "$stack_file" ]; then
+    config_src="$stack_file"
+  elif [ "$name" = "default" ] && [ -f "$NANOSTACK_STORE/config.json" ]; then
+    config_src="$NANOSTACK_STORE/config.json"
+  fi
+  if [ -n "$config_src" ]; then
     local sf_abs
-    sf_abs=$(nano_resolve_abs "$stack_file")
+    sf_abs=$(nano_resolve_abs "$config_src")
     sources=$(printf '%s' "$sources" | jq -c \
       --arg phase "stack:$name" \
       --arg path "$sf_abs" \
