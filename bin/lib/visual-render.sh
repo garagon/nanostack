@@ -382,6 +382,10 @@ nano_visual_page_start() {
     .chip.sev-ok { color: var(--ok); border-color: var(--ok); }
     .pr-link { color: var(--info); }
     .unsafe-url { color: var(--bad); font-family: monospace; }
+    .copy-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .copy-btn { background: var(--panel-2); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit; font-size: 0.9rem; }
+    .copy-btn:hover, .copy-btn:focus { background: var(--panel); border-color: var(--info); color: var(--info); }
+    .copy-status { color: var(--muted); font-size: 0.85rem; }
   </style>
 </head>
 <body>

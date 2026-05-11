@@ -38,12 +38,18 @@ check_absent() {
   local name="$1"; local pattern="$2"; shift 2
   local files=("$@")
   # `-e -- ` so a pattern starting with `-` (e.g. `--no-session-sync`)
-  # is not interpreted as a grep flag.
-  if grep -nE -e "$pattern" -- "${files[@]}" >/dev/null 2>&1; then
+  # is not interpreted as a grep flag. Exclude comment lines (PR 4):
+  # documenting the forbidden APIs in comments is fine, only actual
+  # source uses fail the lint.
+  local hits
+  hits=$(grep -nE -e "$pattern" -- "${files[@]}" 2>/dev/null \
+    | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' \
+    || true)
+  if [ -n "$hits" ]; then
     FAIL=$((FAIL+1))
     printf "  ${RED}FAIL${NC}  %s\n" "$name"
     printf "         ${DIM}pattern: %s${NC}\n" "$pattern"
-    grep -nE -e "$pattern" -- "${files[@]}" | sed 's/^/         /' || true
+    printf '%s\n' "$hits" | sed 's/^/         /'
   else
     PASS=$((PASS+1))
     printf "  ${GREEN}OK${NC}    %s\n" "$name"
@@ -200,6 +206,33 @@ check_absent "no SVG <image href" \
 # inside SVG which sidesteps the CSP and escape contract).
 check_absent "no SVG <foreignObject" \
   '<foreignObject' "bin/render-artifact.sh" "bin/lib/visual-render.sh"
+
+# 17. PR 4: interactive copy-only contract. The inline script body
+# must use ONLY navigator.clipboard.writeText. Everything that
+# could exfiltrate or persist is forbidden in renderer code.
+check_present "render_copy_actions uses navigator.clipboard.writeText" \
+  'navigator\.clipboard\.writeText' "bin/render-artifact.sh"
+check_present "render_copy_actions escapes </ in JS payloads" \
+  '_js_safe_for_script' "bin/render-artifact.sh"
+check_present "interactive CSP defines script-src" \
+  "script-src 'unsafe-inline'" "bin/lib/visual-render.sh"
+
+# 18. PR 4: confirm the static CSP path does NOT include
+# script-src. The shared helper has two arms in nano_visual_csp;
+# only the interactive arm should mention script-src.
+check_present "nano_visual_csp has separate static and interactive arms" \
+  'interactive\)' "bin/lib/visual-render.sh"
+
+# 19. PR 4: no forbidden APIs anywhere in the renderer code that
+# could end up in the rendered HTML. This re-runs the absence sweep
+# already in check 2-4 but explicitly under the interactive-mode
+# expansion lens.
+check_absent "no document.write" \
+  'document\.write' "bin/render-artifact.sh" "bin/lib/visual-render.sh"
+check_absent "no window.open" \
+  'window\.open' "bin/render-artifact.sh" "bin/lib/visual-render.sh"
+check_absent "no addEventListener for form submission" \
+  "addEventListener\\(['\"]submit" "bin/render-artifact.sh" "bin/lib/visual-render.sh"
 
 TOTAL=$((PASS+FAIL))
 printf "\n  %s/%s checks passed\n" "$PASS" "$TOTAL"

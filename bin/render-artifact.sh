@@ -10,10 +10,12 @@
 #                              [--interactive] [--out <path>]
 #                              [--manifest-only]
 #
-# PR 1 scope: /plan renderer + manifest + safety locks. Other phases
-# exit 1 with a clear "phase not yet supported" message; PR 2 wires
-# think/review/security/qa/ship. journal/stack are reserved for PR 3
-# (exit 2). --interactive is reserved for PR 4 (exit 2).
+# PR 1 scope: /plan renderer + manifest + safety locks.
+# PR 2 wires think/review/security/qa/ship.
+# PR 3 wires journal/stack aggregate views.
+# PR 4 adds --interactive for copy-only buttons on /plan and /review
+# (copy as prompt / Markdown / JSON patch). No filesystem writes,
+# no network calls, no form submission.
 
 set -e
 
@@ -49,7 +51,10 @@ PR 1+2+3 scope:
 
 Flags:
   --strict                   require nano_artifact_trust == verified
-  --interactive              reserved for PR 4 (exit 2)
+  --interactive              enable copy-only interactive controls (PR 4 scope:
+                             /plan and /review get "copy as prompt", "copy as Markdown",
+                             and "copy as JSON patch" buttons; no filesystem writes,
+                             no network calls, no form submission)
   --out <path>               write HTML to explicit path under \$NANOSTACK_STORE/visual
   --manifest-only            write manifest only, skip HTML
   --latest                   resolve via find-artifact.sh (default if no path)
@@ -89,10 +94,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --latest)         USE_LATEST=true ;;
     --strict)         STRICT=true ;;
-    --interactive)
-      echo "render-artifact: --interactive is reserved for PR 4 (copy-only interactive mode)" >&2
-      exit 2
-      ;;
+    --interactive)  INTERACTIVE=true ;;
     --manifest-only)  MANIFEST_ONLY=true ;;
     --out)
       shift
@@ -487,6 +489,36 @@ HTML
     printf '      </ul>\n'
   fi
   printf '    </section>\n'
+
+  # PR 4 interactive: copy buttons that export the plan back to the
+  # agent in the requested shape. Built from the normalized JSON so
+  # malformed shapes still produce useful payloads.
+  if [ "${INTERACTIVE:-false}" = true ]; then
+    local plan_prompt plan_markdown plan_json_patch
+    plan_prompt=$(printf '%s' "$norm" | jq -r '
+      "Approve the plan and continue.\n" +
+      "Goal: " + (.summary.goal // "Not recorded") + "\n" +
+      "Scope: " + (.summary.scope // "Not recorded") + "\n" +
+      "Planned files:\n  - " + ((.summary.planned_files // []) | join("\n  - ")) + "\n" +
+      "Risks:\n  - " + ((.summary.risks // []) | join("\n  - "))
+    ')
+    plan_markdown=$(printf '%s' "$norm" | jq -r '
+      "## Plan summary\n\n" +
+      "- **Goal:** " + (.summary.goal // "Not recorded") + "\n" +
+      "- **Scope:** " + (.summary.scope // "Not recorded") + "\n" +
+      "- **Approval:** " + (.summary.plan_approval // "Not recorded") + "\n\n" +
+      "### Planned files\n\n" +
+      ((.summary.planned_files // []) | map("- `" + . + "`") | join("\n"))
+    ')
+    plan_json_patch=$(printf '%s' "$norm" | jq -c '{
+      action: "plan.approve",
+      goal: .summary.goal,
+      scope: .summary.scope,
+      planned_files: .summary.planned_files,
+      out_of_scope: .summary.out_of_scope
+    }')
+    render_copy_actions "$plan_prompt" "$plan_markdown" "$plan_json_patch"
+  fi
 }
 
 # Shared helper: find the latest artifact for <phase>, surfacing
@@ -678,6 +710,40 @@ HTML
   render_findings_section "$norm" "Review findings"
 
   render_context_checkpoint "$norm"
+
+  # PR 4 interactive: review triage payloads. The agent can paste
+  # the prompt back to drive a re-review or accept the findings
+  # as-is.
+  if [ "${INTERACTIVE:-false}" = true ]; then
+    local review_prompt review_markdown review_json_patch
+    review_prompt=$(printf '%s' "$norm" | jq -r '
+      "Address the review findings before /ship.\n" +
+      "Summary: " + (.summary.blocking|tostring) + " blocking / " +
+                   (.summary.should_fix|tostring) + " should-fix / " +
+                   (.summary.nitpicks|tostring) + " nitpicks\n" +
+      "Scope drift: " + (.scope_drift.status // "unknown") + "\n" +
+      "Now-fix:\n  - " +
+      ((.findings // []) | map(select(.severity == "blocking" or .severity == "should_fix")) | map(.description) | join("\n  - "))
+    ')
+    review_markdown=$(printf '%s' "$norm" | jq -r '
+      "## Review findings\n\n" +
+      "| Severity | Count |\n|----|----|\n" +
+      "| Blocking | " + (.summary.blocking|tostring) + " |\n" +
+      "| Should fix | " + (.summary.should_fix|tostring) + " |\n" +
+      "| Nitpicks | " + (.summary.nitpicks|tostring) + " |\n" +
+      "| Positive | " + (.summary.positive|tostring) + " |\n\n" +
+      "### Now-fix\n\n" +
+      ((.findings // []) | map(select(.severity == "blocking" or .severity == "should_fix"))
+        | map("- **" + (.severity // "?") + "**: " + (.description // "")) | join("\n"))
+    ')
+    review_json_patch=$(printf '%s' "$norm" | jq -c '{
+      action: "review.triage",
+      blocking_ids: ((.findings // []) | map(select(.severity == "blocking") | .id)),
+      should_fix_ids: ((.findings // []) | map(select(.severity == "should_fix") | .id)),
+      scope_drift: .scope_drift.status
+    }')
+    render_copy_actions "$review_prompt" "$review_markdown" "$review_json_patch"
+  fi
 }
 
 render_security_body() {
@@ -895,6 +961,105 @@ render_findings_section() {
     printf '      </div>\n'
   done
   printf '    </section>\n'
+}
+
+# ─── Copy-only interactive controls (PR 4) ──────────────────
+#
+# Emits an actions card with three buttons (copy as prompt / copy as
+# Markdown / copy as JSON patch). Each button copies a pre-computed
+# payload to the clipboard. The script uses only
+# navigator.clipboard.writeText; no fetch, no XHR, no localStorage,
+# no form submission. CI lockes those forbidden APIs.
+#
+# Payloads are passed as JSON-encoded strings (via nano_json_string)
+# so embedded quotes, newlines, and control characters stay safe.
+# Each payload is also rendered as a <details><pre>...</pre> block
+# so the user can read and copy manually if the browser blocks
+# clipboard access (e.g. file:// without explicit permission).
+render_copy_actions() {
+  local prompt_payload="$1"
+  local markdown_payload="$2"
+  local json_payload="$3"
+  if [ "${INTERACTIVE:-false}" != true ]; then
+    return 0
+  fi
+
+  # Encode each payload as a JSON string literal so the inline JS
+  # can read it via JSON.parse. nano_json_string emits the full
+  # quoted form including the outer ". Critically: when embedding a
+  # JSON string INSIDE <script>...</script>, any `</` must be
+  # escaped to `<\/` because the HTML parser closes the script tag
+  # at the first literal `</script>` regardless of JS context. Any
+  # following content executes as a new <script> block. JSON.parse
+  # accepts the `<\/` form transparently, so this only hardens the
+  # surrounding HTML parser without changing the runtime payload.
+  _js_safe_for_script() {
+    sed 's|</|<\\/|g'
+  }
+  local p_js m_js j_js
+  p_js=$(printf '%s' "$prompt_payload" | nano_json_string | _js_safe_for_script)
+  m_js=$(printf '%s' "$markdown_payload" | nano_json_string | _js_safe_for_script)
+  j_js=$(printf '%s' "$json_payload" | nano_json_string | _js_safe_for_script)
+
+  # Visible escaped versions for the manual-copy <pre> blocks.
+  local p_html m_html j_html
+  p_html=$(printf '%s' "$prompt_payload" | nano_html_escape)
+  m_html=$(printf '%s' "$markdown_payload" | nano_html_escape)
+  j_html=$(printf '%s' "$json_payload" | nano_html_escape)
+
+  cat <<HTML
+    <section class="card" data-testid="copy-actions" data-interactive="1">
+      <h2>Copy back to the agent</h2>
+      <p class="muted">Local clipboard only. No data leaves your machine.</p>
+      <div class="copy-row">
+        <button type="button" class="copy-btn" data-payload-id="copy-prompt" data-format="prompt">Copy as prompt</button>
+        <button type="button" class="copy-btn" data-payload-id="copy-markdown" data-format="markdown">Copy as Markdown</button>
+        <button type="button" class="copy-btn" data-payload-id="copy-json" data-format="json-patch">Copy as JSON patch</button>
+        <span class="copy-status" data-testid="copy-status" aria-live="polite"></span>
+      </div>
+      <details>
+        <summary>Prompt payload (manual copy)</summary>
+        <pre data-testid="copy-prompt-pre">$p_html</pre>
+      </details>
+      <details>
+        <summary>Markdown payload (manual copy)</summary>
+        <pre data-testid="copy-markdown-pre">$m_html</pre>
+      </details>
+      <details>
+        <summary>JSON-patch payload (manual copy)</summary>
+        <pre data-testid="copy-json-pre">$j_html</pre>
+      </details>
+      <script>
+/* Interactive contract: clipboard write only. No fetch, no XHR, no
+   form submission, no storage, no eval. CI greps this file (and the
+   shared shell) for forbidden APIs. */
+(function () {
+  var payloads = {
+    "copy-prompt": $p_js,
+    "copy-markdown": $m_js,
+    "copy-json": $j_js
+  };
+  var buttons = document.querySelectorAll('button.copy-btn');
+  var status = document.querySelector('[data-testid="copy-status"]');
+  function announce(msg) { if (status) { status.textContent = msg; } }
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.getAttribute('data-payload-id');
+      var text = payloads[id] || '';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () { announce('Copied. Paste into the agent.'); },
+          function () { announce('Clipboard blocked. Use the manual copy below.'); }
+        );
+      } else {
+        announce('Clipboard API unavailable. Use the manual copy below.');
+      }
+    });
+  });
+})();
+      </script>
+    </section>
+HTML
 }
 
 # Shared helper for the context checkpoint card. Every core phase has
@@ -1563,7 +1728,9 @@ CREATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 # survives outside.
 if [ "$MANIFEST_ONLY" != true ]; then
   {
-    nano_visual_page_start "$PHASE" "$TRUST" "static"
+    csp_mode="static"
+    [ "$INTERACTIVE" = true ] && csp_mode="interactive"
+    nano_visual_page_start "$PHASE" "$TRUST" "$csp_mode"
 
     if [ "$SCHEMA_OK" = false ]; then
       printf '    <div class="schema-warning" data-testid="schema-warning">%s</div>\n' \
@@ -1618,7 +1785,7 @@ jq -n \
   --arg phase "$PHASE" \
   --argjson custom_phase false \
   --arg format "html" \
-  --argjson interactive false \
+  --argjson interactive "$($INTERACTIVE && echo true || echo false)" \
   --argjson strict "$($STRICT && echo true || echo false)" \
   --argjson source_artifacts "$SOURCE_ARTIFACTS_JSON" \
   --arg output_path "$HTML_PATH" \
