@@ -812,6 +812,8 @@ jobs:
           run_case 1 '.env'
           run_case 1 '.env.local'
           run_case 1 '.env.production'
+          run_case 1 '.env.staging'
+          run_case 1 '.env.test'
           run_case 1 './secrets/key.pem'
           run_case 1 'path/to/authorized_keys'
           run_case 1 'config.key'
@@ -820,13 +822,82 @@ jobs:
           run_case 1 '/usr/bin/ls'
           run_case 1 "$HOME/.ssh/id_rsa"
           run_case 1 "$HOME/.aws/credentials"
-          # Allowed: templates + regular project files.
+          # PR 7 of the 2026-05-10 architecture audit: credential
+          # JSON basenames must block at write time the same way they
+          # block at read time. The shapes here mirror the G-035
+          # read-guard rule in guard/rules.json.
+          run_case 1 'credentials.json'
+          run_case 1 'credential.json'
+          run_case 1 'secrets.json'
+          run_case 1 'secret.json'
+          run_case 1 'service-account.json'
+          run_case 1 'service_account.json'
+          run_case 1 'service-account-prod.json'
+          run_case 1 'firebase-adminsdk.json'
+          run_case 1 'firebase-adminsdk-staging.json'
+          run_case 1 'google-credentials.json'
+          run_case 1 'gcp-credentials.json'
+          run_case 1 'aws-credentials.json'
+          run_case 1 'aws-credentials-prod.json'
+          run_case 1 'supabase-service-role.json'
+          run_case 1 'client-secrets.json'
+          run_case 1 'client_secret.json'
+          # Separator-less credential JSON variants. Codex caught
+          # the missing optional separator on the PR 7 first review
+          # pass: G-035 read-side allows [-_]? but the initial
+          # write patterns required the separator.
+          run_case 1 'serviceaccount.json'
+          run_case 1 'firebaseadminsdk.json'
+          run_case 1 'googlecredentials.json'
+          run_case 1 'clientsecret.json'
+          run_case 1 'awscredentials.json'
+          run_case 1 'gcpcredentials.json'
+          # Suffixed generic credential / secret JSON. Codex caught
+          # the missing suffix support on the PR 7 second review
+          # pass: G-035 read-side blocks credentials-prod.json and
+          # secrets-backup.json; the write side now does too.
+          run_case 1 'credentials-prod.json'
+          run_case 1 'credential-staging.json'
+          run_case 1 'secret-prod.json'
+          run_case 1 'secrets-backup.json'
+          run_case 1 'credentials.dev.json'
+          # Mixed-case credential JSON. Codex caught the case gap on
+          # the PR 7 third review pass: read-side G-035 is case-
+          # insensitive, so the write side must match too.
+          run_case 1 'Credentials.json'
+          run_case 1 'Service-Account.json'
+          run_case 1 'AWS-Credentials.json'
+          run_case 1 'Firebase-Adminsdk.json'
+          run_case 1 'SECRETS.json'
+          run_case 1 '.ENV'
+          # Mixed-case templates stay allowed.
+          run_case 0 'credentials.Example.json'
+          run_case 0 'Service-Account.Template.json'
+          # Protected directories still block even when the leaf has
+          # a template-looking basename. Codex caught the over-broad
+          # template exemption on the PR 7 first review pass:
+          # $HOME/.ssh/config.example must not become a bypass.
+          run_case 1 "$HOME/.ssh/config.example"
+          run_case 1 "$HOME/.ssh/config.template"
+          run_case 1 "/etc/foo.template"
+          run_case 1 "/etc/foo.sample"
+          # Allowed: templates + regular project files. Template
+          # basenames (.example, .sample, .template, with or without
+          # extension) MUST pass even when the rest of the name looks
+          # like a secret, otherwise first-run onboarding fights the
+          # guard.
           run_case 0 '.env.example'
           run_case 0 '.env.sample'
           run_case 0 '.env.template'
+          run_case 0 'credentials.example.json'
+          run_case 0 'service-account.example.json'
+          run_case 0 'service-account.template.json'
+          run_case 0 'firebase-adminsdk.sample.json'
           run_case 0 'README.md'
           run_case 0 'src/config.js'
           run_case 0 'package.json'
+          run_case 0 'firebase.json'
+          run_case 0 'tsconfig.json'
           run_case 0 '/tmp/scratch.txt'
           # JSON input path (Claude Code PreToolUse contract).
           if ! echo '{"tool_name":"Write","tool_input":{"file_path":".env"}}' \
