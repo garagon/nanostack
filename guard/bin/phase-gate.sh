@@ -47,13 +47,17 @@ PROJECT="$(pwd)"
 REQUIRED_PHASES="review security qa"
 if [ -f "$SESSION_FILE" ] && command -v jq >/dev/null 2>&1; then
   # The session-level phase_graph is the source of truth when it
-  # exists. We separate "graph absent" (legacy fallback) from "graph
-  # present but no post-build gates" (a legitimate custom workflow
-  # where nothing must run before ship) by checking the array length
-  # first. Codex flagged the symmetric collapse on the PR 4 twelfth
-  # review pass: an empty filter result used to drop back to the
-  # built-in trio, so a think-plan-build-ship graph could not commit.
-  if jq -e '(.phase_graph // []) | length > 0' "$SESSION_FILE" >/dev/null 2>&1; then
+  # contains a `ship` node. We separate three cases:
+  #   - graph absent             → legacy review/security/qa default
+  #   - graph present + ship in  → graph-derived ancestors of ship
+  #   - graph present + no ship  → legacy review/security/qa default
+  #     (fail closed: the gate exists to protect ship-like actions, so
+  #     a graph without ship cannot loosen the gate. Codex caught the
+  #     ship-absent bypass on the PR 4 fourteenth review pass.)
+  # The middle case may legitimately produce an empty array (a graph
+  # like think -> plan -> build -> ship has no post-build gates), and
+  # the gate honors that.
+  if jq -e '(.phase_graph // []) | map(.name) | any(. == "ship")' "$SESSION_FILE" >/dev/null 2>&1; then
     REQUIRED_PHASES=$(jq -r '
       (.phase_graph // []) as $g
       | def ancestors($name):

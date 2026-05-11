@@ -681,6 +681,36 @@ rc=$?
 set -e
 assert_eq "/feature after plan: gate now enforces (rc 1)" "1" "$rc"
 
+# Cell 9m: a graph that omits the ship node entirely must fall back
+# to the legacy review/security/qa default. The gate exists to
+# protect ship-like actions, so a ship-less graph cannot be allowed
+# to loosen it. Codex caught the ship-absent bypass on the PR 4
+# fourteenth review pass.
+echo "[9m] phase-gate falls back to legacy when ship is absent"
+new_project "cell9m-no-ship"
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "phase_graph": [
+    {"name":"think","depends_on":[]},
+    {"name":"plan","depends_on":["think"]},
+    {"name":"build","depends_on":["plan"]}
+  ]
+}
+EOF
+"$SESSION_SH" init development >/dev/null
+for ph in think plan; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+echo "scratch" > scratch.txt
+git add scratch.txt && git commit -q -m "scratch" >/dev/null 2>&1 || true
+echo "more" >> scratch.txt
+set +e
+"$REPO/guard/bin/phase-gate.sh" "git commit -m wip" >/dev/null 2>&1
+rc=$?
+set -e
+assert_eq "ship-less graph blocks commit (rc 1, legacy fallback)" "1" "$rc"
+
 # Cell 10: default sprint user_message remains exactly the historical
 # wording. No regression for built-in flows.
 echo "[10] default sprint user_message is unchanged"
