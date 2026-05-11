@@ -20,6 +20,7 @@
 #  16. Guard blocks writes during a read-only custom phase.
 #  17. Custom write phase does not trigger the concurrency block.
 #  18. Built-in review phase still blocks (regression check).
+#  19. Guard still works when the store path contains a space.
 #
 # This harness is the contract Codex's spec calls for in PR 6: a clean
 # sandbox user can complete the entire workflow without reading source.
@@ -312,6 +313,29 @@ NANOSTACK_STORE="$GUARD_STORE" HOME="$GUARD_HOME" \
 guard_rc=$?
 set -e
 assert_eq "built-in review phase blocks write (exit 1)" "1" "$guard_rc"
+
+# Cell 19: a HOME (or store) path that contains a space must not break
+# the guard. The previous space-separated root iteration in
+# nano_phase_skill_path silently dropped path halves and made the
+# concurrency block a no-op for these users. Codex caught the
+# regression on PR 1 of the architecture round; this cell locks it.
+echo "[19] guard works when store path contains a space"
+SPACE_TMP=$(mktemp -d /tmp/nanostack-space.XXXXXX)
+SPACE_HOME="$SPACE_TMP/home with space"
+SPACE_PROJ="$SPACE_TMP/nogit"
+mkdir -p "$SPACE_HOME" "$SPACE_PROJ"
+cd "$SPACE_PROJ"
+HOME="$SPACE_HOME" "$REPO/bin/create-skill.sh" license-audit --concurrency read >/dev/null
+SPACE_STORE="$SPACE_HOME/.nanostack"
+echo '{"current_phase":"license-audit"}' > "$SPACE_STORE/session.json"
+set +e
+NANOSTACK_STORE="$SPACE_STORE" HOME="$SPACE_HOME" \
+  "$REPO/guard/bin/check-dangerous.sh" "touch should-not-pass" >/dev/null 2>&1
+guard_rc=$?
+set -e
+cd "$PROJ"
+rm -rf "$SPACE_TMP"
+assert_eq "store path with space still blocks (exit 1)" "1" "$guard_rc"
 
 cd "$PROJ"
 
