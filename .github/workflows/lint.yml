@@ -3766,3 +3766,19 @@ jobs:
             exit 1
           fi
           echo "OK: save-artifact.sh wires the per-phase validator."
+
+  visual-artifact-contract:
+    # Locks the Visual Artifacts v1 PR 1 contract: bin/render-artifact.sh
+    # writes static HTML under $NANOSTACK_STORE/visual/, escapes every
+    # JSON-derived string, ships a CSP, refuses unsafe output paths, and
+    # records source trust in a companion manifest. See
+    # reference/visual-artifact-contract.md.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static template safety lint
+        run: ci/check-visual-artifact-templates.sh
+      - name: End-to-end render contract
+        run: ci/e2e-visual-artifacts.sh
