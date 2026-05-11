@@ -171,7 +171,7 @@ jobs:
           ci/e2e-onboarding-flows.sh
 
   e2e-graph-aware-session:
-    name: E2E Graph-aware Session + Next-step (7 cells)
+    name: E2E Graph-aware Session + Next-step (10 cells)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # PR 4 of the 2026-05-10 architecture audit. Locks the graph-aware

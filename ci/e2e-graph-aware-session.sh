@@ -95,8 +95,15 @@ new_project "cell1-default"
 "$SESSION_SH" init development >/dev/null
 nodes=$(jq -r '.phase_graph // [] | map(.name) | join(",")' "$NANOSTACK_STORE/session.json")
 assert_eq "default graph nodes" "think,plan,build,review,qa,security,ship" "$nodes"
+# At init, ready_phases is populated with the graph roots (every node
+# with empty depends_on). For the default sprint that is just `think`.
+# A previous form populated this with []; that was the regression
+# Codex flagged on the PR 4 first review pass (a fresh session
+# falling through to ship+can_ship=true).
 ready_init=$(jq -c '.ready_phases // []' "$NANOSTACK_STORE/session.json")
-assert_eq "ready_phases starts empty" "[]" "$ready_init"
+assert_eq "ready_phases at init = [think] (default sprint root)" '["think"]' "$ready_init"
+next_init=$(jq -r '.next_phase // "null"' "$NANOSTACK_STORE/session.json")
+assert_eq "next_phase at init = think" "think" "$next_init"
 
 # Cell 2: default sprint progression matches the legacy ordering.
 # review/qa/security ARE ready in parallel after plan, but next_phase
@@ -249,9 +256,79 @@ done
 assert_true "guided user_message names the custom phase" \
   bash -c "echo '$msg' | grep -qiF 'privacy-check'"
 
-# Cell 7: default sprint user_message remains exactly the historical
+# Cell 8: a freshly-initialized custom session must report the root
+# of the graph as next_phase, NOT collapse to "ship". Codex caught
+# this on the PR 4 first review pass: a session with next_phase=null
+# and ready_phases=[] used to fall back to ship+can_ship=true even
+# though the required custom phases were still incomplete.
+echo "[8] fresh custom session reports the graph root, not ship"
+new_project "cell8-fresh"
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "custom_phases": ["license-audit"],
+  "phase_graph": [
+    {"name":"think","depends_on":[]},
+    {"name":"plan","depends_on":["think"]},
+    {"name":"build","depends_on":["plan"]},
+    {"name":"license-audit","depends_on":["build"]},
+    {"name":"ship","depends_on":["license-audit"]}
+  ]
+}
+EOF
+mkdir -p "$NANOSTACK_STORE/skills/license-audit"
+cat > "$NANOSTACK_STORE/skills/license-audit/SKILL.md" <<'EOF'
+---
+name: license-audit
+description: custom
+concurrency: read
+---
+EOF
+"$SESSION_SH" init development >/dev/null
+out=$("$NEXT_STEP" --json 2>/dev/null)
+assert_eq "fresh session next_phase = think (graph root)" "think" \
+  "$(echo "$out" | jq -r '.next_phase')"
+assert_eq "fresh session can_ship = false" "false" \
+  "$(echo "$out" | jq -r '.can_ship')"
+assert_eq "ready_phases at init = [think]" '["think"]' \
+  "$(echo "$out" | jq -c '.ready_phases')"
+
+# Cell 9: a custom graph that keeps the default phase names but
+# rewires the dependencies (review -> qa -> security serialized)
+# must use the graph-aware path. Codex caught the name-only detection
+# regression on the PR 4 first review pass: the previous "compare by
+# names" check treated the rewired graph as the default sprint and
+# the legacy peer logic could suggest security before qa.
+echo "[9] same-name-different-deps graph routes through graph-aware"
+new_project "cell9-rewired"
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "phase_graph": [
+    {"name":"think","depends_on":[]},
+    {"name":"plan","depends_on":["think"]},
+    {"name":"build","depends_on":["plan"]},
+    {"name":"review","depends_on":["build"]},
+    {"name":"qa","depends_on":["review"]},
+    {"name":"security","depends_on":["qa"]},
+    {"name":"ship","depends_on":["security"]}
+  ]
+}
+EOF
+"$SESSION_SH" init development >/dev/null
+for ph in think plan review; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+out=$("$NEXT_STEP" --json 2>/dev/null)
+assert_eq "rewired graph: after review, next_phase = qa (not security)" \
+  "qa" "$(echo "$out" | jq -r '.next_phase')"
+assert_eq "rewired graph: ready_phases = [qa]" \
+  '["qa"]' "$(echo "$out" | jq -c '.ready_phases')"
+assert_eq "rewired graph: can_ship still false" \
+  "false" "$(echo "$out" | jq -r '.can_ship')"
+
+# Cell 10: default sprint user_message remains exactly the historical
 # wording. No regression for built-in flows.
-echo "[7] default sprint user_message is unchanged"
+echo "[10] default sprint user_message is unchanged"
 new_project "cell7-default-msg"
 "$SESSION_SH" init development >/dev/null
 for ph in think plan; do

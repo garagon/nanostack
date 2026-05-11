@@ -214,8 +214,27 @@ cmd_init() {
   # unavailable; cmd_phase_complete handles that by skipping the
   # graph-aware path.
   local phase_graph_json="[]"
+  local initial_ready_json="[]"
   if declare -F nano_phase_graph_json >/dev/null 2>&1; then
     phase_graph_json=$(nano_phase_graph_json 2>/dev/null || echo "[]")
+    # Compute the initial ready set so a caller that asks for
+    # next_phase BEFORE the first phase-complete sees the actual root
+    # of the graph (e.g. think for the default sprint) rather than an
+    # empty array. Without this, bin/next-step.sh used to fall back to
+    # "ship" for a freshly-initialized session, which Codex caught
+    # on the PR 4 first review pass.
+    if declare -F nano_phase_ready_from_graph >/dev/null 2>&1 && [ "$phase_graph_json" != "[]" ]; then
+      local initial_ready
+      initial_ready=$(nano_phase_ready_from_graph "$phase_graph_json" "[]" "[]" 2>/dev/null || true)
+      if [ -n "$initial_ready" ]; then
+        initial_ready_json=$(echo "$initial_ready" | jq -R . | jq -sc 'map(select(length > 0))')
+      fi
+    fi
+  fi
+  local initial_next_phase="null"
+  if [ "$initial_ready_json" != "[]" ]; then
+    initial_next_phase=$(echo "$initial_ready_json" | jq -r '.[0] // "null"')
+    initial_next_phase="\"$initial_next_phase\""
   fi
 
   jq -n \
@@ -234,6 +253,8 @@ cmd_init() {
     --argjson capabilities "$capabilities_json" \
     --argjson policy "$policy_json" \
     --argjson phase_graph "$phase_graph_json" \
+    --argjson initial_ready "$initial_ready_json" \
+    --argjson initial_next "$initial_next_phase" \
     '{
       schema_version: "2",
       session_id: $id,
@@ -250,8 +271,8 @@ cmd_init() {
       capabilities: $capabilities,
       policy: $policy,
       current_phase: null,
-      next_phase: null,
-      ready_phases: [],
+      next_phase: $initial_next,
+      ready_phases: $initial_ready,
       phase_graph: $phase_graph,
       stop_conditions_met: [],
       phase_log: [],
