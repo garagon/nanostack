@@ -539,6 +539,29 @@ echo '42' > "$NUM"
 assert_exit "number JSON exits 1" 1 \
   sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan '$NUM'"
 
+# ─── Cell 9l: render does not mutate session state ─────────
+# PR 1 pass 7 regression. find-artifact.sh registers the phase via
+# session.sh phase-start as a convenience; render-artifact.sh must
+# pass --no-session-sync so a viewer never marks a phase as
+# in_progress.
+printf "\n  ${DIM}Cell 9l: render does not mutate session (PR 1 pass 7)${NC}\n"
+PROJ="$TMP_ROOT/cell9l"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+# Start a session but do not register any phase yet.
+(cd "$PROJ" && "$REPO/bin/session.sh" init --goal "test session" >/dev/null 2>&1)
+SESSION_BEFORE=$(jq -c '.phase_log // []' "$NANOSTACK_STORE/session.json" 2>/dev/null || echo "[]")
+(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest >/dev/null)
+SESSION_AFTER=$(jq -c '.phase_log // []' "$NANOSTACK_STORE/session.json" 2>/dev/null || echo "[]")
+assert_true "session.phase_log unchanged after render" \
+  sh -c "[ '$SESSION_BEFORE' = '$SESSION_AFTER' ]"
+# Specifically: plan must NOT be in_progress after a render-only call.
+PLAN_LOGGED=$(jq -r '.phase_log // [] | map(.phase) | contains(["plan"])' "$NANOSTACK_STORE/session.json" 2>/dev/null || echo "false")
+assert_true "plan not registered as in_progress by render" \
+  sh -c "[ '$PLAN_LOGGED' = 'false' ]"
+
 # ─── Cell 9: symlinked visual root rejected ─────────────────
 printf "\n  ${DIM}Cell 9: symlinked visual root rejected${NC}\n"
 PROJ="$TMP_ROOT/cell9"

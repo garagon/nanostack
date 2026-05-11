@@ -127,9 +127,13 @@ case "$PHASE" in
     ;;
 esac
 
-# Resolve the source artifact.
+# Resolve the source artifact. --no-session-sync keeps the renderer
+# strictly downstream: find-artifact.sh otherwise calls
+# `session.sh phase-start` as a convenience for skills, which would
+# mutate session.json just because a user viewed an artifact. Codex
+# PR 1 pass 7 caught the boundary violation.
 if [ -z "$ART_PATH" ] || [ "$USE_LATEST" = true ]; then
-  ART_PATH=$("$SCRIPT_DIR/find-artifact.sh" "$PHASE" 30 2>/dev/null || true)
+  ART_PATH=$("$SCRIPT_DIR/find-artifact.sh" "$PHASE" 30 --no-session-sync 2>/dev/null || true)
   if [ -z "$ART_PATH" ]; then
     echo "render-artifact: no $PHASE artifact found in the last 30 days" >&2
     exit 1

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # find-artifact.sh — Find the most recent artifact for a phase and project
-# Usage: find-artifact.sh <phase> [max-age-days] [--verify] [--require-integrity]
+# Usage: find-artifact.sh <phase> [max-age-days] [--verify] [--require-integrity] [--no-session-sync]
 # Example: find-artifact.sh plan 2 --require-integrity
 # Returns: path to most recent artifact, or empty + exit 1 if none found
 #
@@ -14,6 +14,15 @@
 #                         consumer that cannot afford to trust unverifiable
 #                         evidence. Added in the 2026-05-10 architecture audit
 #                         PR 2 so callers stop reimplementing the check.
+#
+# Read-only flag:
+#   --no-session-sync     skip the phase-start session registration that
+#                         find-artifact.sh otherwise performs as a
+#                         convenience for downstream skills. Used by the
+#                         visual renderer (render-artifact.sh), which is a
+#                         strictly downstream consumer and must not mutate
+#                         sprint state. Added in the Visual Artifacts v1
+#                         PR 1 round (codex pass 7).
 #
 # On failure, the reason goes to stderr in a stable format so callers can
 # categorize: "INTEGRITY FAILED: <path>" (mismatch) or
@@ -32,6 +41,7 @@ shift
 MAX_AGE=30
 VERIFY=false
 REQUIRE_INTEGRITY=false
+NO_SESSION_SYNC=false
 # The max-age argument is optional; detect it by shape so callers can
 # skip it and pass a flag in $2 (e.g. find-artifact.sh plan
 # --require-integrity). A leading dash means flag, not age. Codex
@@ -46,6 +56,7 @@ for arg in "$@"; do
   case "$arg" in
     --verify) VERIFY=true ;;
     --require-integrity) REQUIRE_INTEGRITY=true; VERIFY=true ;;
+    --no-session-sync) NO_SESSION_SYNC=true ;;
   esac
 done
 
@@ -73,7 +84,7 @@ done | sort -r | head -1)
 # recurse back to find-artifact.sh and hang). The phase stays
 # "in_progress" until save-artifact.sh completes it.
 SESSION_FILE="$NANOSTACK_STORE/session.json"
-if [ -f "$SESSION_FILE" ]; then
+if [ "$NO_SESSION_SYNC" = false ] && [ -f "$SESSION_FILE" ]; then
   # Cache the phase list extracted from session.json. Multiple find-artifact.sh
   # calls in one resolve.sh run reuse the same list; session.sh writes bump
   # session.json's mtime which invalidates the cache automatically.
