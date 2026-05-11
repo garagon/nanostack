@@ -1,14 +1,24 @@
 #!/usr/bin/env bash
 # Guard: check-dangerous.sh
-# Three-tier permission check inspired by Claude Code auto mode.
-# Tier 1: Allowlist (always safe, skip checks)
-# Tier 2: In-project operations (safe, reviewable via git)
-# Tier 3: Pattern matching against block/warn rules
+# Layered permission check for every Bash call. Block rules run before
+# the allowlist so allowlisted binaries (cat, find, head, tail) still
+# match known-bad patterns like `cat .env` or `find . -delete`.
+#
+# Order:
+#   Block rules                (no exceptions, fail closed)
+#   Allowlist                  (safe commands short-circuit)
+#   Phase-aware concurrency    (read phases block write commands)
+#   In-project fast-path       (git-reviewable changes pass)
+#   Sprint phase gate          (blocks commit/push until required
+#                               ancestors of ship are complete)
+#   Budget gate                (blocks all commands when over budget)
+#   Warn rules                 (allowed but flagged)
 #
 # On block: suggests a safer alternative (deny-and-continue).
 # On warn: allows but flags the risk.
 #
-# Called by Claude Code's PreToolUse hook on Bash commands.
+# Called by the PreToolUse hook on Bash commands (Claude Code hosts the
+# hook directly; other adapters install per their host docs).
 # Exit 0 = safe/warn, Exit 1 = blocked.
 set -euo pipefail
 

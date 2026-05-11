@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # about.sh — Generate compact self-description for agents
 # Writes .nanostack/ABOUT.md with skills, flow, key commands.
-# Any agent (Cursor, Codex, Claude Code) can read this to understand nanostack.
+# Verified adapters: Claude Code, Cursor, OpenAI Codex, OpenCode, Gemini CLI.
+# Adapter capabilities live in adapters/<host>.json.
 #
 # Usage: about.sh          Generate/update ABOUT.md
 #        about.sh --print   Print to stdout instead of file
@@ -21,9 +22,21 @@ SESSIONS=$(find "$NANOSTACK_STORE/sessions" -name "*.json" -type f 2>/dev/null |
 HAS_CONFIG="no"
 [ -f "$NANOSTACK_STORE/config.json" ] && HAS_CONFIG="yes"
 
+# Adapter list: read names from adapters/*.json so this stays in sync
+# with the single source of truth. Falls back to the canonical five if
+# the adapters directory is missing. `paste -sd ', '` alternates the
+# delimiter byte-by-byte on macOS, so we use awk for a clean
+# comma-space join.
+ADAPTER_LIST=""
+if [ -d "$NANOSTACK_ROOT/adapters" ]; then
+  ADAPTER_LIST=$(find "$NANOSTACK_ROOT/adapters" -maxdepth 1 -name "*.json" -type f 2>/dev/null \
+    | sed 's|.*/||; s|\.json$||' | sort | awk 'NR>1{printf ", "} {printf "%s",$0} END{print ""}')
+fi
+[ -z "$ADAPTER_LIST" ] && ADAPTER_LIST="claude, codex, cursor, gemini, opencode"
+
 DOC="# Nanostack
 
-Sprint quality framework. Turns your AI agent into an engineering team.
+Local workflow framework for AI coding agents. The built-in sprint plus a framework for declaring your own custom workflow stacks. Verified adapters: $ADAPTER_LIST.
 
 ## Flow
 
@@ -56,13 +69,19 @@ Sprint quality framework. Turns your AI agent into an engineering team.
 | bin/doctor.sh | Know-how health check. |
 | bin/capture-failure.sh | Log what went wrong (no /compound needed). |
 
+## Custom workflow stacks
+
+Declare your own phases in \`.nanostack/config.json\` (\`custom_phases\` + \`phase_graph\`) and put the skill under \`<store>/skills/<name>/\`. Conductor scheduling, guard concurrency, the artifact contract, session lifecycle, next-step output, and the resolver all consume the same phase registry. See \`reference/custom-stack-contract.md\` and \`examples/custom-stack-template/compliance-release/\`.
+
 ## State
 
 All data in \`.nanostack/\`:
-- Artifacts: \`.nanostack/<phase>/<timestamp>.json\`
+- Artifacts: \`.nanostack/<phase>/<timestamp>.json\` with SHA-256 integrity field.
 - Solutions: \`.nanostack/know-how/solutions/{bug,pattern,decision}/\`
 - Briefs: \`.nanostack/know-how/briefs/\`
 - Audit log: \`.nanostack/audit.log\`
+
+There is no Nanostack cloud. Telemetry is opt-in and documented in \`reference/telemetry.md\`.
 
 ## This Project
 

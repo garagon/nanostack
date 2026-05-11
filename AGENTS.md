@@ -1,27 +1,28 @@
 # Nanostack: Agent Discovery
 
-This file lists all available skills for all supported agents (Claude Code, Cursor, Codex, OpenCode, Gemini CLI).
-Each skill folder contains a `SKILL.md` for agent discovery and an `agents/openai.yaml` for OpenAI-compatible agents.
+This file lists the skills shipped by Nanostack for the verified adapters: Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI. Each skill folder contains a `SKILL.md` for adapter discovery and an `agents/openai.yaml` for OpenAI-compatible agents. Adapter capability evidence lives in `adapters/<host>.json`; treat the JSON as the single source of truth for what a given host actually enforces (hook execution, write guard, phase gate).
 
-## Available Skills
+## Available skills
 
 | Skill | Directory | Description |
 |-------|-----------|-------------|
-| think | `think/` | Strategic product thinking. Three modes (Founder/Startup/Builder) with calibrated intensity. YC-grade forcing questions, CEO cognitive patterns, manual delivery test. |
-| nano | `plan/` | Implementation planning. Scope assessment, step-by-step plans with verification, product standards. |
-| review | `review/` | Two-pass code review. Structural then adversarial. Scope drift detection against plan. Conflict detection with /security. |
-| qa | `qa/` | Quality assurance. Browser, API, CLI and debug testing with Playwright. WTF heuristic. |
-| security | `security/` | Security audit. OWASP Top 10, STRIDE, dependency scanning. Cross-references /review for conflicts. Graded report (A-F). |
-| ship | `ship/` | Shipping pipeline. PR creation, CI monitoring, post-merge verification. Generates sprint journal on success. |
-| guard | `guard/` | Three-tier safety. Allowlist, in-project bypass, 28 block rules with safer alternatives. Configurable in guard/rules.json. |
+| think | `think/` | Strategic product thinking with calibrated intensity per archetype. Saves a structured artifact (value proposition, scope mode, target user, narrowest wedge, key risk, premise validation). |
+| nano  | `plan/` | Implementation planning. Planned files, plan approval, scope assessment, product standards. |
+| review | `review/` | Two-pass code review (structural + adversarial). Scope drift detection against /nano. Conflict precedence with /security. |
+| qa     | `qa/` | Browser, API, CLI, or debug testing. WTF heuristic. |
+| security | `security/` | OWASP Top 10 + STRIDE audit. Cross-references /review for conflicts. |
+| ship   | `ship/` | Pre-flight, PR creation, CI monitoring, post-deploy verification. Generates the sprint journal on success. |
+| guard  | `guard/` | Block and warn rules on Bash + Write/Edit. Phase concurrency, sprint phase gate, and budget gate run inside the same pipeline. Rule counts live in `guard/rules.json`. |
 | conductor | `conductor/` | Multi-agent sprint orchestrator. Parallel sessions via claim/complete protocol with atomic file locking. |
 
-## Know-how Pipeline
+## Custom workflow stacks
 
-Skills automatically save artifacts to `.nanostack/` and cross-reference each other. `/ship` generates a sprint journal. The vault at `.nanostack/know-how/` works as an Obsidian vault. Run `bin/discard-sprint.sh` to clean up bad sessions.
+Custom stacks declare their own phases in `.nanostack/config.json` (`custom_phases` + `phase_graph`) and live under `<store>/skills/<name>/`. They get the same lifecycle support as the built-in sprint (graph-aware progression, concurrency enforcement, artifact trust, schema validation, routing intent through `phase_context`). The contract is in `reference/custom-stack-contract.md`; `examples/custom-stack-template/compliance-release/` is a worked example.
+
+## Know-how pipeline
+
+Skills automatically save artifacts to `.nanostack/`. Downstream skills read upstream artifacts through `bin/resolve.sh`, which honors the artifact-trust contract (PR 2) and the routing contract for custom skills (PR 5). `/ship` generates a sprint journal. `bin/discard-sprint.sh` cleans up bad sessions.
 
 ## Usage
 
-Each skill's `SKILL.md` contains the full instructions. Read it and follow the process described.
-
-Supporting files (templates, references, checklists, scripts) are in subdirectories. Read them when referenced by the SKILL.md.
+Each skill's `SKILL.md` contains the full instructions. Read it and follow the process described. Supporting files (templates, references, checklists, scripts) live in subdirectories and are referenced from the SKILL.md when needed.

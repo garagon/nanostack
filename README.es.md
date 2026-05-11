@@ -201,14 +201,14 @@ Los agentes cometen errores. Corren `rm -rf` cuando querían `rm -r`, hacen forc
 
 Cada comando de Bash pasa por estos seis tiers, en este orden:
 
-1. **Block rules**: las reglas de bloqueo corren primero. 35 reglas cubren borrado masivo (`rm -rf .`, `find . -delete`), destrucción de historia (`git push --force`), lecturas de secretos (`.env`, `*.pem`), drops de DB, deploys a producción y ejecución remota (`curl | sh`). Una coincidencia bloquea aunque el binario esté en el allowlist de abajo.
+1. **Block rules**: las reglas de bloqueo corren primero. Cubren borrado masivo (`rm -rf .`, `find . -delete`), destrucción de historia (`git push --force`), lecturas de secretos (`.env`, `*.pem`), drops de DB, deploys a producción y ejecución remota (`curl | sh`). Una coincidencia bloquea aunque el binario esté en el allowlist de abajo. La fuente de verdad es [`guard/rules.json`](guard/rules.json); para ver el conteo actual: `jq '[.tiers.block.rules[].id] | length' guard/rules.json`.
 2. **Allowlist**: para comandos que pasaron las block rules, los allowlisteados (`git status`, `ls`, `cat`, `jq`, etc.) saltan el resto.
 3. **In-project**: operaciones que solo tocan archivos del repo actual pasan. El control de versiones es la red de seguridad.
 4. **Concurrencia por fase**: durante fases read-only (review, qa, security), las operaciones de escritura quedan bloqueadas para evitar race conditions.
 5. **Phase gate**: cuando hay un sprint activo, `git commit` y `git push` quedan bloqueados hasta que existan artifacts frescos de review, security y qa.
 6. **Budget gate**: cuando el sprint tiene un presupuesto y se gastó 95%+, todos los comandos no-allowlist quedan bloqueados.
 
-Plus 9 reglas de advertencia para operaciones que requieren atención sin llegar a bloqueo.
+Mas un tier de reglas de advertencia (`warn`) para operaciones que requieren atención sin llegar a bloqueo. Las definiciones también viven en `guard/rules.json`.
 
 Las herramientas Write, Edit y MultiEdit pasan por su propio hook (`guard/bin/check-write.sh`) que niega rutas protegidas: archivos de secretos (`.env` y variantes, `*.pem`, `*.key`, llaves SSH) y directorios de sistema o usuario-secreto (`/etc`, `/var`, `/usr/bin`, `~/.ssh`, `~/.aws`, `~/.kube`). Los symlinks se resuelven antes de matchear, así que un `mylink/config -> ~/.ssh/config` se trata como destino resuelto.
 

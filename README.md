@@ -443,7 +443,7 @@ AI agents make mistakes. They run `rm -rf` when they mean `rm -r`, force push to
 
 Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude-code-auto-mode), guard evaluates every Bash command through six tiers in this order:
 
-**Tier 1: Block rules.** Patterns for mass deletion, history destruction, database drops, production deploys, remote code execution, secret reads, security degradation and safety bypasses run first. A match exits 1 immediately, even if the command's binary is on the allowlist below. This ordering closes the bypass class where `find . -delete` or `cat .env` slipped past Tier 2 because `find` and `cat` were on the allowlist. 35 block rules total.
+**Tier 1: Block rules.** Patterns for mass deletion, history destruction, database drops, production deploys, remote code execution, secret reads, security degradation and safety bypasses run first. A match exits 1 immediately, even if the command's binary is on the allowlist below. This ordering closes the bypass class where `find . -delete` or `cat .env` slipped past Tier 2 because `find` and `cat` were on the allowlist. Block rule definitions live in [`guard/rules.json`](guard/rules.json); query the live count with `jq '[.tiers.block.rules[].id] | length' guard/rules.json`.
 
 **Tier 2: Allowlist.** After block rules clear, commands like `git status`, `ls`, `cat`, `jq` skip the remaining checks. They are read-only or otherwise side-effect-free for safe arguments.
 
@@ -455,7 +455,7 @@ Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude
 
 **Tier 6: Budget gate.** When a sprint budget is set and 95%+ spent, all non-allowlisted commands are blocked. The agent can still run safe commands (`ls`, `git status`, `cat`) to save work, but cannot execute builds, tests, or deploys. Bypass with `NANOSTACK_SKIP_BUDGET=1`.
 
-Plus a Tier 7 of warn rules for operations that need attention but not blocking. 9 warn rules total.
+Plus a Tier 7 of warn rules for operations that need attention but not blocking. Warn rule definitions also live in `guard/rules.json`.
 
 ### Write and Edit are hooked too
 
