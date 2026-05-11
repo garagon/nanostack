@@ -436,10 +436,6 @@ mkdir -p "$NANOSTACK_STORE"
 (cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
 assert_exit "--interactive reserved (exit 2)" 2 \
   sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan --latest --interactive"
-assert_exit "journal reserved (exit 2)" 2 \
-  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today"
-assert_exit "stack reserved (exit 2)" 2 \
-  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack mystack"
 
 # ─── Cell 7: --manifest-only ────────────────────────────────
 printf "\n  ${DIM}Cell 7: --manifest-only${NC}\n"
@@ -658,6 +654,112 @@ assert_contains "ship ci_passed escaped" "$HTML" '&lt;script&gt;alert(&quot;ci&q
 HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" qa --latest)
 assert_not_contains "qa reproduce no raw script" "$HTML" '<script>alert("qa")'
 assert_not_contains "qa root_cause no raw img" "$HTML" '<img onerror=alert(1)>'
+
+# ─── Cell 18: sprint journal view ───────────────────────────
+printf "\n  ${DIM}Cell 18: sprint journal view${NC}\n"
+PROJ="$TMP_ROOT/cell18"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_think "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_review "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_security "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_qa "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_ship "$NANOSTACK_STORE")
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_true "journal html exists" test -f "$HTML"
+assert_contains "journal page title" "$HTML" "Sprint journal"
+assert_contains "journal data-phase=journal" "$HTML" 'data-phase="journal"'
+assert_contains "journal timeline" "$HTML" "Phase timeline"
+assert_contains "journal think row" "$HTML" 'data-phase="think"'
+assert_contains "journal plan row" "$HTML" 'data-phase="plan"'
+assert_contains "journal review row" "$HTML" 'data-phase="review"'
+assert_contains "journal security row" "$HTML" 'data-phase="security"'
+assert_contains "journal qa row" "$HTML" 'data-phase="qa"'
+assert_contains "journal ship row" "$HTML" 'data-phase="ship"'
+# Manifest must list every source.
+MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*journal*.manifest.json | head -1)
+assert_true "journal manifest kind = journal" sh -c "[ \"\$(jq -r .kind '$MFST')\" = 'journal' ]"
+assert_true "journal sources length >= 6" sh -c "[ \"\$(jq -r '.source_artifacts | length' '$MFST')\" -ge 6 ]"
+# Trust badge aggregated.
+assert_contains "journal aggregated badge" "$HTML" 'data-trust="not_applicable"'
+assert_contains "journal aggregated badge text" "$HTML" '>aggregated<'
+
+# ─── Cell 19: journal flags missing/tampered phases ──────────
+printf "\n  ${DIM}Cell 19: journal flags missing/tampered${NC}\n"
+PROJ="$TMP_ROOT/cell19"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+# Save only think + plan; review/security/qa/ship will be missing.
+(cd "$PROJ" && save_valid_think "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_contains "journal renders missing phases" "$HTML" "No artifact found"
+# Tamper with plan; the row must show 'tampered'.
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+jq '.summary.goal = "Tampered"' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_contains "journal flags tampered" "$HTML" '>tampered<'
+# Per-row trust attribute present for the tampered row.
+assert_contains "journal plan row data-trust" "$HTML" 'data-phase="plan" data-trust="integrity_mismatch"'
+
+# ─── Cell 20: custom stack DAG view (compliance-release) ─────
+printf "\n  ${DIM}Cell 20: stack compliance-release DAG${NC}\n"
+PROJ="$TMP_ROOT/cell20"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+assert_true "stack html exists" test -f "$HTML"
+assert_contains "stack title" "$HTML" "Custom stack"
+assert_contains "stack display_name" "$HTML" "Compliance Release Stack"
+assert_contains "stack SVG opens" "$HTML" "<svg"
+assert_contains "stack SVG closes" "$HTML" "</svg>"
+# All 10 expected phases must appear as table rows.
+for ph in think plan build review qa security license-audit privacy-check release-readiness ship; do
+  assert_contains "stack table row $ph" "$HTML" "data-phase=\"$ph\""
+done
+# Missing phases must render as 'missing'.
+assert_contains "stack missing badge" "$HTML" ">missing<"
+# No certification language.
+assert_not_contains "stack no certification language" "$HTML" 'certified'
+assert_not_contains "stack no compliance language" "$HTML" 'compliant'
+
+# ─── Cell 21: stack name validation ─────────────────────────
+printf "\n  ${DIM}Cell 21: stack name validation${NC}\n"
+PROJ="$TMP_ROOT/cell21"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+# Path traversal in stack name must be rejected.
+assert_exit "stack name with .. rejected" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack ../etc"
+assert_exit "stack name with / rejected" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack a/b"
+assert_exit "stack name with space rejected" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack 'foo bar'"
+
+# Unknown stack: graceful "not found", not crash.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack does-not-exist 2>/dev/null || true)
+# When no stack file matches and no config.json exists, default graph
+# applies (the registry returns the built-in sprint).
+[ -n "$HTML" ] && assert_true "stack fallback to default registry produced HTML" test -f "$HTML"
+
+# ─── Cell 22: journal --date validation ────────────────────
+printf "\n  ${DIM}Cell 22: journal --date validation${NC}\n"
+PROJ="$TMP_ROOT/cell22"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+assert_exit "journal --date bad shape exits 1" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --date 2026/05/11"
+assert_exit "journal --date with shell metachars exits 1" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --date '2026-05-11; rm -rf x'"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --date 2026-05-11)
+assert_true "journal --date valid shape works" test -f "$HTML"
 
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"

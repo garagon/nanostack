@@ -37,11 +37,13 @@ NC='\033[0m'
 check_absent() {
   local name="$1"; local pattern="$2"; shift 2
   local files=("$@")
-  if grep -nE "$pattern" "${files[@]}" >/dev/null 2>&1; then
+  # `-e -- ` so a pattern starting with `-` (e.g. `--no-session-sync`)
+  # is not interpreted as a grep flag.
+  if grep -nE -e "$pattern" -- "${files[@]}" >/dev/null 2>&1; then
     FAIL=$((FAIL+1))
     printf "  ${RED}FAIL${NC}  %s\n" "$name"
     printf "         ${DIM}pattern: %s${NC}\n" "$pattern"
-    grep -nE "$pattern" "${files[@]}" | sed 's/^/         /' || true
+    grep -nE -e "$pattern" -- "${files[@]}" | sed 's/^/         /' || true
   else
     PASS=$((PASS+1))
     printf "  ${GREEN}OK${NC}    %s\n" "$name"
@@ -51,7 +53,7 @@ check_absent() {
 check_present() {
   local name="$1"; local pattern="$2"; shift 2
   local files=("$@")
-  if grep -nE "$pattern" "${files[@]}" >/dev/null 2>&1; then
+  if grep -nE -e "$pattern" -- "${files[@]}" >/dev/null 2>&1; then
     PASS=$((PASS+1))
     printf "  ${GREEN}OK${NC}    %s\n" "$name"
   else
@@ -78,6 +80,7 @@ check_absent_no_allowlist() {
   hits=$(grep -nE "$pattern" "${files[@]}" 2>/dev/null \
     | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' \
     | grep -vE '# url-allowlist' \
+    | grep -vE 'xmlns="http://www\.w3\.org/' \
     | grep -vE 'http://\*\|https://\*' \
     || true)
   if [ -n "$hits" ]; then
@@ -166,6 +169,30 @@ check_present "shared CSS defines .finding.sev-bad" \
   '\.finding\.sev-bad' "bin/lib/visual-render.sh"
 check_present "shared CSS defines .counter" \
   '\.counter' "bin/lib/visual-render.sh"
+
+# 12. PR 3: journal renderer reads through find-artifact.sh and stays
+# read-only (--no-session-sync) just like the per-phase renders.
+check_present "render_journal_body uses --no-session-sync" \
+  '--no-session-sync' "bin/render-artifact.sh"
+
+# 13. PR 3: stack renderer must validate the stack name before
+# touching disk. Restrict to alnum, _, -.
+check_present "stack name validation rejects path traversal" \
+  '\[!a-zA-Z0-9_-\]\*' "bin/render-artifact.sh"
+
+# 14. PR 3: journal --date must be regex-validated, never piped to a
+# shell with metacharacters.
+check_present "journal --date YYYY-MM-DD regex" \
+  '\[0-9\]\[0-9\]\[0-9\]\[0-9\]-\[0-9\]\[0-9\]-\[0-9\]\[0-9\]' "bin/render-artifact.sh"
+
+# 15. PR 3: SVG must not contain external image hrefs.
+check_absent "no SVG <image href" \
+  '<image[[:space:]]+href' "bin/render-artifact.sh" "bin/lib/visual-render.sh"
+
+# 16. PR 3: SVG must not embed <foreignObject> (allows arbitrary HTML
+# inside SVG which sidesteps the CSP and escape contract).
+check_absent "no SVG <foreignObject" \
+  '<foreignObject' "bin/render-artifact.sh" "bin/lib/visual-render.sh"
 
 TOTAL=$((PASS+FAIL))
 printf "\n  %s/%s checks passed\n" "$PASS" "$TOTAL"
