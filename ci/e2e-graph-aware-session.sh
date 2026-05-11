@@ -506,6 +506,46 @@ assert_eq "after plan: can_ship = true (ship is ready)" "true" \
 assert_eq "after plan: next_phase = ship" "ship" \
   "$(echo "$out" | jq -r '.next_phase')"
 
+# Cell 9h: conductor sprint started with --phases (no config.phase_graph)
+# must update the session snapshot so next-step.sh sees the custom
+# graph. Before PR 4 pass 9 this entry point left the session pointing
+# at the default graph and next-step.sh suggested /review even though
+# the conductor had a license-audit chain. Codex caught the missed
+# conductor entry point on the ninth review pass.
+echo "[9h] conductor --phases updates the session phase_graph snapshot"
+new_project "cell9h-conductor"
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{"custom_phases":["license-audit"]}
+EOF
+mkdir -p "$NANOSTACK_STORE/skills/license-audit"
+cat > "$NANOSTACK_STORE/skills/license-audit/SKILL.md" <<'EOF'
+---
+name: license-audit
+description: custom
+concurrency: read
+---
+EOF
+"$SESSION_SH" init development >/dev/null
+nodes_before=$(jq -c '.phase_graph | map(.name)' "$NANOSTACK_STORE/session.json")
+assert_eq "before conductor: session phase_graph is the default sprint" \
+  '["think","plan","build","review","security","qa","ship"]' "$nodes_before"
+
+"$REPO/conductor/bin/sprint.sh" start --phases \
+  '[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"license-audit","depends_on":["build"]},{"name":"ship","depends_on":["license-audit"]}]' \
+  >/dev/null
+
+nodes_after=$(jq -c '.phase_graph | map(.name)' "$NANOSTACK_STORE/session.json")
+assert_eq "after conductor: session phase_graph is the conductor graph" \
+  '["think","plan","build","license-audit","ship"]' "$nodes_after"
+# Walk to confirm license-audit shows up as next_phase at the right time
+for ph in think plan; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+next_after_plan=$(jq -r '.next_phase' "$NANOSTACK_STORE/session.json")
+assert_eq "after plan in a conductor sprint: next_phase = license-audit" \
+  "license-audit" "$next_after_plan"
+
 # Cell 10: default sprint user_message remains exactly the historical
 # wording. No regression for built-in flows.
 echo "[10] default sprint user_message is unchanged"

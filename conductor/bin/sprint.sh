@@ -197,6 +197,35 @@ cmd_start() {
       phases: $phases
     }' > "$sprint_dir/sprint.json"
 
+  # Mirror the active graph into the session snapshot so
+  # bin/session.sh phase-complete and bin/next-step.sh see the same
+  # source of truth. Without this, conductor sprints started with
+  # --phases on the CLI (no project config.phase_graph) left the
+  # session pointing at the default graph and next-step.sh suggested
+  # default-sprint phases even for a custom stack. PR 4 of the
+  # 2026-05-10 architecture audit added the snapshot; Codex caught
+  # the missed conductor entry point on the ninth review pass.
+  local session_file="$NANOSTACK_STORE/session.json"
+  if [ -f "$session_file" ] && [ -n "$phases" ]; then
+    local ready_seed
+    if declare -F nano_phase_ready_from_graph >/dev/null 2>&1; then
+      local completed_seed in_progress_seed
+      completed_seed=$(jq -c '[(.phase_log // [])[] | select(.status == "completed") | .phase] | unique' "$session_file" 2>/dev/null || echo "[]")
+      in_progress_seed=$(jq -c '[(.phase_log // [])[] | select(.status == "in_progress") | .phase] | unique' "$session_file" 2>/dev/null || echo "[]")
+      ready_seed=$(nano_phase_ready_from_graph "$phases" "$completed_seed" "$in_progress_seed" 2>/dev/null \
+        | jq -R . | jq -sc 'map(select(length > 0))')
+    fi
+    [ -z "$ready_seed" ] && ready_seed="[]"
+    local next_seed
+    next_seed=$(echo "$ready_seed" | jq -r '.[0] // "null"')
+    [ "$next_seed" = "null" ] && next_seed='null' || next_seed="\"$next_seed\""
+    jq --argjson graph "$phases" --argjson ready "$ready_seed" --argjson next "$next_seed" \
+      '.phase_graph = $graph
+       | .ready_phases = $ready
+       | .next_phase = (if ($next | type) == "string" then $next else null end)' \
+      "$session_file" > "${session_file}.tmp" && mv "${session_file}.tmp" "$session_file" || true
+  fi
+
   echo "$sprint_dir"
 }
 
