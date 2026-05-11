@@ -94,7 +94,13 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --latest)         USE_LATEST=true ;;
     --strict)         STRICT=true ;;
-    --interactive)  INTERACTIVE=true ;;
+    --interactive)
+      # Codex PR 4 pass 1: --interactive widens the CSP to allow
+      # inline script. Only enable it for phases that actually emit
+      # copy controls (plan and review in v1) so the wider policy
+      # never applies where it has no purpose.
+      INTERACTIVE=true
+      ;;
     --manifest-only)  MANIFEST_ONLY=true ;;
     --out)
       shift
@@ -167,6 +173,21 @@ case "$PHASE" in
     exit 1
     ;;
 esac
+
+# Codex PR 4 pass 1: --interactive is supported only for /plan and
+# /review in v1. Reject elsewhere with exit 1 so the wider CSP
+# (script-src 'unsafe-inline') never applies to phases that emit no
+# copy controls. The architect's spec already scoped interactive UI
+# to those two phases.
+if [ "$INTERACTIVE" = true ]; then
+  case "$PHASE" in
+    plan|review) ;;
+    *)
+      echo "render-artifact: --interactive is supported only for /plan and /review in PR 4" >&2
+      exit 1
+      ;;
+  esac
+fi
 
 # Default the journal date to today if neither --today nor --date
 # was supplied (codex PR 3 pass 2: bare `journal` left this empty
@@ -495,20 +516,23 @@ HTML
   # malformed shapes still produce useful payloads.
   if [ "${INTERACTIVE:-false}" = true ]; then
     local plan_prompt plan_markdown plan_json_patch
+    # Coerce every payload field with tostring/map(tostring) so a
+    # schema-warning artifact (numbers, objects, nulls in unexpected
+    # places) cannot crash jq under set -e. Codex PR 4 pass 1.
     plan_prompt=$(printf '%s' "$norm" | jq -r '
       "Approve the plan and continue.\n" +
-      "Goal: " + (.summary.goal // "Not recorded") + "\n" +
-      "Scope: " + (.summary.scope // "Not recorded") + "\n" +
-      "Planned files:\n  - " + ((.summary.planned_files // []) | join("\n  - ")) + "\n" +
-      "Risks:\n  - " + ((.summary.risks // []) | join("\n  - "))
+      "Goal: " + ((.summary.goal // "Not recorded") | tostring) + "\n" +
+      "Scope: " + ((.summary.scope // "Not recorded") | tostring) + "\n" +
+      "Planned files:\n  - " + ((.summary.planned_files // []) | map(tostring) | join("\n  - ")) + "\n" +
+      "Risks:\n  - " + ((.summary.risks // []) | map(tostring) | join("\n  - "))
     ')
     plan_markdown=$(printf '%s' "$norm" | jq -r '
       "## Plan summary\n\n" +
-      "- **Goal:** " + (.summary.goal // "Not recorded") + "\n" +
-      "- **Scope:** " + (.summary.scope // "Not recorded") + "\n" +
-      "- **Approval:** " + (.summary.plan_approval // "Not recorded") + "\n\n" +
+      "- **Goal:** " + ((.summary.goal // "Not recorded") | tostring) + "\n" +
+      "- **Scope:** " + ((.summary.scope // "Not recorded") | tostring) + "\n" +
+      "- **Approval:** " + ((.summary.plan_approval // "Not recorded") | tostring) + "\n\n" +
       "### Planned files\n\n" +
-      ((.summary.planned_files // []) | map("- `" + . + "`") | join("\n"))
+      ((.summary.planned_files // []) | map(tostring) | map("- `" + . + "`") | join("\n"))
     ')
     plan_json_patch=$(printf '%s' "$norm" | jq -c '{
       action: "plan.approve",
@@ -716,25 +740,29 @@ HTML
   # as-is.
   if [ "${INTERACTIVE:-false}" = true ]; then
     local review_prompt review_markdown review_json_patch
+    # Coerce every concatenated field with tostring (codex PR 4
+    # pass 1). A schema-warning review with .summary.blocking as a
+    # string or .scope_drift.status as a number would otherwise
+    # crash jq under set -e.
     review_prompt=$(printf '%s' "$norm" | jq -r '
       "Address the review findings before /ship.\n" +
-      "Summary: " + (.summary.blocking|tostring) + " blocking / " +
-                   (.summary.should_fix|tostring) + " should-fix / " +
-                   (.summary.nitpicks|tostring) + " nitpicks\n" +
-      "Scope drift: " + (.scope_drift.status // "unknown") + "\n" +
+      "Summary: " + ((.summary.blocking // 0) | tostring) + " blocking / " +
+                   ((.summary.should_fix // 0) | tostring) + " should-fix / " +
+                   ((.summary.nitpicks // 0) | tostring) + " nitpicks\n" +
+      "Scope drift: " + ((.scope_drift.status // "unknown") | tostring) + "\n" +
       "Now-fix:\n  - " +
-      ((.findings // []) | map(select(.severity == "blocking" or .severity == "should_fix")) | map(.description) | join("\n  - "))
+      ((.findings // []) | map(select(.severity == "blocking" or .severity == "should_fix")) | map((.description // "(no description)") | tostring) | join("\n  - "))
     ')
     review_markdown=$(printf '%s' "$norm" | jq -r '
       "## Review findings\n\n" +
       "| Severity | Count |\n|----|----|\n" +
-      "| Blocking | " + (.summary.blocking|tostring) + " |\n" +
-      "| Should fix | " + (.summary.should_fix|tostring) + " |\n" +
-      "| Nitpicks | " + (.summary.nitpicks|tostring) + " |\n" +
-      "| Positive | " + (.summary.positive|tostring) + " |\n\n" +
+      "| Blocking | " + ((.summary.blocking // 0) | tostring) + " |\n" +
+      "| Should fix | " + ((.summary.should_fix // 0) | tostring) + " |\n" +
+      "| Nitpicks | " + ((.summary.nitpicks // 0) | tostring) + " |\n" +
+      "| Positive | " + ((.summary.positive // 0) | tostring) + " |\n\n" +
       "### Now-fix\n\n" +
       ((.findings // []) | map(select(.severity == "blocking" or .severity == "should_fix"))
-        | map("- **" + (.severity // "?") + "**: " + (.description // "")) | join("\n"))
+        | map("- **" + ((.severity // "?") | tostring) + "**: " + ((.description // "") | tostring)) | join("\n"))
     ')
     review_json_patch=$(printf '%s' "$norm" | jq -c '{
       action: "review.triage",

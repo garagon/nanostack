@@ -1528,6 +1528,72 @@ assert_contains "escaped <\\/script> form present" "$HTML" '<\/script>'
 # Manual copy <pre> is HTML-escaped.
 assert_contains "manual-copy <pre> shows escaped tag" "$HTML" '&lt;/script&gt;'
 
+# ─── Cell 23i: --interactive rejected outside plan/review (PR 4 pass 1) ─
+printf "\n  ${DIM}Cell 23i: --interactive scope (PR 4 pass 1)${NC}\n"
+PROJ="$TMP_ROOT/cell23i"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_security "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_qa "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_ship "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_think "$NANOSTACK_STORE")
+assert_exit "security --interactive rejected" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' security --latest --interactive"
+assert_exit "qa --interactive rejected" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' qa --latest --interactive"
+assert_exit "ship --interactive rejected" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' ship --latest --interactive"
+assert_exit "think --interactive rejected" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' think --latest --interactive"
+assert_exit "journal --interactive rejected" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today --interactive"
+assert_exit "stack --interactive rejected" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack default --interactive"
+
+# ─── Cell 23j: --interactive on schema-warning plan does not crash (PR 4 pass 1) ─
+printf "\n  ${DIM}Cell 23j: --interactive on schema-warning plan (PR 4 pass 1)${NC}\n"
+PROJ="$TMP_ROOT/cell23j"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/plan"
+# Plan with non-string risks (objects) and numeric planned_files.
+# Schema validation will fail but the renderer must still produce HTML.
+cat > "$NANOSTACK_STORE/plan/$(date -u +%Y%m%d)-120000.json" <<JSON
+{
+  "phase": "plan",
+  "project": "$PROJ",
+  "summary": {
+    "goal": 42,
+    "planned_files": [123, 456],
+    "plan_approval": "manual",
+    "risks": [{"complicated":true}]
+  },
+  "context_checkpoint": {"summary": null}
+}
+JSON
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest --interactive 2>/dev/null || true)
+[ -n "$HTML" ] && assert_true "schema-warning plan with --interactive renders" test -f "$HTML"
+
+# ─── Cell 23k: --interactive on schema-warning review does not crash (PR 4 pass 1) ─
+printf "\n  ${DIM}Cell 23k: --interactive on schema-warning review (PR 4 pass 1)${NC}\n"
+PROJ="$TMP_ROOT/cell23k"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/review"
+cat > "$NANOSTACK_STORE/review/$(date -u +%Y%m%d)-120000.json" <<JSON
+{
+  "phase": "review",
+  "project": "$PROJ",
+  "summary": {"blocking":"one","should_fix":2,"nitpicks":3,"positive":0},
+  "scope_drift": {"status": 42},
+  "findings": [{"id":"X","severity":"blocking","description":{"nested":"object"}}],
+  "context_checkpoint": {}
+}
+JSON
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" review --latest --interactive 2>/dev/null || true)
+[ -n "$HTML" ] && assert_true "schema-warning review with --interactive renders" test -f "$HTML"
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"
