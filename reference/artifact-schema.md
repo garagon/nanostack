@@ -161,8 +161,15 @@ Every artifact can include a `context_checkpoint` — a self-contained summary t
       "src/auth/login.ts",
       "tests/auth/login.test.ts"
     ],
+    "plan_approval": "manual|auto|not_required",
     "risks": ["string"],
     "out_of_scope": ["string"]
+  },
+  "context_checkpoint": {
+    "summary": "string",
+    "key_files": ["string"],
+    "decisions_made": ["string"],
+    "open_questions": ["string"]
   }
 }
 ```
@@ -194,7 +201,13 @@ Every artifact can include a `context_checkpoint` — a self-contained summary t
       "line": 42
     }
   ],
-  "conflicts": []
+  "conflicts": [],
+  "context_checkpoint": {
+    "summary": "string",
+    "key_files": ["string"],
+    "decisions_made": ["string"],
+    "open_questions": ["string"]
+  }
 }
 ```
 
@@ -222,7 +235,13 @@ Every artifact can include a `context_checkpoint` — a self-contained summary t
       "root_cause": "string",
       "fixed": true
     }
-  ]
+  ],
+  "context_checkpoint": {
+    "summary": "string",
+    "key_files": ["string"],
+    "decisions_made": ["string"],
+    "open_questions": ["string"]
+  }
 }
 ```
 
@@ -251,11 +270,19 @@ Every artifact can include a `context_checkpoint` — a self-contained summary t
       "confidence": 8
     }
   ],
-  "conflicts": []
+  "conflicts": [],
+  "context_checkpoint": {
+    "summary": "string",
+    "key_files": ["string"],
+    "decisions_made": ["string"],
+    "open_questions": ["string"]
+  }
 }
 ```
 
 ### /ship
+
+Normal mode:
 
 ```json
 {
@@ -266,7 +293,23 @@ Every artifact can include a `context_checkpoint` — a self-contained summary t
     "title": "string",
     "status": "created|merged|reverted",
     "ci_passed": true
+  },
+  "context_checkpoint": {
+    "summary": "string",
+    "key_files": ["string"],
+    "decisions_made": ["string"],
+    "open_questions": ["string"]
   }
+}
+```
+
+Report-only mode (no commit, no PR):
+
+```json
+{
+  "phase": "ship",
+  "run_mode": "report_only",
+  "summary": "string or object describing what would have shipped"
 }
 ```
 
