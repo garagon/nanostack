@@ -106,47 +106,13 @@ if [ -n "$TIER1" ]; then
   fi
 fi
 
-# ─── Tier 2: In-project operations ──────────────────────────
-# If the command only touches files inside the current git repo,
-# it's reviewable via version control. Let it through.
-PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
-
-if [ -n "$PROJECT_ROOT" ]; then
-  # Commands that write files but stay in-project are Tier 2
-  # We only check simple file-targeting commands, not pipes or chains
-  case "$CMD" in
-    # Skip tier 2 for chained/piped commands (too hard to analyze)
-    *\|*|*\;*|*\&\&*) ;;
-    *)
-      # If command references files, check they're all in-project
-      # Extract paths that look like file references
-      ALL_IN_PROJECT=true
-      for token in $CMD; do
-        # Skip flags and the command itself
-        case "$token" in
-          -*|"$CMD_BASE") continue ;;
-        esac
-        # If it looks like a path and exists or starts with project root
-        if [ -e "$token" ] || [[ "$token" == /* ]]; then
-          REAL_PATH=$(realpath "$token" 2>/dev/null) || REAL_PATH="$token"
-          case "$REAL_PATH" in
-            "$PROJECT_ROOT"*) ;; # in project
-            *) ALL_IN_PROJECT=false ;;
-          esac
-        fi
-      done
-      # Don't auto-pass if command has no file args (could be anything)
-      if [ "$ALL_IN_PROJECT" = true ] && echo "$CMD" | grep -qE '/|\./' ; then
-        exit 0
-      fi
-      ;;
-  esac
-fi
-
-# ─── Tier 2.5: Phase-aware concurrency enforcement ─────────
-# If a session is active and the current phase is read-only,
-# block write operations to prevent race conditions in parallel execution.
-# Store path already resolved at the top of the script.
+# ─── Tier 2.4: Phase-aware concurrency enforcement ─────────
+# Runs BEFORE the in-project fast-path. A read-only phase must block
+# write commands even when they only touch in-project paths, otherwise
+# `touch ./foo` or `mv ./a ./b` slip through the git-reviewable
+# allowlist and silently mutate files during a phase that promised no
+# writes. Codex caught this on the PR 1 review by testing `touch ./x`
+# from a git worktree while concurrency was set to read.
 #
 # Skill resolution goes through bin/lib/phases.sh so custom phases are
 # protected the same way built-in ones are. The previous lookup did a
@@ -198,6 +164,45 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
       fi
     fi
   fi
+fi
+
+# ─── Tier 2.5: In-project operations ────────────────────────
+# If the command only touches files inside the current git repo,
+# it's reviewable via version control. Let it through. Phase
+# concurrency above already prevented in-project writes during a
+# read phase, so this fast-path only fires when writes are allowed.
+PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
+
+if [ -n "$PROJECT_ROOT" ]; then
+  # Commands that write files but stay in-project are Tier 2.5
+  # We only check simple file-targeting commands, not pipes or chains
+  case "$CMD" in
+    # Skip tier 2.5 for chained/piped commands (too hard to analyze)
+    *\|*|*\;*|*\&\&*) ;;
+    *)
+      # If command references files, check they're all in-project
+      # Extract paths that look like file references
+      ALL_IN_PROJECT=true
+      for token in $CMD; do
+        # Skip flags and the command itself
+        case "$token" in
+          -*|"$CMD_BASE") continue ;;
+        esac
+        # If it looks like a path and exists or starts with project root
+        if [ -e "$token" ] || [[ "$token" == /* ]]; then
+          REAL_PATH=$(realpath "$token" 2>/dev/null) || REAL_PATH="$token"
+          case "$REAL_PATH" in
+            "$PROJECT_ROOT"*) ;; # in project
+            *) ALL_IN_PROJECT=false ;;
+          esac
+        fi
+      done
+      # Don't auto-pass if command has no file args (could be anything)
+      if [ "$ALL_IN_PROJECT" = true ] && echo "$CMD" | grep -qE '/|\./' ; then
+        exit 0
+      fi
+      ;;
+  esac
 fi
 
 # ─── Tier 2.75: Sprint phase gate ──────────────────────────

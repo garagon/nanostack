@@ -267,7 +267,10 @@ cd "$PROJ"
 # must block writes the same way a built-in read phase does. Without the
 # registry lookup, guard fell back to $NANOSTACK_ROOT/<phase>/SKILL.md
 # and silently no-oped for every custom skill (which lives under the
-# store's skills/, not the repo).
+# store's skills/, not the repo). Also exercises the in-project bypass
+# (./ prefix + absolute in-project path) that Codex flagged on the
+# PR 1 review — Tier 2.4 must run before the in-project fast-path or
+# `touch ./x` inside a git worktree slips through.
 echo "[16] guard blocks writes during a read-only custom phase"
 GUARD_HOME="$TMP_ROOT/guard-home"
 GUARD_PROJ="$TMP_ROOT/guard-project"
@@ -278,12 +281,14 @@ HOME="$GUARD_HOME" "$REPO/bin/create-skill.sh" license-audit --concurrency read 
 GUARD_STORE="$GUARD_PROJ/.nanostack"
 [ -d "$GUARD_STORE/skills/license-audit" ] || GUARD_STORE="$GUARD_HOME/.nanostack"
 echo '{"current_phase":"license-audit"}' > "$GUARD_STORE/session.json"
-set +e
-NANOSTACK_STORE="$GUARD_STORE" HOME="$GUARD_HOME" \
-  "$REPO/guard/bin/check-dangerous.sh" "touch should-not-pass" >/dev/null 2>&1
-guard_rc=$?
-set -e
-assert_eq "custom read phase blocks write (exit 1)" "1" "$guard_rc"
+for case_cmd in "touch should-not-pass" "touch ./should-not-pass" "touch $GUARD_PROJ/should-not-pass"; do
+  set +e
+  NANOSTACK_STORE="$GUARD_STORE" HOME="$GUARD_HOME" \
+    "$REPO/guard/bin/check-dangerous.sh" "$case_cmd" >/dev/null 2>&1
+  guard_rc=$?
+  set -e
+  assert_eq "blocks: $case_cmd" "1" "$guard_rc"
+done
 
 # Cell 17: switching the same custom phase to concurrency: write lifts
 # the concurrency block. (Other guard tiers may still object to specific
