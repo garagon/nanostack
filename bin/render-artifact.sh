@@ -1151,13 +1151,17 @@ render_stack_svg() {
   local graph_json="$1"
 
   # Iterative depth resolution in bash. Root nodes (no depends_on) get
-  # depth 0; children get 1 + max(parent depths). Cap at 10 rounds to
-  # keep cycles from looping forever.
-  local names depths_tsv
+  # depth 0; children get 1 + max(parent depths). Cap rounds at the
+  # node count + 1 so a valid topologically-unsorted graph is fully
+  # resolved (worst case is a linear chain). Codex PR 3 pass 3 caught
+  # the fixed cap of 10 truncating larger custom stacks.
+  local names depths_tsv node_count round_cap
   names=$(printf '%s' "$graph_json" | jq -r '.[].name')
+  node_count=$(printf '%s\n' "$names" | grep -c .)
+  round_cap=$(( node_count + 1 ))
   : > "$TMP_ROOT_FALLBACK/depths.tsv"
   local round
-  for round in 1 2 3 4 5 6 7 8 9 10; do
+  for round in $(seq 1 "$round_cap"); do
     local progressed=0
     for n in $names; do
       local already
@@ -1383,6 +1387,24 @@ jq -n \
     created_at: $created_at
   }' > "$TMP_MFST"
 
+# Strict mode for aggregate renders: enforce after sources are
+# collected, BEFORE the manifest-only branch returns. Codex PR 3
+# pass 3 caught that running before the early exit was required so
+# `journal --strict --manifest-only` cannot ship a "strict: true"
+# manifest with tampered sources. "missing" sources stay acceptable
+# because they are an expected aggregate state (the user has not
+# run that phase yet). integrity_missing and integrity_mismatch are
+# the actually-suspect cases.
+if [ "$STRICT" = true ] && { [ "$PHASE" = "journal" ] || [ "$PHASE" = "stack" ]; }; then
+  bad=$(printf '%s' "$SOURCE_ARTIFACTS_JSON" | jq -r \
+    '.[] | select(.trust == "integrity_missing" or .trust == "integrity_mismatch") | "\(.phase): \(.trust)"' 2>/dev/null)
+  if [ -n "$bad" ]; then
+    echo "render-artifact: --strict requires every aggregated source to be verified; failing on:" >&2
+    printf '  %s\n' $bad >&2
+    exit 3
+  fi
+fi
+
 if [ "$MANIFEST_ONLY" = true ]; then
   # Codex PR 1 pass 9: the manifest-only branch must not leave the
   # mktemp'd HTML temp file behind. Clean it before disabling the
@@ -1393,26 +1415,6 @@ if [ "$MANIFEST_ONLY" = true ]; then
   trap - EXIT
   echo "$MANIFEST_PATH"
   exit 0
-fi
-
-# Strict mode for aggregate renders: enforce after sources are
-# collected. Any source whose trust is not "verified" rejects the
-# render. Codex PR 3 pass 2 caught that --strict with a journal or
-# stack produced a "strict: true" manifest while skipping the trust
-# check entirely.
-if [ "$STRICT" = true ] && { [ "$PHASE" = "journal" ] || [ "$PHASE" = "stack" ]; }; then
-  unverified=$(printf '%s' "$SOURCE_ARTIFACTS_JSON" | jq -r \
-    '.[] | select(.trust != "verified" and .trust != "missing") | "\(.phase): \(.trust)"' 2>/dev/null)
-  # "missing" sources are an expected aggregate state (the user has
-  # not run that phase yet). "integrity_missing" and
-  # "integrity_mismatch" are the actually-suspect cases.
-  bad=$(printf '%s' "$SOURCE_ARTIFACTS_JSON" | jq -r \
-    '.[] | select(.trust == "integrity_missing" or .trust == "integrity_mismatch") | "\(.phase): \(.trust)"' 2>/dev/null)
-  if [ -n "$bad" ]; then
-    echo "render-artifact: --strict requires every aggregated source to be verified; failing on:" >&2
-    printf '  %s\n' $bad >&2
-    exit 3
-  fi
 fi
 
 mv "$TMP_HTML" "$HTML_PATH"

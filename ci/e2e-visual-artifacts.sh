@@ -861,7 +861,9 @@ PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
 jq 'del(.integrity)' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
 assert_exit "journal --strict fails on integrity_missing" 3 \
   sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today --strict"
-# Tamper plan; --strict must also fail.
+# Tamper plan; --strict must also fail. Delete prior artifact first
+# so the latest-picker definitely sees the tampered one.
+rm -f "$NANOSTACK_STORE/plan/"*.json
 (cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
 PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
 jq '.summary.goal = "Tampered"' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
@@ -899,6 +901,55 @@ MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*stack*.manifest.json | head -1)
 assert_true "stack manifest is parseable JSON" jq -e '.' "$MFST"
 assert_true "stack manifest has source_artifacts array" \
   sh -c "[ \"\$(jq -r 'type' '$MFST')\" = 'object' ] && [ \"\$(jq -r '.source_artifacts | type' '$MFST')\" = 'array' ]"
+
+# ─── Cell 22h: --manifest-only with --strict still enforces (PR 3 pass 3) ─
+printf "\n  ${DIM}Cell 22h: --manifest-only --strict enforces (PR 3 pass 3)${NC}\n"
+PROJ="$TMP_ROOT/cell22h"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+jq '.summary.goal = "Tampered"' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
+assert_exit "journal --strict --manifest-only exits 3 when tampered" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today --strict --manifest-only"
+assert_exit "stack --strict --manifest-only exits 3 when tampered" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack compliance-release --strict --manifest-only"
+
+# ─── Cell 22i: large unsorted phase_graph renders every node (PR 3 pass 3) ─
+printf "\n  ${DIM}Cell 22i: large unsorted phase_graph (PR 3 pass 3)${NC}\n"
+PROJ="$TMP_ROOT/cell22i"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+# 15-node linear chain in reverse topological order. The previous
+# cap of 10 rounds left the tail of the chain out of the SVG.
+cat > "$NANOSTACK_STORE/config.json" <<'CFG'
+{
+  "schema_version": "1",
+  "custom_phases": ["c1","c2","c3","c4","c5","c6","c7","c8","c9","c10","c11","c12","c13"],
+  "phase_graph": [
+    {"name": "c13", "depends_on": ["c12"]},
+    {"name": "c12", "depends_on": ["c11"]},
+    {"name": "c11", "depends_on": ["c10"]},
+    {"name": "c10", "depends_on": ["c9"]},
+    {"name": "c9", "depends_on": ["c8"]},
+    {"name": "c8", "depends_on": ["c7"]},
+    {"name": "c7", "depends_on": ["c6"]},
+    {"name": "c6", "depends_on": ["c5"]},
+    {"name": "c5", "depends_on": ["c4"]},
+    {"name": "c4", "depends_on": ["c3"]},
+    {"name": "c3", "depends_on": ["c2"]},
+    {"name": "c2", "depends_on": ["c1"]},
+    {"name": "c1", "depends_on": []}
+  ]
+}
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack default)
+# Every node must appear in the SVG (as a <g data-phase=...> wrapper).
+for n in c1 c5 c10 c13; do
+  assert_contains "stack svg contains $n" "$HTML" "data-phase=\"$n\""
+done
 
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
