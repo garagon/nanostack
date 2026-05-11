@@ -75,12 +75,48 @@ The resolver looks for the custom phase's dependency list in this order:
 2. **`depends_on:` in the skill's `SKILL.md` frontmatter**. Both inline (`depends_on: [plan, build]`) and block (`depends_on:\n  - plan\n  - build`) YAML list forms parse. The skill is found via `nano_phase_skill_path`.
 3. If neither lists the phase, `upstream_artifacts` is `{}`.
 
-## What the resolver does NOT do for custom phases (yet)
+## Custom routing contract (PR 5 of architecture vNext)
 
-- It does not load solutions, precedents, or diarizations. Skills that want those can call the helpers directly (`bin/find-solution.sh`, etc.).
-- It does not read custom routing rules from a config file. Routing is currently keyed on the dependency list only.
-- It does not enforce the conductor's `concurrency` field. That work belongs to PR 5 (conductor custom graph).
-- It does not check skill discovery files (`agents/openai.yaml`). That belongs to PR 3 (copy-paste template) and PR 6 (`bin/check-custom-skill.sh`).
+A custom skill can declare a `phase_context` block in `.nanostack/config.json` to tell `bin/resolve.sh` what shape of context it needs. Without a `phase_context` entry the resolver keeps the dependency-only behavior; with one it applies the declared fields and surfaces them in the `routing` block of its JSON output so downstream consumers can audit what was applied.
+
+```json
+{
+  "custom_phases": ["license-audit"],
+  "phase_context": {
+    "license-audit": {
+      "trust": "strict",
+      "upstream_required": ["review"],
+      "upstream_optional": ["security"],
+      "max_age_days": 7,
+      "solutions": {
+        "tags": ["license", "compliance"],
+        "limit": 3
+      },
+      "diarizations": {
+        "paths": ["package.json", "src/privacy"],
+        "keywords": ["pii"]
+      }
+    }
+  }
+}
+```
+
+| Field | Default | Effect |
+|-------|---------|--------|
+| `trust` | `"normal"` | `"strict"` rejects `integrity_missing` artifacts (so a tampered or legacy file never lands in `upstream_artifacts`); `"normal"` keeps the historical lenient load. The artifact's trust state is always reported in `upstream_status` either way. |
+| `upstream_required` | `[]` | Surfaces declared-required upstreams in `routing.upstream_required`. Missing artifacts for these phases already report `upstream_status[phase] = "missing"`; the routing block makes the intent explicit. |
+| `upstream_optional` | `[]` | Surfaces declared-optional upstreams in `routing.upstream_optional`. Informational; consumers can use it to soften missing-warning logic. |
+| `max_age_days` | per-phase default (30 days for custom) | Overrides the per-phase max age window. CLI `--max-age <phase>:<n>` still takes precedence. |
+| `solutions.tags` | `[]` | When non-empty, the resolver loads matching solutions from `<store>/know-how/solutions` (case-insensitive substring match against file content). |
+| `solutions.limit` | `10` | Cap on the number of solution paths returned. |
+| `diarizations.paths` / `diarizations.keywords` | `[]` | When non-empty, the resolver loads diarizations whose `subject:` field matches any path or keyword (case-insensitive substring). Does not require a git diff to be present. |
+
+The full `routing` block always appears in `bin/resolve.sh`'s JSON output: `routing.declared` is `false` for core phases and for custom phases without a context entry. Custom skills can also declare context routing rules directly in their `SKILL.md` frontmatter once the feature is wired (currently the JSON config in `.nanostack/config.json` is the canonical location).
+
+## What the resolver still leaves to skill authors
+
+- It does not enforce the conductor's `concurrency` field. That responsibility lives in `guard/bin/check-dangerous.sh` (Tier 2.4) and `conductor/bin/sprint.sh batch`.
+- It does not check skill discovery files (`agents/openai.yaml`). That belongs to `bin/check-custom-skill.sh`.
 
 ## Lifecycle outputs
 

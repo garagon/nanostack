@@ -3366,6 +3366,43 @@ jobs:
           fi
           echo "OK: guard concurrency tier uses the phase registry."
 
+  custom-routing-contract:
+    name: Custom routing contract wired into resolve.sh
+    runs-on: ubuntu-latest
+    # PR 5 of the 2026-05-10 architecture audit. Locks that bin/resolve.sh
+    # reads phase_context from config and emits the routing block.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: resolve.sh reads phase_context and emits routing
+        run: |
+          set -e
+          script=bin/resolve.sh
+          if ! grep -qF 'phase_context' "$script"; then
+            echo "FAIL: $script does not read phase_context from config."
+            exit 1
+          fi
+          if ! grep -qE '^\s*routing:' "$script"; then
+            echo "FAIL: $script does not emit a routing block in its JSON output."
+            exit 1
+          fi
+          for field in routing_trust routing_required routing_optional routing_max_age routing_solution_tags routing_solution_limit routing_diarization_paths routing_diarization_keywords; do
+            if ! grep -qF "$field" "$script"; then
+              echo "FAIL: $script does not surface $field."
+              exit 1
+            fi
+          done
+          echo "OK: custom routing contract wired into resolve.sh"
+      - name: Contract documented in reference/custom-stack-contract.md
+        run: |
+          set -e
+          if ! grep -qF 'phase_context' reference/custom-stack-contract.md; then
+            echo "FAIL: reference/custom-stack-contract.md does not document phase_context."
+            exit 1
+          fi
+          echo "OK: phase_context documented in the contract reference"
+
   session-graph-aware-wiring:
     name: session.sh + next-step.sh route through the phase registry
     runs-on: ubuntu-latest

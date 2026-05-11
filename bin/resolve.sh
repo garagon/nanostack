@@ -108,8 +108,9 @@ case "$PHASE" in
     # Custom-phase fallback. A phase that's registered in
     # .nanostack/config.json (custom_phases) returns minimal context:
     # upstream artifacts driven by phase_graph or skill frontmatter,
-    # everything else empty. An unregistered phase still exits 1 so
-    # set -e callers fail closed.
+    # plus the optional context routing block (phase_context) added in
+    # PR 5 of the 2026-05-10 architecture audit. An unregistered phase
+    # still exits 1 so set -e callers fail closed.
     if [ "$(nano_phase_kind "$PHASE" 2>/dev/null)" = "custom" ]; then
       PHASE_KIND="custom"
       DEPS=""
@@ -180,6 +181,46 @@ case "$PHASE" in
     ;;
 esac
 
+# ─── Custom routing contract (PR 5 of architecture vNext) ──────
+# Custom skills can declare a `phase_context` block in
+# .nanostack/config.json that tells the resolver what shape of
+# context they need: which upstreams are required vs optional, what
+# trust level (strict / normal) gates the artifact loads, a per-
+# phase max_age override, plus solution_tags and diarization_paths
+# to widen the lookup beyond dependency edges. Core phases ignore
+# this block; their routing stays hardcoded in the case statement
+# above. Custom phases with no phase_context entry keep their pre-
+# PR-5 behavior (upstreams from deps, no solutions / diarizations).
+ROUTING_TRUST="normal"
+ROUTING_REQUIRED_JSON="[]"
+ROUTING_OPTIONAL_JSON="[]"
+ROUTING_MAX_AGE_DAYS=""
+ROUTING_SOLUTION_TAGS_JSON="[]"
+ROUTING_SOLUTION_LIMIT=""
+ROUTING_DIARIZATION_PATHS_JSON="[]"
+ROUTING_DIARIZATION_KEYWORDS_JSON="[]"
+ROUTING_DECLARED=false
+if [ "$PHASE_KIND" = "custom" ]; then
+  CONFIG_FILE="$NANOSTACK_STORE/config.json"
+  if [ -f "$CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
+    if jq -e --arg p "$PHASE" '.phase_context // {} | has($p)' "$CONFIG_FILE" >/dev/null 2>&1; then
+      ROUTING_DECLARED=true
+      ROUTING_TRUST=$(jq -r --arg p "$PHASE" '.phase_context[$p].trust // "normal"' "$CONFIG_FILE" 2>/dev/null)
+      ROUTING_REQUIRED_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].upstream_required // []' "$CONFIG_FILE" 2>/dev/null)
+      ROUTING_OPTIONAL_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].upstream_optional // []' "$CONFIG_FILE" 2>/dev/null)
+      ROUTING_MAX_AGE_DAYS=$(jq -r --arg p "$PHASE" '.phase_context[$p].max_age_days // ""' "$CONFIG_FILE" 2>/dev/null)
+      ROUTING_SOLUTION_TAGS_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].solutions.tags // []' "$CONFIG_FILE" 2>/dev/null)
+      ROUTING_SOLUTION_LIMIT=$(jq -r --arg p "$PHASE" '.phase_context[$p].solutions.limit // ""' "$CONFIG_FILE" 2>/dev/null)
+      ROUTING_DIARIZATION_PATHS_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].diarizations.paths // []' "$CONFIG_FILE" 2>/dev/null)
+      ROUTING_DIARIZATION_KEYWORDS_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].diarizations.keywords // []' "$CONFIG_FILE" 2>/dev/null)
+      case "$ROUTING_TRUST" in
+        strict|normal) ;;
+        *) ROUTING_TRUST="normal" ;;
+      esac
+    fi
+  fi
+fi
+
 # ─── 1. Resolve upstream artifacts ─────────────────────────
 #
 # upstream_artifacts keeps its historical shape: only verified paths
@@ -190,6 +231,14 @@ esac
 # integrity field" without reimplementing the check. release-readiness
 # and other release gates can switch to --require-integrity in their
 # own find-artifact.sh calls when they need strict semantics.
+#
+# PR 5 of the architecture audit adds the phase_context routing
+# block: strict trust upgrades artifact-loading to --require-integrity
+# (rejects integrity_missing in addition to mismatch) and max_age_days
+# overrides the per-phase age. upstream_required + upstream_optional
+# from the routing block surface in the routing.required / optional
+# lists for downstream consumers; missing-from-store required entries
+# already report status=missing.
 
 ARTIFACTS_JSON="{"
 STATUS_JSON="{"
@@ -207,6 +256,19 @@ for entry in $UPSTREAM; do
       age="$o_age"
     fi
   done
+  # Phase context max_age_days overrides per-phase default. CLI
+  # --max-age stays on top so an operator can widen the window for a
+  # specific run without editing config.
+  if [ -n "$ROUTING_MAX_AGE_DAYS" ] && [ "$ROUTING_MAX_AGE_DAYS" != "null" ]; then
+    age="$ROUTING_MAX_AGE_DAYS"
+    for override in $MAX_AGE_OVERRIDES; do
+      o_phase="${override%%:*}"
+      o_age="${override#*:}"
+      if [ "$o_phase" = "$phase" ] && [ -n "$o_age" ] && [ "$o_age" != "$override" ]; then
+        age="$o_age"
+      fi
+    done
+  fi
 
   # Look up the latest artifact for this phase WITHOUT --verify so we
   # can classify it ourselves via nano_artifact_trust. The verified
@@ -241,11 +303,28 @@ for entry in $UPSTREAM; do
   # added) continue to work; release gates that need strict semantics
   # call find-artifact.sh --require-integrity themselves and read
   # upstream_status for the explicit signal.
+  #
+  # PR 5: phase_context.trust = strict rejects integrity_missing too,
+  # so a custom skill that declared strict trust never sees a path it
+  # cannot verify. Normal trust keeps the historical lenient behavior
+  # (legacy artifacts saved before .integrity was added still load).
+  ALLOWED_STATUSES="verified|integrity_missing"
+  if [ "$ROUTING_TRUST" = "strict" ]; then
+    ALLOWED_STATUSES="verified"
+  fi
   case "$STATUS" in
     verified|integrity_missing)
-      $FIRST || ARTIFACTS_JSON="$ARTIFACTS_JSON,"
-      ARTIFACTS_JSON="$ARTIFACTS_JSON\"$phase\":\"$RAW\""
-      FIRST=false
+      if [ "$ROUTING_TRUST" = "strict" ] && [ "$STATUS" != "verified" ]; then
+        if [ "$PHASE_KIND" = "custom" ]; then
+          $FIRST || ARTIFACTS_JSON="$ARTIFACTS_JSON,"
+          ARTIFACTS_JSON="$ARTIFACTS_JSON\"$phase\":null"
+          FIRST=false
+        fi
+      else
+        $FIRST || ARTIFACTS_JSON="$ARTIFACTS_JSON,"
+        ARTIFACTS_JSON="$ARTIFACTS_JSON\"$phase\":\"$RAW\""
+        FIRST=false
+      fi
       ;;
     *)
       if [ "$PHASE_KIND" = "custom" ]; then
@@ -278,6 +357,31 @@ STATUS_JSON="$STATUS_JSON}"
 # ─── 2. Resolve solutions ──────────────────────────────────
 
 SOLUTIONS_JSON="[]"
+
+# PR 5: when a custom phase declares solution_tags in phase_context,
+# load matching solutions even though the core LOAD_SOLUTIONS flag is
+# false for custom phases. Tag matching is case-insensitive substring
+# over each solution's frontmatter tags field and its filename so a
+# skill author does not need to invent a new index.
+if [ "$SKIP_SOLUTIONS_FLAG" = false ] && [ "$PHASE_KIND" = "custom" ] \
+   && [ "$ROUTING_SOLUTION_TAGS_JSON" != "[]" ] \
+   && [ -d "$NANOSTACK_STORE/know-how/solutions" ]; then
+  custom_limit="${ROUTING_SOLUTION_LIMIT:-10}"
+  [ -z "$custom_limit" ] || [ "$custom_limit" = "null" ] && custom_limit=10
+  tag_matches=""
+  while IFS= read -r tag; do
+    [ -z "$tag" ] && continue
+    while IFS= read -r sol; do
+      [ -z "$sol" ] && continue
+      tag_matches="${tag_matches}${sol}
+"
+    done < <(grep -lri -- "$tag" "$NANOSTACK_STORE/know-how/solutions" 2>/dev/null | head -"$custom_limit")
+  done < <(echo "$ROUTING_SOLUTION_TAGS_JSON" | jq -r '.[]?' 2>/dev/null)
+  if [ -n "$tag_matches" ]; then
+    SOLUTIONS_JSON=$(echo "$tag_matches" | sed '/^$/d' | sort -u | head -"$custom_limit" | jq -R . | jq -sc '.')
+  fi
+fi
+
 if [ "$LOAD_SOLUTIONS" = true ] && [ "$SKIP_SOLUTIONS_FLAG" = false ]; then
   DIFF_FILES=""
   if [ "$USE_DIFF" = true ]; then
@@ -356,7 +460,59 @@ fi
 # ─── 4. Resolve diarizations ───────────────────────────────
 
 DIARIZATIONS_JSON="[]"
-if [ "$LOAD_DIARIZATIONS" = true ]; then
+# PR 5: a custom phase can declare diarization paths or keywords in
+# phase_context to load diarizations by topic instead of git diff. A
+# diarization matches when its `subject:` line contains any of the
+# declared paths or keywords (case-insensitive substring). This
+# parallels the core LOAD_DIARIZATIONS path but does not require a
+# diff to be present.
+if [ "$PHASE_KIND" = "custom" ] \
+   && { [ "$ROUTING_DIARIZATION_PATHS_JSON" != "[]" ] || [ "$ROUTING_DIARIZATION_KEYWORDS_JSON" != "[]" ]; }; then
+  DIARIZE_DIR="$NANOSTACK_STORE/know-how/diarizations"
+  if [ -d "$DIARIZE_DIR" ]; then
+    needles=""
+    while IFS= read -r needle; do
+      [ -z "$needle" ] && continue
+      needles="${needles}${needle}
+"
+    done < <(echo "$ROUTING_DIARIZATION_PATHS_JSON $ROUTING_DIARIZATION_KEYWORDS_JSON" | jq -r '.[]?' 2>/dev/null)
+    if [ -n "$needles" ]; then
+      DIAR_RESULTS="["
+      DFIRST=true
+      for dfile in "$DIARIZE_DIR"/*.md; do
+        [ -f "$dfile" ] || continue
+        SUBJECT=$(sed -n '/^---$/,/^---$/p' "$dfile" | grep -i '^subject:' | head -1 | sed 's/^subject: *//i')
+        [ -z "$SUBJECT" ] && continue
+        matched=false
+        while IFS= read -r needle; do
+          [ -z "$needle" ] && continue
+          if printf '%s' "$SUBJECT" | grep -qi -- "$needle" 2>/dev/null; then
+            matched=true
+            break
+          fi
+        done <<< "$needles"
+        if [ "$matched" = true ]; then
+          FILE_DATE=$(sed -n '/^---$/,/^---$/p' "$dfile" | grep -i '^date:' | head -1 | sed 's/^date: *//i')
+          AGE_DAYS="unknown"
+          if [ -n "$FILE_DATE" ]; then
+            if command -v gdate >/dev/null 2>&1; then DC="gdate"; else DC="date"; fi
+            FILE_EPOCH=$($DC -d "$FILE_DATE" +%s 2>/dev/null || echo 0)
+            NOW_EPOCH=$($DC +%s 2>/dev/null || echo 0)
+            if [ "$FILE_EPOCH" -gt 0 ]; then
+              AGE_DAYS=$(( (NOW_EPOCH - FILE_EPOCH) / 86400 ))
+            fi
+          fi
+          $DFIRST || DIAR_RESULTS="$DIAR_RESULTS,"
+          DIAR_RESULTS="$DIAR_RESULTS{\"path\":\"$dfile\",\"subject\":\"$SUBJECT\",\"age_days\":\"$AGE_DAYS\"}"
+          DFIRST=false
+        fi
+      done
+      DIARIZATIONS_JSON="$DIAR_RESULTS]"
+    fi
+  fi
+fi
+
+if [ "$LOAD_DIARIZATIONS" = true ] && [ "$DIARIZATIONS_JSON" = "[]" ]; then
   DIARIZE_DIR="$NANOSTACK_STORE/know-how/diarizations"
   if [ -d "$DIARIZE_DIR" ] && [ "$USE_DIFF" = true ] && [ -n "$DIFF_FILES" ]; then
     DIAR_RESULTS="["
@@ -423,6 +579,23 @@ fi
 
 # ─── Output ─────────────────────────────────────────────────
 
+# PR 5: routing exposes the phase_context that was applied to this
+# resolve call. Consumers can read it to know what trust level
+# gated artifact loads, which upstreams were declared required vs
+# optional, and which solution / diarization filters fired. The
+# block is present for every phase: core phases get a "declared:
+# false" placeholder so downstream code reads a uniform shape.
+ROUTING_MAX_AGE_FOR_OUTPUT="null"
+if [ -n "$ROUTING_MAX_AGE_DAYS" ] && [ "$ROUTING_MAX_AGE_DAYS" != "null" ]; then
+  ROUTING_MAX_AGE_FOR_OUTPUT="$ROUTING_MAX_AGE_DAYS"
+fi
+ROUTING_LIMIT_FOR_OUTPUT="null"
+if [ -n "$ROUTING_SOLUTION_LIMIT" ] && [ "$ROUTING_SOLUTION_LIMIT" != "null" ]; then
+  ROUTING_LIMIT_FOR_OUTPUT="$ROUTING_SOLUTION_LIMIT"
+fi
+ROUTING_DECLARED_JSON=false
+[ "$ROUTING_DECLARED" = true ] && ROUTING_DECLARED_JSON=true
+
 jq -n \
   --arg phase "$PHASE" \
   --arg phase_kind "$PHASE_KIND" \
@@ -434,6 +607,15 @@ jq -n \
   --argjson config "$CONFIG_JSON" \
   --argjson goal "$GOAL" \
   --argjson metrics "$METRICS_JSON" \
+  --argjson routing_declared "$ROUTING_DECLARED_JSON" \
+  --arg     routing_trust "$ROUTING_TRUST" \
+  --argjson routing_required "$ROUTING_REQUIRED_JSON" \
+  --argjson routing_optional "$ROUTING_OPTIONAL_JSON" \
+  --argjson routing_max_age "$ROUTING_MAX_AGE_FOR_OUTPUT" \
+  --argjson routing_solution_tags "$ROUTING_SOLUTION_TAGS_JSON" \
+  --argjson routing_solution_limit "$ROUTING_LIMIT_FOR_OUTPUT" \
+  --argjson routing_diarization_paths "$ROUTING_DIARIZATION_PATHS_JSON" \
+  --argjson routing_diarization_keywords "$ROUTING_DIARIZATION_KEYWORDS_JSON" \
   '{
     phase: $phase,
     phase_kind: $phase_kind,
@@ -444,5 +626,20 @@ jq -n \
     diarizations: $diarizations,
     config: $config,
     goal: $goal,
-    sprint_metrics: $metrics
+    sprint_metrics: $metrics,
+    routing: {
+      declared: $routing_declared,
+      trust: $routing_trust,
+      upstream_required: $routing_required,
+      upstream_optional: $routing_optional,
+      max_age_days: $routing_max_age,
+      solutions: {
+        tags: $routing_solution_tags,
+        limit: $routing_solution_limit
+      },
+      diarizations: {
+        paths: $routing_diarization_paths,
+        keywords: $routing_diarization_keywords
+      }
+    }
   }'

@@ -30,6 +30,8 @@ Add your own skills that plug into Nanostack's workflow. Your skills save artifa
 > ```
 >
 > The stack manifest schema, the directory contract any new stack must satisfy, and the runtime guarantees the framework gives a stack are documented in [`reference/custom-stack-examples-technical-spec.md`](reference/custom-stack-examples-technical-spec.md). The 15-cell runtime end-to-end harness for the example stack is at [`ci/e2e-custom-stack-examples.sh`](ci/e2e-custom-stack-examples.sh) (51 assertions).
+>
+> **Routing the context your skill needs.** A custom skill can declare a `phase_context` block in `.nanostack/config.json` so the resolver loads what the skill actually needs: strict integrity trust, required vs optional upstreams, per-phase age windows, tagged solutions from `know-how/solutions`, and diarizations filtered by path or keyword. The full contract lives in [`reference/custom-stack-contract.md`](reference/custom-stack-contract.md) under "Custom routing contract". Custom skills without a `phase_context` entry keep the dependency-only behavior, so the feature is opt-in.
 
 ## Configure your stack
 
