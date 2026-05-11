@@ -459,7 +459,7 @@ Plus a Tier 7 of warn rules for operations that need attention but not blocking.
 
 ### Write and Edit are hooked too
 
-`Write`, `Edit`, and `MultiEdit` go through their own PreToolUse hook (`guard/bin/check-write.sh`) that denies a narrow list of paths: secret files (`.env` and variants, `*.pem`, `*.key`, SSH keys, shell history) and system or user-secret directories (`/etc`, `/var`, `/usr/bin`, `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.gcp`, `~/.kube`). Symlinks are resolved before matching so `mylink/config -> ~/.ssh/config` is treated as the resolved target. See [`SECURITY.md`](SECURITY.md) for the full denylist and the manual wire-up for installs that predate the hook.
+`Write`, `Edit`, and `MultiEdit` go through their own PreToolUse hook (`guard/bin/check-write.sh`) that denies a narrow list of paths: secret files (`.env` and variants, `*.pem`, `*.key`, SSH keys, shell history), credential JSON basenames (`credentials.json`, `secrets.json`, `service-account*.json`, `firebase-adminsdk*.json`, `google-credentials*.json`, `aws-credentials*.json`, plus the same-stem variants with environment or region suffixes), and system or user-secret directories (`/etc`, `/var`, `/usr/bin`, `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.gcp`, `~/.kube`). Safe templates (`.env.example`, `.env.sample`, `.env.template`, `credentials.example.json`, `service-account.template.json`, etc.) pass through so first-run onboarding does not fight the guard. Matching is case-insensitive and mirrors the read-side G-035 rule. Symlinks are resolved before matching so `mylink/config -> ~/.ssh/config` is treated as the resolved target. See [`SECURITY.md`](SECURITY.md) for the full denylist and the manual wire-up for installs that predate the hook.
 
 ### Deny-and-continue
 
@@ -628,11 +628,15 @@ A review artifact captures everything: findings, scope drift, conflicts resolved
 }
 ```
 
-Full schema in [`reference/artifact-schema.md`](reference/artifact-schema.md). To disable, set `auto_save: false` in `.nanostack/config.json`.
+Every artifact `bin/save-artifact.sh` writes carries a SHA-256 `integrity` field over the canonical JSON, so a downstream consumer can detect a tampered file. Strict consumers call `bin/find-artifact.sh --require-integrity` to also reject artifacts whose `.integrity` field is missing. The save path validates the structured shape per phase (see `bin/lib/artifact-schemas.sh`); the legacy `--from-session` form still works for manual recovery but writes `schema_legacy: true` so downstream tools know the artifact was reconstructed instead of produced by the structured flow.
+
+Full schema in [`reference/artifact-schema.md`](reference/artifact-schema.md). To disable auto-save, set `auto_save: false` in `.nanostack/config.json`.
 
 ### Skills read each other
 
 Every skill starts with one call to `bin/resolve.sh`, a centralized context resolver. It loads upstream artifacts, past solutions, conflict precedents, diarizations and project config in one JSON blob. Each phase has its own routing table: `/review` gets the plan artifact and solutions matched by file overlap with the current diff. `/security` gets the plan, review artifact (up to 30 days back) and conflict precedents. `/compound` gets all six phase artifacts.
+
+The resolver also exposes trust state to the caller. `upstream_status` per phase reports `verified`, `integrity_missing`, `integrity_mismatch`, or `missing`, so a release gate can tell a tampered artifact apart from a never-saved one. Custom skills can declare a `phase_context` block in `.nanostack/config.json` to ask the resolver for `trust: strict` (rejects integrity-missing upstreams), a per-phase `max_age_days`, required vs optional upstreams, and tagged solution / diarization lookup. The applied context comes back in `routing` so consumers see what the resolver did, not just what they asked for.
 
 `/review` checks scope drift: did you touch files outside the plan? Did you skip files that were in it?
 

@@ -41,7 +41,7 @@ Every artifact written by `bin/save-artifact.sh` carries a SHA-256 integrity fie
 
 ## Privacy
 
-There is no Nanostack cloud. Artifacts, journals, and analytics stay under `.nanostack/` on disk. Telemetry is opt-in and documented in `reference/telemetry.md`; the on-by-default behavior is no remote calls.
+There is no Nanostack cloud. Artifacts, journals, and analytics stay under `.nanostack/` on disk. Telemetry is opt-in and documented in `TELEMETRY.md`; the on-by-default behavior is no remote calls.
 
 ## Install
 
