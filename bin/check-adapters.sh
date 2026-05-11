@@ -123,6 +123,13 @@ check_adapter() {
     record_result "$name" "fail" "invalid JSON" "" 0
     return 0
   fi
+  # The root must be an object. A valid-JSON array (`[]`) or scalar
+  # used to pass this gate and crash the next jq read under set -e.
+  # Codex flagged the type hole on the PR 6 sixth review pass.
+  if ! jq -e 'type == "object"' "$file" >/dev/null 2>&1; then
+    record_result "$name" "fail" "root is not a JSON object" "" 0
+    return 0
+  fi
 
   host=$(jq -r '.host // ""' "$file")
   last_verified=$(jq -r '.last_verified // ""' "$file")
@@ -145,6 +152,17 @@ check_adapter() {
              bash_guard write_guard phase_gate install_target doctor_checks; do
     if ! jq -e --arg k "$key" 'has($k)' "$file" >/dev/null 2>&1; then
       errors="${errors:+$errors; }missing $key"
+    fi
+  done
+  # Scalar required fields must be strings. A wrong scalar type like
+  # install_target: 123 used to pass because only key presence was
+  # checked. Codex flagged this on the PR 6 sixth review pass.
+  for str_key in host schema_version last_verified skill_discovery \
+                 bash_guard write_guard phase_gate install_target; do
+    if jq -e --arg k "$str_key" 'has($k)' "$file" >/dev/null 2>&1; then
+      if ! jq -e --arg k "$str_key" '.[$k] | type == "string"' "$file" >/dev/null 2>&1; then
+        errors="${errors:+$errors; }$str_key is not a string"
+      fi
     fi
   done
 

@@ -377,6 +377,44 @@ echo "$out" | grep -q "verification is not an object" && \
   assert_eq "verification-shape message present" "yes" "yes" || \
   assert_eq "verification-shape message present" "yes" "no"
 
+# Cell 7l: a JSON file whose root is not an object (e.g. an array)
+# is reported as a typed failure, not a crash. Codex caught the
+# silent crash on the PR 6 sixth review pass: `[]` used to pass
+# the `jq -e .` check and then break the next field read.
+echo "[7l] non-object JSON root reports a typed failure"
+root=$(new_repo "cell7l-array-root")
+cat > "$root/README.md" <<'EOF'
+README mentions `claude`.
+EOF
+echo "[]" > "$root/adapters/claude.json"
+out=$(cd "$root" && bash bin/check-adapters.sh --json 2>&1; echo "RC=$?")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "array root exits 1" "1" "$rc"
+echo "$out" | grep -q "root is not a JSON object" && \
+  assert_eq "non-object-root message present" "yes" "yes" || \
+  assert_eq "non-object-root message present" "yes" "no"
+# --json should still produce a parseable summary even on this kind
+# of failure.
+json_only=$(echo "$out" | sed '/^RC=/d')
+echo "$json_only" | jq -e '.summary.fail >= 1' >/dev/null 2>&1 && \
+  assert_eq "--json still parseable on root-type failure" "yes" "yes" || \
+  assert_eq "--json still parseable on root-type failure" "yes" "no"
+
+# Cell 7m: wrong scalar type (install_target: 123) is reported.
+# Codex caught the type hole on the PR 6 sixth review pass.
+echo "[7m] wrong scalar type for required field is reported"
+root=$(new_repo "cell7m-scalar-type")
+cat > "$root/README.md" <<'EOF'
+README mentions `claude`.
+EOF
+write_adapter "$root" claude "$NOW_ISO" '.install_target = 123'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "install_target as int exits 1" "1" "$rc"
+echo "$out" | grep -q "install_target is not a string" && \
+  assert_eq "scalar-type message present" "yes" "yes" || \
+  assert_eq "scalar-type message present" "yes" "no"
+
 # Cell 8: --json output emits a parseable summary object.
 echo "[8] --json output is parseable"
 root=$(new_repo "cell8")

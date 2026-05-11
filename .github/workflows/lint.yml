@@ -3399,10 +3399,14 @@ jobs:
           # Source of truth: filenames under adapters/.
           adapters_truth=$(find adapters -maxdepth 1 -name "*.json" -type f \
             | sed 's|.*/||; s|\.json$||' | sort | tr '\n' ' ')
-          # AGENTS.md and llms.txt should mention every adapter name (case-insensitive).
+          # Every public surface that names verified adapters must
+          # mention each one shipped under adapters/. Codex flagged
+          # the partial coverage on the PR 6 sixth review pass: the
+          # READMEs are the load-bearing public claim, and they were
+          # not in this loop.
           for name in $adapters_truth; do
             [ -z "$name" ] && continue
-            for f in AGENTS.md llms.txt; do
+            for f in AGENTS.md llms.txt README.md README.es.md; do
               if ! grep -qi -- "$name" "$f"; then
                 echo "FAIL: $f does not mention adapter '$name'"
                 fail=1
@@ -3419,12 +3423,14 @@ jobs:
             case " $adapters_truth " in
               *" $candidate "*) ;;
               *)
-                for f in AGENTS.md llms.txt; do
+                for f in AGENTS.md llms.txt README.md README.es.md; do
                   # Match three shapes:
                   #   - inline backticked  -> `cursor`
                   #   - "verified adapter" copy -> "verified adapter cursor"
                   #   - bullet entry under a "Verified adapters" header -> "- Cursor"
-                  # Codex flagged the bare-bullet miss on the PR 6 fifth review pass.
+                  # Codex flagged the bare-bullet miss on the PR 6
+                  # fifth review pass and the README omission on the
+                  # sixth review pass.
                   if grep -qiE "(\`${candidate}\`|verified adapter[^.]*${candidate}|^[[:space:]]*[-*][[:space:]]+${candidate}\b)" "$f"; then
                     echo "FAIL: $f advertises adapter '$candidate' but adapters/${candidate}.json is missing."
                     fail=1
