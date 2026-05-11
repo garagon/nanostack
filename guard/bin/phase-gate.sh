@@ -37,7 +37,41 @@ FIND_ARTIFACT="$NANOSTACK_ROOT/bin/find-artifact.sh"
 SESSION_SH="$NANOSTACK_ROOT/bin/session.sh"
 SESSION_FILE="$NANOSTACK_STORE/session.json"
 PROJECT="$(pwd)"
+
+# Default required phases for the built-in sprint. The session's
+# phase_graph (when present) overrides this with the actual ancestors
+# of ship so a custom workflow stack gates on its own phases instead
+# of the built-in trio. PR 4 of the 2026-05-10 architecture audit
+# made the phase-gate graph-aware; Codex caught the gate-vs-can_ship
+# drift on the eleventh review pass.
 REQUIRED_PHASES="review security qa"
+if [ -f "$SESSION_FILE" ] && command -v jq >/dev/null 2>&1; then
+  # The session-level phase_graph is the source of truth when it
+  # contains a `ship` node. We separate three cases:
+  #   - graph absent             → legacy review/security/qa default
+  #   - graph present + ship in  → graph-derived ancestors of ship
+  #   - graph present + no ship  → legacy review/security/qa default
+  #     (fail closed: the gate exists to protect ship-like actions, so
+  #     a graph without ship cannot loosen the gate. Codex caught the
+  #     ship-absent bypass on the PR 4 fourteenth review pass.)
+  # The middle case may legitimately produce an empty array (a graph
+  # like think -> plan -> build -> ship has no post-build gates), and
+  # the gate honors that.
+  if jq -e '(.phase_graph // []) | map(.name) | any(. == "ship")' "$SESSION_FILE" >/dev/null 2>&1; then
+    REQUIRED_PHASES=$(jq -r '
+      (.phase_graph // []) as $g
+      | def ancestors($name):
+          ($g | map(select(.name == $name)) | first // {depends_on:[]}).depends_on as $deps
+          | $deps + ($deps | map(ancestors(.)) | add // []);
+        (ancestors("ship")) as $ancs
+        | [$g[].name
+            | select(. as $n | $ancs | any(. == $n))
+            | select(. != "think" and . != "plan" and . != "build")
+          ]
+        | join(" ")
+    ' "$SESSION_FILE" 2>/dev/null)
+  fi
+fi
 
 # ─── Reference timestamp: latest code change ────────────────
 last_code_timestamp() {
@@ -106,6 +140,12 @@ print_block() {
       review)   echo "  /review   — Code review" ;;
       security) echo "  /security — Security audit" ;;
       qa)       echo "  /qa       — Testing" ;;
+      # PR 4 of the 2026-05-10 audit made the gate graph-aware, so the
+      # missing list can include custom phases (license-audit, etc).
+      # The default case keeps the remediation actionable for those
+      # users instead of printing a blank section. Codex caught the
+      # empty-section regression on the fifteenth review pass.
+      *)        echo "  /$phase — custom workflow phase (run its skill)" ;;
     esac
   done
   echo ""
@@ -122,6 +162,7 @@ print_warning() {
       review)   echo "  /review   — Code review" ;;
       security) echo "  /security — Security audit" ;;
       qa)       echo "  /qa       — Testing" ;;
+      *)        echo "  /$phase — custom workflow phase (run its skill)" ;;
     esac
   done
   echo ""
@@ -139,8 +180,15 @@ if [ -f "$SESSION_FILE" ]; then
       exit 0
     fi
 
-    # Skip if no phases have started (session just initialized)
-    PHASES_STARTED=$(jq -r '.phase_log | length' "$SESSION_FILE" 2>/dev/null || echo "0")
+    # Skip if no phases have started (session just initialized). The
+    # filter excludes synthetic entries (source: "feature-skip" or
+    # similar markers) so a /feature session that pre-seeded think as
+    # completed at init does not activate the gate before /plan runs.
+    # Codex caught the premature-block regression on the PR 4
+    # thirteenth review pass.
+    PHASES_STARTED=$(jq -r '
+      [.phase_log[]? | select((.source // "") | startswith("feature-skip") | not)] | length
+    ' "$SESSION_FILE" 2>/dev/null || echo "0")
     if [ "$PHASES_STARTED" -eq 0 ]; then
       exit 0
     fi

@@ -170,6 +170,24 @@ jobs:
           chmod +x ci/e2e-onboarding-flows.sh
           ci/e2e-onboarding-flows.sh
 
+  e2e-graph-aware-session:
+    name: E2E Graph-aware Session + Next-step (10 cells)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # PR 4 of the 2026-05-10 architecture audit. Locks the graph-aware
+    # session lifecycle: session.json snapshots phase_graph at init,
+    # phase-complete fills next_phase + ready_phases from the snapshot,
+    # next-step.sh surfaces custom required_before_ship and keeps
+    # guided wording free of phase-graph jargon.
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq is present
+        run: jq --version
+      - name: Run graph-aware session E2E
+        run: |
+          chmod +x ci/e2e-graph-aware-session.sh
+          ci/e2e-graph-aware-session.sh
+
   e2e-structured-artifacts:
     name: E2E Structured Artifact Contract (9 cells)
     runs-on: ubuntu-latest

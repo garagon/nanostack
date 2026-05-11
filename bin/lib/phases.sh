@@ -213,6 +213,16 @@ _nano_phase_graph_is_valid() {
 nano_phase_graph_json() {
   local config
   config=$(_nano_phases_resolve_config "${1:-}") || true
+  # Node order under `review`/`qa`/`security` matches the legacy
+  # hardcoded progression in bin/session.sh that this PR replaces:
+  # review -> qa -> security -> ship. Next-phase walks graph order,
+  # so the graph IS the progression contract. required_before_ship
+  # ends up as ["review","qa","security"] (graph-derived order);
+  # consumers that need set semantics work either way and the doc
+  # is the single source of truth on the wire shape. Two earlier
+  # Codex passes pulled in opposite directions on the array order
+  # vs the progression; we side with the progression because that
+  # is what the previous PR (PR 4) explicitly promised to preserve.
   local default_graph='[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"review","depends_on":["build"]},{"name":"qa","depends_on":["build"]},{"name":"security","depends_on":["build"]},{"name":"ship","depends_on":["review","qa","security"]}]'
   if [ -n "$config" ] && command -v jq >/dev/null 2>&1; then
     local graph
@@ -226,6 +236,84 @@ nano_phase_graph_json() {
     fi
   fi
   printf '%s\n' "$default_graph"
+}
+
+# Compute the ready phases for a phase_graph given the set of phases
+# that have already been completed (and optionally the phases currently
+# in_progress). A phase is "ready" when every entry in its depends_on
+# is in the completed set AND the phase itself is neither completed nor
+# in_progress. Returns the ready phase names, one per line, in the
+# graph's declared order so callers that need a single "next_phase"
+# pick the first line.
+#
+# The conductor's "build" stage produces no session-tracked artifact
+# (developers do the work, no phase-complete call lands), so the helper
+# treats "build" as auto-satisfied for dependency checks unless the
+# caller passes it explicitly in completed. Without that escape hatch,
+# the default sprint graph (review/qa/security depend on build) would
+# never advance.
+#
+# Arguments:
+#   $1  graph JSON array of {name, depends_on}
+#   $2  completed JSON array of phase names
+#   $3  in_progress JSON array of phase names (optional, defaults to [])
+#
+# PR 4 of the 2026-05-10 architecture audit: replaces the hardcoded
+# next-phase case statement in bin/session.sh with registry-aware
+# traversal so custom workflow stacks get the same lifecycle support
+# as the built-in sprint.
+nano_phase_ready_from_graph() {
+  local graph="${1:?nano_phase_ready_from_graph requires a graph JSON argument}"
+  local completed="${2:-[]}"
+  local in_progress="${3:-[]}"
+  command -v jq >/dev/null 2>&1 || return 1
+  # IN() is used instead of `index()` because some jq builds (1.6 on
+  # macOS in particular) refuse `array | index(.field)` when the field
+  # is computed inside a .[] context, while IN() accepts the stream
+  # syntax cleanly. The filter does not need the returned position,
+  # only set membership.
+  #
+  # "build" is auto-promoted into the satisfied set, but ONLY when its
+  # own depends_on entries are all satisfied. Without that gate the
+  # default sprint graph (review/qa/security depend on build, build
+  # depends on plan) would report review/qa/security as ready right
+  # after /think completes, even though /plan has not run yet.
+  echo "$graph" | jq -r \
+    --argjson done "$completed" \
+    --argjson active "$in_progress" \
+    '
+    . as $graph
+    | $done as $base
+    # Auto-promote "build" when its declared deps (if any) are all
+    # already completed AND build itself is not currently in_progress.
+    # The in_progress check is the load-bearing piece: a caller can
+    # record the build handoff with session.sh phase-start build, and
+    # treating that as satisfied would unblock review/qa/security
+    # while build is still running. Codex caught the racy promotion
+    # on the PR 4 sixth review pass. Treat a "build"-less graph as a
+    # no-op for this step.
+    | (
+        ($graph | map(select(.name == "build")) | first // null) as $build_node
+        | if $build_node == null then $base
+          else
+            ($build_node.depends_on // []) as $bdeps
+            | if (($bdeps | all(. as $d | $base | any(. == $d)))
+                  and (($active | any(. == "build")) | not))
+              then ($base + ["build"] | unique)
+              else $base
+              end
+          end
+      ) as $satisfied
+    | [.[]
+        | select(
+            (.name | IN($satisfied[]) | not)
+            and (.name | IN($active[]) | not)
+            and ((.depends_on // []) | all(. as $d | $satisfied | any(. == $d)))
+          )
+        | .name
+      ]
+    | .[]
+    ' 2>/dev/null
 }
 
 # Topologically sort a phase_graph and emit the phase names, one per
