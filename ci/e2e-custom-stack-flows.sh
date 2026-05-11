@@ -21,7 +21,8 @@
 #  17. Custom write phase does not trigger the concurrency block.
 #  18. Built-in review phase still blocks (regression check).
 #  19. Guard finds repo-bundled non-core skills (feature, doctor).
-#  20. Guard still works when the store path contains a space.
+#  20. Registered custom skill wins over bundled non-core fallback.
+#  21. Guard still works when the store path contains a space.
 #
 # This harness is the contract Codex's spec calls for in PR 6: a clean
 # sandbox user can complete the entire workflow without reading source.
@@ -343,12 +344,45 @@ for bundled in feature doctor; do
 done
 cd "$PROJ"
 
-# Cell 20: a HOME (or store) path that contains a space must not break
+# Cell 20: a registered custom phase that reuses a repo-bundled
+# directory name (feature, doctor, ...) must win over the bundled
+# fallback. create-skill.sh does not reserve bundled names, so a
+# user can legitimately register `feature` themselves with their own
+# concurrency. Codex caught the precedence regression on the PR 1
+# fifth pass; this cell locks the correct order.
+echo "[20] registered custom skill wins over bundled non-core fallback"
+PREC_PROJ="$TMP_ROOT/precedence-project"
+mkdir -p "$PREC_PROJ/.nanostack/skills/feature"
+cd "$PREC_PROJ"
+git init -q
+cat > "$PREC_PROJ/.nanostack/config.json" <<'EOF'
+{"custom_phases":["feature"]}
+EOF
+cat > "$PREC_PROJ/.nanostack/skills/feature/SKILL.md" <<'EOF'
+---
+name: feature
+description: user-registered feature override
+concurrency: write
+---
+body
+EOF
+echo '{"current_phase":"feature"}' > "$PREC_PROJ/.nanostack/session.json"
+PREC_OUT=$(mktemp -d /tmp/precedence-out.XXXXXX)
+set +e
+NANOSTACK_STORE="$PREC_PROJ/.nanostack" \
+  "$REPO/guard/bin/check-dangerous.sh" "touch $PREC_OUT/x" >/dev/null 2>&1
+guard_rc=$?
+set -e
+rm -rf "$PREC_OUT"
+cd "$PROJ"
+assert_eq "custom feature (write) shadows bundled feature (read)" "0" "$guard_rc"
+
+# Cell 21: a HOME (or store) path that contains a space must not break
 # the guard. The previous space-separated root iteration in
 # nano_phase_skill_path silently dropped path halves and made the
 # concurrency block a no-op for these users. Codex caught the
 # regression on PR 1 of the architecture round; this cell locks it.
-echo "[20] guard works when store path contains a space"
+echo "[21] guard works when store path contains a space"
 SPACE_TMP=$(mktemp -d /tmp/nanostack-space.XXXXXX)
 SPACE_HOME="$SPACE_TMP/home with space"
 SPACE_PROJ="$SPACE_TMP/nogit"

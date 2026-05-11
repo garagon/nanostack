@@ -285,17 +285,6 @@ nano_phase_skill_path() {
       return 1
       ;;
   esac
-  # Repo-bundled non-core skills live at $NANOSTACK_ROOT/<name>/SKILL.md
-  # (feature, doctor, help, compound, start, etc). They are shipped with
-  # the repo and can be set as current_phase, but they are not in the
-  # core list. The previous raw lookup in guard saw them directly; we
-  # preserve that behavior here so guard concurrency stays consistent
-  # whether the phase is core, repo-bundled, or registered custom.
-  # Codex caught this on the PR 1 fourth pass.
-  if [ -n "$repo_root" ] && [ -d "$repo_root/$phase" ] && [ -f "$repo_root/$phase/SKILL.md" ]; then
-    printf '%s\n' "$repo_root/$phase"
-    return 0
-  fi
   # Build a newline-delimited candidate list so paths with spaces (a
   # $HOME like "Hello World" or a store under "My Drive") survive
   # iteration. Previous form was a single space-separated string fed
@@ -363,5 +352,19 @@ nano_phase_skill_path() {
     fi
   done <<< "$candidates"
   unset -f _phases_append_root
+
+  # Repo-bundled non-core skills (feature, doctor, help, compound,
+  # start, ...) live at $NANOSTACK_ROOT/<phase>/SKILL.md. They are
+  # shipped with the repo and can be set as current_phase. The
+  # previous raw lookup in guard saw them directly; we preserve that
+  # behavior here as the LAST fallback so an explicitly registered
+  # custom skill with the same directory name wins (create-skill.sh
+  # does not reserve bundled names, so a user can legitimately
+  # register `feature` themselves). Codex flagged the original
+  # ordering on the PR 1 fifth pass.
+  if [ -n "$repo_root" ] && [ -d "$repo_root/$phase" ] && [ -f "$repo_root/$phase/SKILL.md" ]; then
+    printf '%s\n' "$repo_root/$phase"
+    return 0
+  fi
   return 1
 }
