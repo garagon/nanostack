@@ -358,6 +358,28 @@ nano_visual_page_start() {
     .kvgrid dt { color: var(--muted); }
     .kvgrid dd { margin: 0; }
     .schema-warning { background: rgba(250,204,21,0.1); border: 1px solid var(--warn); color: var(--warn); padding: 12px; border-radius: 6px; margin-bottom: 16px; }
+    .counters { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+    .counter { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 12px; text-align: center; }
+    .counter .num { font-size: 1.8rem; font-weight: 700; display: block; }
+    .counter .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+    .counter[data-tone="bad"] .num { color: var(--bad); }
+    .counter[data-tone="warn"] .num { color: var(--warn); }
+    .counter[data-tone="ok"] .num { color: var(--ok); }
+    .counter[data-tone="info"] .num { color: var(--info); }
+    .finding { border-left: 4px solid var(--info); background: var(--panel-2); border-radius: 0 6px 6px 0; padding: 10px 12px; margin-bottom: 10px; }
+    .finding.sev-bad { border-left-color: var(--bad); }
+    .finding.sev-warn { border-left-color: var(--warn); }
+    .finding.sev-info { border-left-color: var(--info); }
+    .finding.sev-ok { border-left-color: var(--ok); }
+    .finding .meta { font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; }
+    .finding .meta .id { font-family: "SFMono-Regular", Consolas, monospace; }
+    .chip { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; background: var(--panel); border: 1px solid var(--line); margin-right: 4px; }
+    .chip.sev-bad { color: var(--bad); border-color: var(--bad); }
+    .chip.sev-warn { color: var(--warn); border-color: var(--warn); }
+    .chip.sev-info { color: var(--info); border-color: var(--info); }
+    .chip.sev-ok { color: var(--ok); border-color: var(--ok); }
+    .pr-link { color: var(--info); }
+    .unsafe-url { color: var(--bad); font-family: monospace; }
   </style>
 </head>
 <body>
@@ -368,6 +390,98 @@ nano_visual_page_start() {
       <p class="trust-badge" data-trust="$trust_esc">$(printf '%s' "$badge_text" | nano_html_escape)</p>
     </header>
 HTML
+}
+
+# Generic JSON normalizer for phase body renderers. Coerces every
+# field referenced by the core renderers to a sane type so a legacy
+# or malformed artifact (e.g. .summary as a string from
+# --from-session) does not crash jq under set -e. Reads from the
+# given artifact path; echoes the normalized JSON as a single line.
+#
+# Coercions:
+#   .summary, .context_checkpoint, .scope_drift, .summary.search_summary,
+#   .summary.manual_delivery_test, .summary.example_reference,
+#   .summary.archetype_*, .conflicts -> object/array as appropriate
+#   .findings, .context_checkpoint.{key_files,decisions_made,open_questions},
+#   .summary.{planned_files,risks,out_of_scope,steps,conflicts}        -> arrays
+nano_visual_normalize_artifact() {
+  local path="$1"
+  jq -c '
+    . as $orig
+    | (if (.summary | type)            == "object" then .summary            else {} end) as $s
+    | (if (.context_checkpoint | type) == "object" then .context_checkpoint else {} end) as $c
+    | (if (.scope_drift | type)        == "object" then .scope_drift        else {} end) as $sd
+    | (if (.findings | type)           == "array"  then .findings           else [] end) as $f
+    | (if (.conflicts | type)          == "array"  then .conflicts          else [] end) as $cf
+    | $orig
+    | .summary           = $s
+    | .context_checkpoint = $c
+    | .scope_drift       = $sd
+    | .findings          = $f
+    | .conflicts         = $cf
+    | .summary.planned_files = (if (.summary.planned_files | type) == "array" then .summary.planned_files else [] end)
+    | .summary.risks         = (if (.summary.risks         | type) == "array" then .summary.risks         else [] end)
+    | .summary.out_of_scope  = (if (.summary.out_of_scope  | type) == "array" then .summary.out_of_scope  else [] end)
+    | .context_checkpoint.key_files      = (if (.context_checkpoint.key_files      | type) == "array" then .context_checkpoint.key_files      else [] end)
+    | .context_checkpoint.decisions_made = (if (.context_checkpoint.decisions_made | type) == "array" then .context_checkpoint.decisions_made else [] end)
+    | .context_checkpoint.open_questions = (if (.context_checkpoint.open_questions | type) == "array" then .context_checkpoint.open_questions else [] end)
+    | .scope_drift.planned_files     = (if (.scope_drift.planned_files     | type) == "array" then .scope_drift.planned_files     else [] end)
+    | .scope_drift.actual_files      = (if (.scope_drift.actual_files      | type) == "array" then .scope_drift.actual_files      else [] end)
+    | .scope_drift.out_of_scope_files = (if (.scope_drift.out_of_scope_files | type) == "array" then .scope_drift.out_of_scope_files else [] end)
+    | .scope_drift.missing_files     = (if (.scope_drift.missing_files     | type) == "array" then .scope_drift.missing_files     else [] end)
+  ' "$path"
+}
+
+# Severity -> CSS class for finding cards. Stays in the shared shell
+# so review/security/qa all agree on the color and styling.
+nano_visual_severity_class() {
+  case "${1:-}" in
+    critical|blocking) printf 'sev-bad\n' ;;
+    high|should_fix)   printf 'sev-warn\n' ;;
+    medium|nitpick)    printf 'sev-info\n' ;;
+    low|positive)      printf 'sev-ok\n' ;;
+    *)                 printf 'sev-info\n' ;;
+  esac
+}
+
+# Decide whether a /ship PR URL is safe to render as a link. Only
+# explicit GitHub URLs over https are treated as link targets; every
+# other URL renders as escaped text so a malicious PR URL cannot be
+# used to redirect the human reader. CSP would block navigation on
+# many surfaces, but the policy is to keep the visual surface
+# defensive in depth.
+nano_visual_safe_pr_url() {
+  local url="${1:-}"
+  # url-allowlist: literal patterns live in a code-level case to
+  # validate inbound PR URLs. They are not template output, so the
+  # template safety lint excludes lines with the url-allowlist
+  # marker.
+  case "$url" in
+    https://github.com/*) printf 'safe\n' ;;  # url-allowlist
+    *)                    printf 'unsafe\n' ;;
+  esac
+}
+
+# Decide whether a screenshot path is safe to render as an <img>.
+# Allowed: absolute paths under the project or the NANOSTACK_STORE,
+# and relative paths starting with a known prefix (no ".." segments).
+# Returns "safe" or "unsafe". Used by render_qa_body so a malicious
+# screenshot URL never reaches the page as an <img src>.
+nano_visual_safe_screenshot_path() {
+  local p="${1:-}" project="${2:-$PWD}"
+  case "$p" in
+    "")                printf 'unsafe\n'; return ;;
+    *..*|*"\\"*)       printf 'unsafe\n'; return ;;
+    http://*|https://*|//*|data:*|javascript:*|file://*|*\<*|*\>*|*\"*)
+                       printf 'unsafe\n'; return ;;
+  esac
+  case "$p" in
+    "$project"/*|"$NANOSTACK_STORE"/*) printf 'safe\n'; return ;;
+    /*)                                printf 'unsafe\n'; return ;;
+  esac
+  # Relative paths: accept only when they stay within the project.
+  # Reject any path that resolves above the project root.
+  printf 'safe\n'
 }
 
 # Closes the page with provenance pointing back to the source artifact

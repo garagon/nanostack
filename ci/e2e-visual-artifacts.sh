@@ -128,6 +128,171 @@ save_valid_plan() {
   }' >/dev/null
 }
 
+save_valid_think() {
+  local store="$1"
+  NANOSTACK_STORE="$store" "$REPO/bin/save-artifact.sh" think '{
+    "phase": "think",
+    "summary": {
+      "value_proposition": "Make Nanostack renders inspectable",
+      "scope_mode": "selective_expand",
+      "target_user": "Devs reviewing AI work",
+      "narrowest_wedge": "Static /plan HTML view",
+      "key_risk": "XSS via unescaped artifact text",
+      "premise_validated": true,
+      "out_of_scope": ["Interactive editing"],
+      "archetype": "cli_tooling",
+      "archetype_confidence": "high"
+    },
+    "context_checkpoint": {
+      "summary": "Decision brief signed off",
+      "key_files": [],
+      "decisions_made": ["JSON canonical, HTML derived"],
+      "open_questions": []
+    }
+  }' >/dev/null
+}
+
+save_valid_review() {
+  local store="$1"
+  NANOSTACK_STORE="$store" "$REPO/bin/save-artifact.sh" review '{
+    "phase": "review",
+    "summary": {"blocking": 1, "should_fix": 2, "nitpicks": 3, "positive": 1},
+    "scope_drift": {
+      "status": "drift_detected",
+      "planned_files": ["a.ts","b.ts"],
+      "actual_files": ["a.ts","b.ts","c.ts"],
+      "out_of_scope_files": ["c.ts"],
+      "missing_files": []
+    },
+    "findings": [
+      {"id": "REV-001", "severity": "blocking", "description": "Unbounded loop", "file": "src/loop.ts", "line": 42},
+      {"id": "REV-002", "severity": "should_fix", "description": "Missing error handling", "file": "src/api.ts", "line": 10},
+      {"id": "REV-003", "severity": "nitpick", "description": "Inconsistent naming", "file": "src/utils.ts", "line": 5}
+    ],
+    "context_checkpoint": {
+      "summary": "One blocker, two should-fixes",
+      "key_files": ["src/loop.ts:42"],
+      "decisions_made": [],
+      "open_questions": []
+    }
+  }' >/dev/null
+}
+
+save_valid_security() {
+  local store="$1"
+  NANOSTACK_STORE="$store" "$REPO/bin/save-artifact.sh" security '{
+    "phase": "security",
+    "summary": {"critical": 1, "high": 1, "medium": 0, "low": 0, "total_findings": 2},
+    "findings": [
+      {
+        "id": "SEC-001",
+        "severity": "critical",
+        "category": "A03",
+        "description": "SQL injection in login",
+        "file": "src/auth.ts",
+        "line": 17,
+        "proof_of_concept": "curl -d user=admin /login",
+        "fix": "Use parameterized queries",
+        "confidence": 9
+      },
+      {
+        "id": "SEC-002",
+        "severity": "high",
+        "category": "STRIDE",
+        "description": "Session fixation",
+        "file": "src/session.ts",
+        "line": 88,
+        "proof_of_concept": "Replay session cookie",
+        "fix": "Rotate session on login",
+        "confidence": 7
+      }
+    ],
+    "context_checkpoint": {
+      "summary": "Two findings: SQLi critical, session fixation high",
+      "key_files": [],
+      "decisions_made": [],
+      "open_questions": []
+    }
+  }' >/dev/null
+}
+
+save_valid_qa() {
+  local store="$1"
+  NANOSTACK_STORE="$store" "$REPO/bin/save-artifact.sh" qa '{
+    "phase": "qa",
+    "summary": {
+      "mode": "browser",
+      "status": "partial",
+      "tests_run": 12,
+      "tests_passed": 11,
+      "tests_failed": 1,
+      "bugs_found": 1,
+      "bugs_fixed": 0,
+      "wtf_likelihood": 15
+    },
+    "findings": [
+      {
+        "id": "QA-001",
+        "severity": "high",
+        "description": "Login redirect loops on Safari",
+        "reproduce": "Open /login in Safari",
+        "root_cause": "Service worker cache",
+        "fixed": false
+      }
+    ],
+    "context_checkpoint": {
+      "summary": "One Safari-specific bug",
+      "key_files": [],
+      "decisions_made": [],
+      "open_questions": []
+    }
+  }' >/dev/null
+}
+
+save_valid_ship() {
+  local store="$1"
+  NANOSTACK_STORE="$store" "$REPO/bin/save-artifact.sh" ship '{
+    "phase": "ship",
+    "summary": {
+      "pr_number": 217,
+      "pr_url": "https://github.com/garagon/nanostack/pull/217",
+      "title": "Visual artifacts PR 1",
+      "status": "merged",
+      "ci_passed": true
+    },
+    "context_checkpoint": {
+      "summary": "Merged after 10 codex passes",
+      "key_files": [],
+      "decisions_made": [],
+      "open_questions": []
+    }
+  }' >/dev/null
+}
+
+save_ship_report_only() {
+  local store="$1"
+  NANOSTACK_STORE="$store" "$REPO/bin/save-artifact.sh" ship '{
+    "phase": "ship",
+    "run_mode": "report_only",
+    "summary": "Would have shipped if approved"
+  }' >/dev/null
+}
+
+save_ship_malicious_url() {
+  local store="$1"
+  NANOSTACK_STORE="$store" "$REPO/bin/save-artifact.sh" ship '{
+    "phase": "ship",
+    "summary": {
+      "pr_number": 99,
+      "pr_url": "javascript:alert(1)",
+      "title": "<script>evil</script>",
+      "status": "created",
+      "ci_passed": false
+    },
+    "context_checkpoint": {"summary": "x", "key_files": [], "decisions_made": [], "open_questions": []}
+  }' >/dev/null
+}
+
 save_malicious_plan() {
   local store="$1"
   NANOSTACK_STORE="$store" "$REPO/bin/save-artifact.sh" plan '{
@@ -310,6 +475,189 @@ TMPPLAN="$TMP_ROOT/mixed.json"
 jq '.phase = "review"' "$PLAN_PATH" > "$TMPPLAN"
 assert_exit "explicit path with mismatched .phase exits 1" 1 \
   sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan '$TMPPLAN'"
+
+# ─── Cell 10: /think renderer ───────────────────────────────
+printf "\n  ${DIM}Cell 10: /think renderer${NC}\n"
+PROJ="$TMP_ROOT/cell10"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_think "$NANOSTACK_STORE")
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" think --latest)
+assert_true "think html exists" test -f "$HTML"
+assert_contains "think value_proposition" "$HTML" "Make Nanostack renders inspectable"
+assert_contains "think scope_mode chip" "$HTML" "selective_expand"
+assert_contains "think narrowest_wedge" "$HTML" "Static /plan HTML view"
+assert_contains "think key_risk" "$HTML" "XSS via unescaped artifact text"
+assert_contains "think target_user" "$HTML" "Devs reviewing AI work"
+assert_contains "think archetype chip" "$HTML" "cli_tooling"
+assert_contains "think out_of_scope" "$HTML" "Interactive editing"
+assert_contains "think context_checkpoint" "$HTML" "Decision brief signed off"
+assert_contains "think data-phase=think" "$HTML" 'data-phase="think"'
+
+# ─── Cell 11: /review renderer ──────────────────────────────
+printf "\n  ${DIM}Cell 11: /review renderer${NC}\n"
+PROJ="$TMP_ROOT/cell11"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_review "$NANOSTACK_STORE")
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" review --latest)
+assert_true "review html exists" test -f "$HTML"
+assert_contains "review blocking counter" "$HTML" '>Blocking<'
+assert_contains "review should_fix counter" "$HTML" '>Should fix<'
+assert_contains "review nitpicks counter" "$HTML" '>Nitpicks<'
+assert_contains "review positive counter" "$HTML" '>Positive<'
+assert_contains "review scope_drift status" "$HTML" "drift_detected"
+assert_contains "review out-of-scope file" "$HTML" "c.ts"
+assert_contains "review finding REV-001" "$HTML" "REV-001"
+assert_contains "review finding description" "$HTML" "Unbounded loop"
+assert_contains "review file:line" "$HTML" "src/loop.ts:42"
+assert_contains "review sev-bad class" "$HTML" 'sev-bad'
+assert_contains "review data-severity attr" "$HTML" 'data-severity="blocking"'
+
+# ─── Cell 12: /security renderer ────────────────────────────
+printf "\n  ${DIM}Cell 12: /security renderer${NC}\n"
+PROJ="$TMP_ROOT/cell12"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_security "$NANOSTACK_STORE")
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" security --latest)
+assert_true "security html exists" test -f "$HTML"
+assert_contains "security critical counter" "$HTML" '>Critical<'
+assert_contains "security finding SEC-001" "$HTML" "SEC-001"
+assert_contains "security category A03 chip" "$HTML" 'A03'
+assert_contains "security STRIDE category" "$HTML" 'STRIDE'
+assert_contains "security proof_of_concept details" "$HTML" "<details><summary>Proof of concept</summary>"
+assert_contains "security fix recommendation" "$HTML" "Use parameterized queries"
+assert_contains "security confidence" "$HTML" "confidence 9"
+# No "certification" or "compliant" language allowed (architect rule).
+assert_not_contains "no 'certified' language" "$HTML" 'certified'
+assert_not_contains "no 'compliant' language" "$HTML" 'compliant'
+
+# ─── Cell 13: /qa renderer ──────────────────────────────────
+printf "\n  ${DIM}Cell 13: /qa renderer${NC}\n"
+PROJ="$TMP_ROOT/cell13"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_qa "$NANOSTACK_STORE")
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" qa --latest)
+assert_true "qa html exists" test -f "$HTML"
+assert_contains "qa mode chip" "$HTML" 'browser'
+assert_contains "qa status partial" "$HTML" 'partial'
+assert_contains "qa wtf_likelihood" "$HTML" 'WTF likelihood'
+assert_contains "qa tests_run counter" "$HTML" '>Tests run<'
+assert_contains "qa tests_failed counter" "$HTML" '>Failed<'
+assert_contains "qa finding QA-001" "$HTML" "QA-001"
+assert_contains "qa reproduce details" "$HTML" "<details><summary>Reproduce</summary>"
+assert_contains "qa root_cause" "$HTML" "Root cause"
+
+# ─── Cell 14: /ship renderer normal mode ────────────────────
+printf "\n  ${DIM}Cell 14: /ship renderer normal mode${NC}\n"
+PROJ="$TMP_ROOT/cell14"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_ship "$NANOSTACK_STORE")
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" ship --latest)
+assert_true "ship html exists" test -f "$HTML"
+assert_contains "ship title" "$HTML" "Visual artifacts PR 1"
+assert_contains "ship pr_number" "$HTML" "217"
+assert_contains "ship status merged" "$HTML" 'merged'
+# Safe github.com URL must render as an <a>.
+assert_contains "ship safe PR URL as link" "$HTML" '<a class="pr-link" href="https://github.com/'
+
+# ─── Cell 15: /ship renderer report_only mode ───────────────
+printf "\n  ${DIM}Cell 15: /ship report_only${NC}\n"
+PROJ="$TMP_ROOT/cell15"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_ship_report_only "$NANOSTACK_STORE")
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" ship --latest)
+assert_true "ship report_only html exists" test -f "$HTML"
+assert_contains "ship report_only banner" "$HTML" "run_mode = report_only"
+assert_contains "ship report_only body" "$HTML" "Would have shipped"
+# No release-packet styling in report_only.
+assert_not_contains "no Release packet header in report_only" "$HTML" "Release packet"
+
+# ─── Cell 16: /ship malicious PR URL refused as link ────────
+printf "\n  ${DIM}Cell 16: /ship malicious PR URL${NC}\n"
+PROJ="$TMP_ROOT/cell16"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_ship_malicious_url "$NANOSTACK_STORE")
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" ship --latest)
+assert_contains "ship unsafe URL marker" "$HTML" 'data-testid="unsafe-pr-url"'
+assert_not_contains "ship NO javascript: href" "$HTML" 'href="javascript:'
+assert_not_contains "ship NO active <a> for javascript scheme" "$HTML" 'href="javascript'
+assert_contains "ship escapes title XSS" "$HTML" '&lt;script&gt;evil&lt;/script&gt;'
+assert_not_contains "ship NO raw <script>evil" "$HTML" '<script>evil'
+
+# ─── Cell 17: XSS across all 5 new phases ──────────────────
+printf "\n  ${DIM}Cell 17: XSS escape across core phases${NC}\n"
+PROJ="$TMP_ROOT/cell17"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+# Malicious think
+(cd "$PROJ" && NANOSTACK_STORE="$NANOSTACK_STORE" "$REPO/bin/save-artifact.sh" think '{
+  "phase":"think",
+  "summary":{"value_proposition":"<script>alert(1)</script>","scope_mode":"<img src=x onerror=alert(1)>","target_user":"a","narrowest_wedge":"b","key_risk":"c","premise_validated":true},
+  "context_checkpoint":{"summary":"\"><iframe>x</iframe>","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" think --latest)
+assert_not_contains "think no raw <script>alert" "$HTML" '<script>alert'
+assert_not_contains "think no raw <iframe>x" "$HTML" '<iframe>x</iframe>'
+assert_contains "think escapes script tag" "$HTML" '&lt;script&gt;'
+
+# Malicious review (finding description contains JS)
+(cd "$PROJ" && NANOSTACK_STORE="$NANOSTACK_STORE" "$REPO/bin/save-artifact.sh" review '{
+  "phase":"review","summary":{"blocking":1,"should_fix":0,"nitpicks":0,"positive":0},
+  "scope_drift":{"status":"clean","planned_files":[],"actual_files":[],"out_of_scope_files":[],"missing_files":[]},
+  "findings":[{"id":"REV-X","severity":"blocking","description":"<script>alert(\"rev\")</script>","file":"a","line":1}],
+  "context_checkpoint":{"summary":"x","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" review --latest)
+assert_not_contains "review no raw <script>alert" "$HTML" '<script>alert'
+assert_contains "review escapes" "$HTML" '&lt;script&gt;'
+
+# Malicious security proof_of_concept (must escape inside <pre>)
+(cd "$PROJ" && NANOSTACK_STORE="$NANOSTACK_STORE" "$REPO/bin/save-artifact.sh" security '{
+  "phase":"security","summary":{"critical":1,"high":0,"medium":0,"low":0,"total_findings":1},
+  "findings":[{"id":"SEC-X","severity":"critical","category":"A01","description":"d","file":"f","line":1,"proof_of_concept":"<script>alert(\"poc\")</script>","fix":"<img src=x onerror=alert(1)>"}],
+  "context_checkpoint":{"summary":"x","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" security --latest)
+assert_not_contains "security PoC no raw <script>alert" "$HTML" '<script>alert'
+assert_not_contains "security fix no raw <img" "$HTML" '<img src=x onerror=alert(1)>'
+assert_contains "security PoC escaped" "$HTML" '&lt;script&gt;'
+assert_contains "security PoC stays in <pre>" "$HTML" '<details><summary>Proof of concept</summary><pre>'
+
+# Malicious ship.ci_passed (PR 2 pass 1 regression: ci_passed was
+# interpolated unescaped because the schema documents it as a
+# boolean; a malformed artifact stored it as a string).
+(cd "$PROJ" && NANOSTACK_STORE="$NANOSTACK_STORE" "$REPO/bin/save-artifact.sh" ship '{
+  "phase":"ship",
+  "summary":{"pr_number":1,"pr_url":"https://github.com/x/y/pull/1","title":"t","status":"created","ci_passed":"<script>alert(\"ci\")</script>"},
+  "context_checkpoint":{"summary":"x","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" ship --latest)
+assert_not_contains "ship ci_passed no raw script" "$HTML" '<script>alert("ci")</script>'
+assert_contains "ship ci_passed escaped" "$HTML" '&lt;script&gt;alert(&quot;ci&quot;)&lt;/script&gt;'
+
+# Malicious qa (reproduce + root_cause)
+(cd "$PROJ" && NANOSTACK_STORE="$NANOSTACK_STORE" "$REPO/bin/save-artifact.sh" qa '{
+  "phase":"qa","summary":{"mode":"browser","status":"fail","tests_run":1,"tests_passed":0,"tests_failed":1,"bugs_found":1,"bugs_fixed":0},
+  "findings":[{"id":"QA-X","severity":"high","description":"d","reproduce":"<script>alert(\"qa\")</script>","root_cause":"<img onerror=alert(1)>","fixed":false}],
+  "context_checkpoint":{"summary":"x","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" qa --latest)
+assert_not_contains "qa reproduce no raw script" "$HTML" '<script>alert("qa")'
+assert_not_contains "qa root_cause no raw img" "$HTML" '<img onerror=alert(1)>'
 
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
