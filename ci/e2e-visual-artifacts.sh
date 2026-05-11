@@ -1236,6 +1236,22 @@ assert_true "malformed plan artifact does not crash journal" test -f "$HTML"
 # The row should surface as unreadable or integrity_missing, not abort.
 assert_contains "malformed artifact row appears" "$HTML" 'data-phase="plan"'
 
+# ─── Cell 22v: stack survives truncated phase artifact (PR 3 pass 11) ─
+printf "\n  ${DIM}Cell 22v: stack survives truncated artifact (PR 3 pass 11)${NC}\n"
+PROJ="$TMP_ROOT/cell22v"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/plan"
+# Truncated plan artifact.
+printf '{"phase":"plan","summary":{' > "$NANOSTACK_STORE/plan/$(date -u +%Y%m%d)-100000.json"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+assert_true "stack html exists despite truncated artifact" test -f "$HTML"
+# The plan row in the table surfaces as integrity_missing (not a crash).
+assert_contains "stack table shows plan as integrity_missing" "$HTML" 'data-phase="plan" data-trust="integrity_missing"'
+# --strict catches it.
+assert_exit "stack --strict catches truncated artifact" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack compliance-release --strict"
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"

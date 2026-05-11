@@ -1298,7 +1298,11 @@ render_stack_body() {
     if [ -n "$ap" ] && [ -f "$ap" ]; then
       ap=$(nano_resolve_abs "$ap")
       tr=$(nano_artifact_trust "$ap" 2>/dev/null || echo "not_found")
-      ig=$(jq -r '.integrity // ""' "$ap" 2>/dev/null)
+      # Codex PR 3 pass 11: a truncated artifact would already
+      # surface as integrity_missing above, but the unguarded jq
+      # read below aborted the whole stack render under set -e
+      # before the manifest could be written. Guard with `|| echo`.
+      ig=$(jq -r '.integrity // ""' "$ap" 2>/dev/null || echo "")
     else
       ap=""; tr="missing"; ig=""
     fi
