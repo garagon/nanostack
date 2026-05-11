@@ -416,7 +416,7 @@ if [ "$SKIP_SOLUTIONS_FLAG" = false ] && [ "$PHASE_KIND" = "custom" ] \
       [ -z "$sol" ] && continue
       tag_matches="${tag_matches}${sol}
 "
-    done < <(grep -lri -- "$tag" "$NANOSTACK_STORE/know-how/solutions" 2>/dev/null | head -"$custom_limit")
+    done < <(grep -lriF -- "$tag" "$NANOSTACK_STORE/know-how/solutions" 2>/dev/null | head -"$custom_limit")
   done < <(echo "$ROUTING_SOLUTION_TAGS_JSON" | jq -r '.[]?' 2>/dev/null)
   if [ -n "$tag_matches" ]; then
     SOLUTIONS_JSON=$(echo "$tag_matches" | sed '/^$/d' | sort -u | head -"$custom_limit" | jq -R . | jq -sc '.')
@@ -518,8 +518,11 @@ if [ "$PHASE_KIND" = "custom" ] \
 "
     done < <(echo "$ROUTING_DIARIZATION_PATHS_JSON $ROUTING_DIARIZATION_KEYWORDS_JSON" | jq -r '.[]?' 2>/dev/null)
     if [ -n "$needles" ]; then
-      DIAR_RESULTS="["
-      DFIRST=true
+      # Build the diarizations array through jq so quotes, backslashes
+      # or other JSON metacharacters in a subject or path do not break
+      # the final --argjson parse. Codex caught the string-concat
+      # injection on the PR 5 third review pass.
+      DIARIZATIONS_JSON='[]'
       for dfile in "$DIARIZE_DIR"/*.md; do
         [ -f "$dfile" ] || continue
         SUBJECT=$(sed -n '/^---$/,/^---$/p' "$dfile" | grep -i '^subject:' | head -1 | sed 's/^subject: *//i')
@@ -547,12 +550,13 @@ if [ "$PHASE_KIND" = "custom" ] \
               AGE_DAYS=$(( (NOW_EPOCH - FILE_EPOCH) / 86400 ))
             fi
           fi
-          $DFIRST || DIAR_RESULTS="$DIAR_RESULTS,"
-          DIAR_RESULTS="$DIAR_RESULTS{\"path\":\"$dfile\",\"subject\":\"$SUBJECT\",\"age_days\":\"$AGE_DAYS\"}"
-          DFIRST=false
+          DIARIZATIONS_JSON=$(echo "$DIARIZATIONS_JSON" | jq \
+            --arg path "$dfile" \
+            --arg subject "$SUBJECT" \
+            --arg age_days "$AGE_DAYS" \
+            '. + [{path: $path, subject: $subject, age_days: $age_days}]')
         fi
       done
-      DIARIZATIONS_JSON="$DIAR_RESULTS]"
     fi
   fi
 fi

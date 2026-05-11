@@ -354,6 +354,71 @@ diar_subjects=$(echo "$out" | jq -c '.diarizations | map(.subject) | sort')
 assert_eq "literal match: only the exact subject is loaded" \
   '["app/users/[id]/page.tsx"]' "$diar_subjects"
 
+# Cell 7d: solution_tags are also matched literally, not as regex.
+# A tag like next.js or app/users/[id] must not match unrelated
+# files because of the `.` or `[id]` characters. Codex caught the
+# regex interpretation on the PR 5 third review pass.
+echo "[7d] solution_tags are literal substrings, not regex"
+new_project "cell7d-tag-literal"
+cat > "$NANOSTACK_STORE/know-how/solutions/exact.md" <<'EOF'
+---
+tags: [next.js]
+---
+next.js notes
+EOF
+cat > "$NANOSTACK_STORE/know-how/solutions/decoy.md" <<'EOF'
+---
+tags: [nextxjs]
+---
+nextxjs notes (decoy must contain neither the literal tag nor a regex-equivalent)
+EOF
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "custom_phases": ["license-audit"],
+  "phase_context": {
+    "license-audit": {
+      "solutions": { "tags": ["next.js"], "limit": 5 }
+    }
+  }
+}
+EOF
+out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
+sol_count=$(echo "$out" | jq '.solutions | length')
+sol_first=$(echo "$out" | jq -r '.solutions[0] // ""')
+assert_eq "literal tag: only the exact tag file matches" "1" "$sol_count"
+case "$sol_first" in
+  *exact.md) PASS=$((PASS+1)); printf "    ${GREEN}OK${NC}    %s\n" "selected solution is exact.md" ;;
+  *) FAIL=$((FAIL+1)); printf "    ${RED}FAIL${NC}  %s (got %s)\n" "selected solution is exact.md" "$sol_first" ;;
+esac
+
+# Cell 7e: diarization subjects/paths containing JSON metacharacters
+# (quotes, backslashes) must still produce valid JSON. The previous
+# string-concat path emitted invalid JSON for a subject like
+# app/"weird"/path.tsx; the resolver now builds the array through jq
+# so the escape is automatic. Codex caught the injection on the PR 5
+# third review pass.
+echo "[7e] diarization subjects with JSON metacharacters parse cleanly"
+new_project "cell7e-json-safe"
+cat > "$NANOSTACK_STORE/know-how/diarizations/quoted.md" <<'EOF'
+---
+subject: app/"weird"/path.tsx
+date: 2026-04-01
+---
+EOF
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "custom_phases": ["license-audit"],
+  "phase_context": {
+    "license-audit": {
+      "diarizations": { "paths": ["weird"], "keywords": [] }
+    }
+  }
+}
+EOF
+out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
+diar_subject=$(echo "$out" | jq -r '.diarizations[0].subject // ""')
+assert_eq "quote in subject lands intact" 'app/"weird"/path.tsx' "$diar_subject"
+
 # Cell 8: routing block surfaces every applied field so consumers
 # can audit what the resolver did.
 echo "[8] routing block surfaces every applied field"
