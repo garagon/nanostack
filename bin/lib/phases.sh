@@ -294,16 +294,23 @@ nano_phase_skill_path() {
   local candidates=""
   _phases_append_root() {
     local candidate="$1"
-    [ -z "$candidate" ] && return
+    # Both early returns are successful no-ops, not errors. A bare
+    # `return` would inherit the previous test's exit status (1 when
+    # the candidate is non-empty), and callers running under `set -e`
+    # would treat the helper as failed. Codex caught this on the
+    # PR 1 second pass with the standard $NANOSTACK_STORE == config_dir
+    # case where the dedup branch fires.
+    [ -z "$candidate" ] && return 0
     # Dedup: skip if the exact path is already on the list.
     case $'\n'"$candidates"$'\n' in
-      *$'\n'"$candidate"$'\n'*) return ;;
+      *$'\n'"$candidate"$'\n'*) return 0 ;;
     esac
     if [ -z "$candidates" ]; then
       candidates="$candidate"
     else
       candidates="$candidates"$'\n'"$candidate"
     fi
+    return 0
   }
 
   # 1. Configured skill_roots (user override), newline-separated from jq.
