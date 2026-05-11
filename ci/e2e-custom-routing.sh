@@ -255,6 +255,33 @@ diar_subj=$(echo "$out" | jq -r '.diarizations[0].subject // ""')
 assert_eq "diarizations filtered to package.json subject" "1" "$diar_count"
 assert_eq "diarization subject = package.json" "package.json" "$diar_subj"
 
+# Cell 7a: a routed upstream that is NOT in depends_on still gets
+# its artifact looked up. The routing contract is supposed to give
+# skills a way to ask for context outside the dependency edges;
+# Codex caught the missing wiring on the PR 5 first review pass
+# (declaring upstream_optional: ["security"] without depends_on
+# left security absent from upstream_status entirely).
+echo "[7a] routed upstreams not in depends_on are still resolved"
+new_project "cell7a-routed-only"
+"$REPO/bin/save-artifact.sh" security \
+  '{"phase":"security","summary":{"v":1},"findings":[],"context_checkpoint":{"summary":"routing test"}}' >/dev/null
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "custom_phases": ["license-audit"],
+  "phase_context": {
+    "license-audit": {
+      "upstream_optional": ["security"]
+    }
+  }
+}
+EOF
+out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
+assert_eq "upstream_status.security present even though only routed" \
+  "verified" "$(echo "$out" | jq -r '.upstream_status.security')"
+sec_art=$(echo "$out" | jq -r '.upstream_artifacts.security // ""')
+assert_eq "upstream_artifacts.security is the resolved path" \
+  "true" "$( [ -n "$sec_art" ] && echo "true" || echo "false" )"
+
 # Cell 8: routing block surfaces every applied field so consumers
 # can audit what the resolver did.
 echo "[8] routing block surfaces every applied field"

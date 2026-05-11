@@ -217,6 +217,38 @@ if [ "$PHASE_KIND" = "custom" ]; then
         strict|normal) ;;
         *) ROUTING_TRUST="normal" ;;
       esac
+
+      # Routed upstreams that are not already in the dependency-derived
+      # UPSTREAM list still need their artifacts resolved so consumers
+      # see status + paths. Codex caught the missing wiring on the
+      # PR 5 first review pass: declaring upstream_optional: ["security"]
+      # without listing security in depends_on left it absent from
+      # upstream_status entirely. Default age for the merge follows the
+      # routing max_age_days when set, otherwise the per-phase 30-day
+      # custom default.
+      _routed_default_age=30
+      [ -n "$ROUTING_MAX_AGE_DAYS" ] && [ "$ROUTING_MAX_AGE_DAYS" != "null" ] && _routed_default_age="$ROUTING_MAX_AGE_DAYS"
+      _add_routed_upstream() {
+        local extra="$1"
+        [ -z "$extra" ] && return 0
+        case " $UPSTREAM " in
+          *" ${extra}:"*) return 0 ;;
+        esac
+        if [ "$extra" = "build" ]; then
+          UPSTREAM="${UPSTREAM:+$UPSTREAM }build:0"
+        else
+          UPSTREAM="${UPSTREAM:+$UPSTREAM }$extra:$_routed_default_age"
+        fi
+      }
+      while IFS= read -r r; do
+        [ -z "$r" ] || [ "$r" = "null" ] && continue
+        _add_routed_upstream "$r"
+      done < <(echo "$ROUTING_REQUIRED_JSON" | jq -r '.[]?' 2>/dev/null)
+      while IFS= read -r r; do
+        [ -z "$r" ] || [ "$r" = "null" ] && continue
+        _add_routed_upstream "$r"
+      done < <(echo "$ROUTING_OPTIONAL_JSON" | jq -r '.[]?' 2>/dev/null)
+      unset -f _add_routed_upstream
     fi
   fi
 fi
