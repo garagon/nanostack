@@ -171,7 +171,7 @@ jobs:
           ci/e2e-onboarding-flows.sh
 
   e2e-artifact-trust:
-    name: E2E Artifact Trust v2 (8 cells)
+    name: E2E Artifact Trust v2 (9 cells)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # Artifact Trust v2 PR 2 of the 2026-05-10 architecture audit.

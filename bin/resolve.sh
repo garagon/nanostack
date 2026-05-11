@@ -216,7 +216,20 @@ for entry in $UPSTREAM; do
   STATUS="missing"
   if [ -n "$RAW" ]; then
     if declare -F nano_artifact_trust >/dev/null 2>&1; then
-      STATUS=$(nano_artifact_trust "$RAW" 2>/dev/null || echo "missing")
+      # Keep `||` OUTSIDE the command substitution so a deletion race
+      # (file vanishes between find-artifact.sh and nano_artifact_trust)
+      # cleanly maps to "missing" instead of leaving "not_found" plus a
+      # trailing "missing" inside STATUS. Codex caught this on the PR 2
+      # review: the previous inline `|| echo "missing"` produced a
+      # literal newline that broke jq --argjson upstream_status.
+      STATUS=$(nano_artifact_trust "$RAW" 2>/dev/null) || STATUS="missing"
+      # Defense in depth: normalize any unexpected helper output (empty
+      # string, not_found leaking through, future statuses) to one of
+      # the four contract values so the JSON shape stays stable.
+      case "$STATUS" in
+        verified|integrity_missing|integrity_mismatch) ;;
+        *) STATUS="missing" ;;
+      esac
     else
       STATUS="verified"  # helper unavailable; assume verified to keep legacy behavior
     fi

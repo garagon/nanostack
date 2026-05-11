@@ -225,6 +225,32 @@ status_qa=$( echo "$resolved"       | jq -r '.upstream_status.qa // ""' )
 assert_eq "missing security reports status=missing" "missing" "$status_security"
 assert_eq "missing qa reports status=missing"       "missing" "$status_qa"
 
+# Cell 8a: find-artifact.sh parses flags even when max-age is omitted.
+# Codex caught this on the PR 2 first pass: `find-artifact.sh plan
+# --require-integrity` (the documented optional-age form) used to
+# assign the flag string to MAX_AGE and the strict gate silently
+# no-oped. Locked here so the regression cannot return.
+echo "[8a] find-artifact.sh detects flags in the max-age slot"
+PROJ_FLAG="$TMP_ROOT/project-flag"
+STORE_FLAG="$PROJ_FLAG/.nanostack"
+mkdir -p "$PROJ_FLAG" "$STORE_FLAG"
+cd "$PROJ_FLAG"
+git init -q
+mk_artifact "$STORE_FLAG" plan missing 2026-05-10T08-00-00 "$PROJ_FLAG"
+set +e
+out=$( NANOSTACK_STORE="$STORE_FLAG" "$REPO/bin/find-artifact.sh" plan --require-integrity 2>&1 )
+rc=$?
+set -e
+assert_eq "no max-age + --require-integrity fails on missing (rc 1)" "1" "$rc"
+echo "$out" | grep -qE '^INTEGRITY MISSING:' && \
+  assert_eq "no max-age + --require-integrity emits INTEGRITY MISSING" "yes" "yes" || \
+  assert_eq "no max-age + --require-integrity emits INTEGRITY MISSING" "yes" "no"
+set +e
+out=$( NANOSTACK_STORE="$STORE_FLAG" "$REPO/bin/find-artifact.sh" plan --verify 2>&1 )
+rc=$?
+set -e
+assert_eq "no max-age + --verify is lenient (rc 0)" "0" "$rc"
+
 # Cell 8: custom phases also get upstream_status. The custom dep graph
 # resolves through phase_graph or SKILL.md frontmatter, same as before.
 echo "[8] custom phase upstream_status follows the dep graph"

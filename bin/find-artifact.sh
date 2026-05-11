@@ -27,26 +27,32 @@ source "$SCRIPT_DIR/lib/store-path.sh"
 [ -f "$SCRIPT_DIR/lib/artifact-trust.sh" ] && source "$SCRIPT_DIR/lib/artifact-trust.sh"
 
 PHASE="${1:?Usage: find-artifact.sh <phase> [max-age-days] [--verify] [--require-integrity]}"
-MAX_AGE="${2:-30}"
-STORE="$NANOSTACK_STORE/$PHASE"
-PROJECT="$(pwd)"
+shift
 
-[ -d "$STORE" ] || exit 1
-
+MAX_AGE=30
 VERIFY=false
 REQUIRE_INTEGRITY=false
-# Accept both flags at any position from arg 3 onward so older call
-# sites (find-artifact.sh <phase> <age> --verify) keep working and new
-# call sites can pass --require-integrity alongside --verify.
-shift_count=2
-[ $# -lt 2 ] && shift_count=$#
-shift $shift_count 2>/dev/null || true
+# The max-age argument is optional; detect it by shape so callers can
+# skip it and pass a flag in $2 (e.g. find-artifact.sh plan
+# --require-integrity). A leading dash means flag, not age. Codex
+# caught this on the PR 2 review: without the shape check, the flag
+# was assigned to MAX_AGE and find -mtime -"--require-integrity"
+# silently returned nothing.
+if [ $# -gt 0 ] && [ -n "$1" ] && [ "${1#-}" = "$1" ]; then
+  MAX_AGE="$1"
+  shift
+fi
 for arg in "$@"; do
   case "$arg" in
     --verify) VERIFY=true ;;
     --require-integrity) REQUIRE_INTEGRITY=true; VERIFY=true ;;
   esac
 done
+
+STORE="$NANOSTACK_STORE/$PHASE"
+PROJECT="$(pwd)"
+
+[ -d "$STORE" ] || exit 1
 
 RESULT=$(find "$STORE" -name "*.json" -mtime -"$MAX_AGE" 2>/dev/null | while read -r f; do
   # Pre-filter with grep before full jq parse (80% fewer jq calls on multi-project setups)
