@@ -63,9 +63,34 @@ check_present() {
 
 printf "\n${GREEN}=== Visual artifact template safety ===${NC}\n\n"
 
-# 1. No external URLs in renderer source. Comments are allowed for
-# contract refs but the contract doc has no URLs either.
-check_absent "no http(s) URLs in renderer/templates" \
+# 1. No external URLs in template emission lines. We allow URLs to
+# appear inside the source as case-pattern allowlists (PR 2 added
+# nano_visual_safe_pr_url to validate ship pr_url strings), but they
+# must never appear as literal HTML emitted by the renderer. The
+# grep filter excludes lines that are case patterns, comments, or
+# expansion sentinels for the URL allowlist itself.
+check_absent_no_allowlist() {
+  local name="$1"
+  local pattern="$2"
+  shift 2
+  local files=("$@")
+  local hits
+  hits=$(grep -nE "$pattern" "${files[@]}" 2>/dev/null \
+    | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' \
+    | grep -vE '# url-allowlist' \
+    | grep -vE 'http://\*\|https://\*' \
+    || true)
+  if [ -n "$hits" ]; then
+    FAIL=$((FAIL+1))
+    printf "  ${RED}FAIL${NC}  %s\n" "$name"
+    printf "         ${DIM}pattern: %s${NC}\n" "$pattern"
+    printf '%s\n' "$hits" | sed 's/^/         /'
+  else
+    PASS=$((PASS+1))
+    printf "  ${GREEN}OK${NC}    %s\n" "$name"
+  fi
+}
+check_absent_no_allowlist "no http(s) URLs in renderer/templates (allowlist excepted)" \
   'https?://' "${FILES[@]}"
 
 # 2. No script-loading or XHR-style APIs.
@@ -123,6 +148,24 @@ check_present "renderer sources visual-render" \
   'source.*lib/visual-render.sh' "bin/render-artifact.sh"
 check_present "renderer sources artifact-trust" \
   'source.*lib/artifact-trust.sh' "bin/render-artifact.sh"
+
+# 9. PR 2: ship renderer must escape PR URLs and use the allowlist.
+check_present "ship renderer calls nano_visual_safe_pr_url" \
+  'nano_visual_safe_pr_url' "bin/render-artifact.sh"
+check_present "ship renderer wraps URL with rel='noopener noreferrer'" \
+  'noopener noreferrer' "bin/render-artifact.sh"
+
+# 10. PR 2: severity classes must come from the shared helper, not be
+# inlined. Lets PR 3 / 4 keep them consistent.
+check_present "renderer uses nano_visual_severity_class" \
+  'nano_visual_severity_class' "bin/render-artifact.sh"
+
+# 11. PR 2: shared CSS must include severity finding styles so every
+# core phase shares the visual identity.
+check_present "shared CSS defines .finding.sev-bad" \
+  '\.finding\.sev-bad' "bin/lib/visual-render.sh"
+check_present "shared CSS defines .counter" \
+  '\.counter' "bin/lib/visual-render.sh"
 
 TOTAL=$((PASS+FAIL))
 printf "\n  %s/%s checks passed\n" "$PASS" "$TOTAL"
