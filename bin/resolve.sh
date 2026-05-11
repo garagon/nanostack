@@ -20,6 +20,7 @@ source "$SCRIPT_DIR/lib/store-path.sh"
 [ -f "$SCRIPT_DIR/lib/preflight.sh" ] && { source "$SCRIPT_DIR/lib/preflight.sh"; nanostack_require jq; }
 [ -f "$SCRIPT_DIR/lib/cache.sh" ] && source "$SCRIPT_DIR/lib/cache.sh"
 . "$SCRIPT_DIR/lib/phases.sh"
+[ -f "$SCRIPT_DIR/lib/artifact-trust.sh" ] && . "$SCRIPT_DIR/lib/artifact-trust.sh"
 
 # Portable timeout wrapper: gtimeout (coreutils on macOS) → timeout (Linux) → run as-is.
 # Used to bound expensive solution lookups so resolve.sh never hangs the sprint.
@@ -180,9 +181,20 @@ case "$PHASE" in
 esac
 
 # ─── 1. Resolve upstream artifacts ─────────────────────────
+#
+# upstream_artifacts keeps its historical shape: only verified paths
+# appear (the --verify call drops integrity-mismatched files). New in
+# the 2026-05-10 architecture audit (PR 2): upstream_status exposes
+# the trust state for every declared upstream so downstream consumers
+# can distinguish "no artifact" from "tampered" from "missing
+# integrity field" without reimplementing the check. release-readiness
+# and other release gates can switch to --require-integrity in their
+# own find-artifact.sh calls when they need strict semantics.
 
 ARTIFACTS_JSON="{"
+STATUS_JSON="{"
 FIRST=true
+SFIRST=true
 for entry in $UPSTREAM; do
   phase="${entry%%:*}"
   age="${entry#*:}"
@@ -195,28 +207,73 @@ for entry in $UPSTREAM; do
       age="$o_age"
     fi
   done
-  # --verify rejects artifacts whose stored content hash does not match
-  # on read, so a tampered file in .nanostack/ cannot become the source
-  # of truth for downstream phases (gates, review context, conflict
-  # precedence). find-artifact.sh returns empty on a verify failure;
-  # that is fine and equivalent to "no artifact for this phase".
-  RESULT=$("$SCRIPT_DIR/find-artifact.sh" "$phase" "$age" --verify 2>/dev/null) || RESULT=""
-  if [ -n "$RESULT" ]; then
-    $FIRST || ARTIFACTS_JSON="$ARTIFACTS_JSON,"
-    ARTIFACTS_JSON="$ARTIFACTS_JSON\"$phase\":\"$RESULT\""
-    FIRST=false
-  elif [ "$PHASE_KIND" = "custom" ]; then
-    # Custom phases keep declared-but-missing deps in the output as
-    # `null` so consumers can tell "we asked for this and found
-    # nothing" apart from "this was never a dep". Core phases keep the
-    # historical "omit if missing" behavior to avoid changing the JSON
-    # shape for downstream skills.
-    $FIRST || ARTIFACTS_JSON="$ARTIFACTS_JSON,"
-    ARTIFACTS_JSON="$ARTIFACTS_JSON\"$phase\":null"
-    FIRST=false
+
+  # Look up the latest artifact for this phase WITHOUT --verify so we
+  # can classify it ourselves via nano_artifact_trust. The verified
+  # variant below decides what goes into upstream_artifacts.
+  RAW=$("$SCRIPT_DIR/find-artifact.sh" "$phase" "$age" 2>/dev/null) || RAW=""
+
+  STATUS="missing"
+  if [ -n "$RAW" ]; then
+    if declare -F nano_artifact_trust >/dev/null 2>&1; then
+      # Keep `||` OUTSIDE the command substitution so a deletion race
+      # (file vanishes between find-artifact.sh and nano_artifact_trust)
+      # cleanly maps to "missing" instead of leaving "not_found" plus a
+      # trailing "missing" inside STATUS. Codex caught this on the PR 2
+      # review: the previous inline `|| echo "missing"` produced a
+      # literal newline that broke jq --argjson upstream_status.
+      STATUS=$(nano_artifact_trust "$RAW" 2>/dev/null) || STATUS="missing"
+      # Defense in depth: normalize any unexpected helper output (empty
+      # string, not_found leaking through, future statuses) to one of
+      # the four contract values so the JSON shape stays stable.
+      case "$STATUS" in
+        verified|integrity_missing|integrity_mismatch) ;;
+        *) STATUS="missing" ;;
+      esac
+    else
+      STATUS="verified"  # helper unavailable; assume verified to keep legacy behavior
+    fi
   fi
+
+  # upstream_artifacts: only include verified artifacts so a tampered
+  # file in the store cannot drive downstream context. integrity_missing
+  # artifacts also load so legacy stores (saved before integrity was
+  # added) continue to work; release gates that need strict semantics
+  # call find-artifact.sh --require-integrity themselves and read
+  # upstream_status for the explicit signal.
+  case "$STATUS" in
+    verified|integrity_missing)
+      $FIRST || ARTIFACTS_JSON="$ARTIFACTS_JSON,"
+      ARTIFACTS_JSON="$ARTIFACTS_JSON\"$phase\":\"$RAW\""
+      FIRST=false
+      ;;
+    *)
+      if [ "$PHASE_KIND" = "custom" ]; then
+        # Custom phases keep declared-but-missing deps in the output
+        # as `null` so consumers can tell "we asked for this and found
+        # nothing" apart from "this was never a dep". Core phases keep
+        # the historical "omit if missing" behavior to avoid changing
+        # the JSON shape for downstream skills.
+        $FIRST || ARTIFACTS_JSON="$ARTIFACTS_JSON,"
+        ARTIFACTS_JSON="$ARTIFACTS_JSON\"$phase\":null"
+        FIRST=false
+      fi
+      ;;
+  esac
+
+  # upstream_status: always include every declared upstream so callers
+  # can read a single key to know the trust state. Possible values:
+  # verified, integrity_missing, integrity_mismatch, missing. build is
+  # the conductor's no-artifact stage; record it as not_applicable.
+  if [ "$phase" = "build" ]; then
+    STATUS="not_applicable"
+  fi
+  $SFIRST || STATUS_JSON="$STATUS_JSON,"
+  STATUS_JSON="$STATUS_JSON\"$phase\":\"$STATUS\""
+  SFIRST=false
 done
 ARTIFACTS_JSON="$ARTIFACTS_JSON}"
+STATUS_JSON="$STATUS_JSON}"
 
 # ─── 2. Resolve solutions ──────────────────────────────────
 
@@ -370,6 +427,7 @@ jq -n \
   --arg phase "$PHASE" \
   --arg phase_kind "$PHASE_KIND" \
   --argjson artifacts "$ARTIFACTS_JSON" \
+  --argjson upstream_status "$STATUS_JSON" \
   --argjson solutions "$SOLUTIONS_JSON" \
   --argjson precedents "$PRECEDENTS_JSON" \
   --argjson diarizations "$DIARIZATIONS_JSON" \
@@ -380,6 +438,7 @@ jq -n \
     phase: $phase,
     phase_kind: $phase_kind,
     upstream_artifacts: $artifacts,
+    upstream_status: $upstream_status,
     solutions: $solutions,
     conflict_precedents: $precedents,
     diarizations: $diarizations,

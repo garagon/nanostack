@@ -169,3 +169,22 @@ jobs:
         run: |
           chmod +x ci/e2e-onboarding-flows.sh
           ci/e2e-onboarding-flows.sh
+
+  e2e-artifact-trust:
+    name: E2E Artifact Trust v2 (9 cells)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Artifact Trust v2 PR 2 of the 2026-05-10 architecture audit.
+    # Locks the four-state trust model across the shared helper
+    # (bin/lib/artifact-trust.sh), find-artifact.sh (--verify vs
+    # --require-integrity), and resolve.sh (upstream_status field).
+    # Each cell builds artifacts by hand to exercise verified,
+    # integrity_missing, integrity_mismatch, and missing in isolation.
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq is present
+        run: jq --version
+      - name: Run artifact-trust E2E
+        run: |
+          chmod +x ci/e2e-artifact-trust.sh
+          ci/e2e-artifact-trust.sh
