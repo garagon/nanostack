@@ -1369,6 +1369,25 @@ MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*empty_graph2*.manifest.json | hea
 LEN=$(jq -r '.source_artifacts | length' "$MFST")
 assert_true "graph-invalid manifest has >= 1 source" sh -c "[ '$LEN' -ge 1 ]"
 
+# ─── Cell 23a: stack manifest records the stack definition (PR 3 pass 16) ─
+printf "\n  ${DIM}Cell 23a: stack manifest records the stack def (PR 3 pass 16)${NC}\n"
+PROJ="$TMP_ROOT/cell23a"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*stack*compliance-release*.manifest.json | head -1)
+# First source must be the stack definition file itself.
+FIRST_PHASE=$(jq -r '.source_artifacts[0].phase' "$MFST")
+FIRST_PATH=$(jq -r '.source_artifacts[0].path' "$MFST")
+assert_true "first source phase is 'stack:compliance-release'" \
+  sh -c "[ '$FIRST_PHASE' = 'stack:compliance-release' ]"
+assert_true "first source path is the stack file" \
+  sh -c "echo '$FIRST_PATH' | grep -q 'compliance-release/stack.json'"
+# Total sources = stack def + 10 phases.
+TOTAL=$(jq -r '.source_artifacts | length' "$MFST")
+assert_true "manifest has 11 sources (1 stack def + 10 phases)" sh -c "[ '$TOTAL' = '11' ]"
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"

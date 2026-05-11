@@ -170,10 +170,17 @@ check_present "shared CSS defines .finding.sev-bad" \
 check_present "shared CSS defines .counter" \
   '\.counter' "bin/lib/visual-render.sh"
 
-# 12. PR 3: journal renderer reads through find-artifact.sh and stays
-# read-only (--no-session-sync) just like the per-phase renders.
-check_present "render_journal_body uses --no-session-sync" \
-  '--no-session-sync' "bin/render-artifact.sh"
+# 12. PR 3: journal renderer reads through _journal_latest_on_date
+# (a direct filesystem helper) and never calls session.sh
+# phase-start or other mutating commands. Codex PR 3 pass 16: the
+# previous check was vacuous (just `grep --no-session-sync` against
+# the whole file). Tighten to require that render_journal_body uses
+# the dedicated lookup helper.
+check_present "render_journal_body uses _journal_latest_on_date helper" \
+  '_journal_latest_on_date' "bin/render-artifact.sh"
+# And per-phase resolution still uses --no-session-sync.
+check_present "phase resolution uses --no-session-sync" \
+  '\-\-no-session-sync' "bin/render-artifact.sh"
 
 # 13. PR 3: stack renderer must validate the stack name before
 # touching disk. Restrict to alnum, _, -.

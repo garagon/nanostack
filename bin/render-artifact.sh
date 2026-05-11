@@ -1345,7 +1345,20 @@ render_stack_body() {
   # escaping. Codex PR 3 pass 2: the previous awk builder only
   # escaped double quotes; a project path with a backslash or
   # control character produced invalid JSON.
+  #
+  # Codex PR 3 pass 16: include the stack definition file itself as
+  # the first source so manifest consumers can spot a change to the
+  # graph. Stack files don't carry .integrity so we record them as
+  # not_applicable (trust is meaningful only for artifact JSON).
   sources='[]'
+  if [ -n "$stack_file" ] && [ -f "$stack_file" ]; then
+    local sf_abs
+    sf_abs=$(nano_resolve_abs "$stack_file")
+    sources=$(printf '%s' "$sources" | jq -c \
+      --arg phase "stack:$name" \
+      --arg path "$sf_abs" \
+      '. + [{phase: $phase, path: $path, integrity: "", trust: "not_applicable"}]')
+  fi
   while IFS= read -r nm; do
     [ -z "$nm" ] && continue
     local ap tr ig
