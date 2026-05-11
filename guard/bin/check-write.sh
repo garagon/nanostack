@@ -122,6 +122,27 @@ fi
 # Each entry is a POSIX extended regex evaluated against the absolute or
 # relative file path. Intentionally narrow: false positives train users
 # to ignore the block, and this hook cannot afford that.
+#
+# PR 7 of the 2026-05-10 architecture audit: closed the gap where read
+# guard (G-035 in guard/rules.json) blocked credential JSON basenames
+# but write/edit allowed them. The deny list now mirrors the read
+# side for credential JSON files; templates (.env.example,
+# credentials.example.json, service-account.template.json, etc.) are
+# explicitly allowed through TEMPLATE_ALLOW so first-run onboarding
+# does not fight the guard.
+
+# Template basenames that should ALWAYS pass through, even when the
+# rest of the filename looks like a secret. Runs before the deny
+# matcher. Matches the common ".example", ".sample", ".template"
+# infix that signals "documentation copy, no secrets".
+TEMPLATE_ALLOW=(
+  '\.example$'
+  '\.sample$'
+  '\.template$'
+  '\.example\.[a-zA-Z0-9]+$'
+  '\.sample\.[a-zA-Z0-9]+$'
+  '\.template\.[a-zA-Z0-9]+$'
+)
 
 # Basename-based patterns (match any path ending in this filename).
 BASENAME_DENY=(
@@ -133,6 +154,24 @@ BASENAME_DENY=(
   '\.env\.staging$'
   '\.env\.development$'
   '\.env\.dev$'
+  '\.env\.test$'
+  # Credential JSON files. Mirrors the read-side deny added in PR
+  # #195 (G-035 in guard/rules.json). The shapes cover the common
+  # SDK conventions: credentials.json, secrets.json, service-account
+  # /service_account, firebase-adminsdk, google-credentials,
+  # gcp-credentials, aws-credentials, supabase-service-role,
+  # client-secret(s) / client_secret. The base patterns match the
+  # plain name and any same-stem variant such as
+  # service-account-prod.json or aws-credentials-staging.json.
+  '(^|/)credentials?\.json$'
+  '(^|/)secrets?\.json$'
+  '(^|/)service[-_]account[^/]*\.json$'
+  '(^|/)firebase[-_]adminsdk[^/]*\.json$'
+  '(^|/)google[-_]credentials[^/]*\.json$'
+  '(^|/)gcp[-_]credentials[^/]*\.json$'
+  '(^|/)aws[-_]credentials[^/]*\.json$'
+  '(^|/)supabase[-_]service[-_]role[^/]*\.json$'
+  '(^|/)client[-_]secret[s]?[^/]*\.json$'
   # Private cryptographic material.
   '\.pem$'
   '\.key$'
@@ -181,6 +220,19 @@ MATCHED_PATH=""
 
 check_path() {
   local p="$1" pat
+  # Template short-circuit: files whose basename ends in `.example`,
+  # `.sample`, `.template` (with or without an extension after) pass
+  # through, even if the rest of the name matches a credential
+  # pattern. This is the safe surface for first-run onboarding
+  # (credentials.example.json, service-account.template.json,
+  # .env.example, etc.).
+  local base
+  base=$(basename "$p")
+  for pat in "${TEMPLATE_ALLOW[@]}"; do
+    if printf '%s' "$base" | grep -qE -- "$pat"; then
+      return 1
+    fi
+  done
   for pat in "${BASENAME_DENY[@]}"; do
     if printf '%s' "$p" | grep -qE -- "$pat"; then
       MATCHED_RULE="secret_basename:$pat"

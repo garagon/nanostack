@@ -812,6 +812,8 @@ jobs:
           run_case 1 '.env'
           run_case 1 '.env.local'
           run_case 1 '.env.production'
+          run_case 1 '.env.staging'
+          run_case 1 '.env.test'
           run_case 1 './secrets/key.pem'
           run_case 1 'path/to/authorized_keys'
           run_case 1 'config.key'
@@ -820,13 +822,43 @@ jobs:
           run_case 1 '/usr/bin/ls'
           run_case 1 "$HOME/.ssh/id_rsa"
           run_case 1 "$HOME/.aws/credentials"
-          # Allowed: templates + regular project files.
+          # PR 7 of the 2026-05-10 architecture audit: credential
+          # JSON basenames must block at write time the same way they
+          # block at read time. The shapes here mirror the G-035
+          # read-guard rule in guard/rules.json.
+          run_case 1 'credentials.json'
+          run_case 1 'credential.json'
+          run_case 1 'secrets.json'
+          run_case 1 'secret.json'
+          run_case 1 'service-account.json'
+          run_case 1 'service_account.json'
+          run_case 1 'service-account-prod.json'
+          run_case 1 'firebase-adminsdk.json'
+          run_case 1 'firebase-adminsdk-staging.json'
+          run_case 1 'google-credentials.json'
+          run_case 1 'gcp-credentials.json'
+          run_case 1 'aws-credentials.json'
+          run_case 1 'aws-credentials-prod.json'
+          run_case 1 'supabase-service-role.json'
+          run_case 1 'client-secrets.json'
+          run_case 1 'client_secret.json'
+          # Allowed: templates + regular project files. Template
+          # basenames (.example, .sample, .template, with or without
+          # extension) MUST pass even when the rest of the name looks
+          # like a secret, otherwise first-run onboarding fights the
+          # guard.
           run_case 0 '.env.example'
           run_case 0 '.env.sample'
           run_case 0 '.env.template'
+          run_case 0 'credentials.example.json'
+          run_case 0 'service-account.example.json'
+          run_case 0 'service-account.template.json'
+          run_case 0 'firebase-adminsdk.sample.json'
           run_case 0 'README.md'
           run_case 0 'src/config.js'
           run_case 0 'package.json'
+          run_case 0 'firebase.json'
+          run_case 0 'tsconfig.json'
           run_case 0 '/tmp/scratch.txt'
           # JSON input path (Claude Code PreToolUse contract).
           if ! echo '{"tool_name":"Write","tool_input":{"file_path":".env"}}' \
