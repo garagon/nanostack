@@ -356,8 +356,15 @@ if [ -n "$FILTER" ] && [ "$FILTER_MATCHED" = "0" ]; then
 fi
 
 # Cross-check: every README-listed adapter must have a JSON file.
+# In single-host mode (caller passed a $FILTER) we only check the
+# requested adapter so a partial checkout that mentions other
+# adapters in its README does not fail the targeted run. Codex
+# flagged the cross-host bleed on the PR 6 eighth review pass.
 for host in $README_LISTED; do
   [ -z "$host" ] && continue
+  if [ -n "$FILTER" ] && [ "$host" != "$FILTER" ]; then
+    continue
+  fi
   if [ ! -f "$ADAPTER_DIR/${host}.json" ]; then
     FAIL=$((FAIL + 1))
     RESULTS_TEXT="${RESULTS_TEXT}FAIL  ${host}: listed in README but no adapters/${host}.json

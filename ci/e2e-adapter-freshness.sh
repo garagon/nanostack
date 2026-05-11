@@ -437,6 +437,26 @@ out=$(run_check_in "$root")
 rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
 assert_eq "'04/25/2026' exits 1" "1" "$rc"
 
+# Cell 7o: single-host mode scopes the README cross-check. A README
+# that mentions claude AND cursor must let `check-adapters.sh claude`
+# pass even if cursor.json is missing — the caller asked only for
+# claude. Codex flagged the cross-host bleed on the PR 6 eighth
+# review pass.
+echo "[7o] single-host filter scopes the README cross-check"
+root=$(new_repo "cell7o-filter-scope")
+cat > "$root/README.md" <<'EOF'
+README mentions `claude` and `cursor`.
+EOF
+write_adapter "$root" claude "$NOW_ISO"
+# cursor.json deliberately missing.
+out=$(cd "$root" && bash bin/check-adapters.sh claude 2>&1; echo "RC=$?")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "filter=claude passes even though cursor.json is missing" "0" "$rc"
+# Without the filter, the same setup must fail.
+out=$(cd "$root" && bash bin/check-adapters.sh 2>&1; echo "RC=$?")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "no filter still fails on missing cursor.json" "1" "$rc"
+
 # Cell 8: --json output emits a parseable summary object.
 echo "[8] --json output is parseable"
 root=$(new_repo "cell8")
