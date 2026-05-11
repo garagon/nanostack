@@ -641,6 +641,12 @@ fi
 ROUTING_LIMIT_FOR_OUTPUT="null"
 if [ -n "$ROUTING_SOLUTION_LIMIT" ] && [ "$ROUTING_SOLUTION_LIMIT" != "null" ]; then
   ROUTING_LIMIT_FOR_OUTPUT="$ROUTING_SOLUTION_LIMIT"
+elif [ "$ROUTING_SOLUTION_TAGS_JSON" != "[]" ]; then
+  # When tags are declared but limit is omitted, the resolver applies
+  # the documented default (10). Report the effective value so the
+  # routing block matches the actual lookup behavior. Codex flagged
+  # the silent default on the PR 5 fourth review pass.
+  ROUTING_LIMIT_FOR_OUTPUT="10"
 fi
 ROUTING_DECLARED_JSON=false
 [ "$ROUTING_DECLARED" = true ] && ROUTING_DECLARED_JSON=true

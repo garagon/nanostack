@@ -449,6 +449,35 @@ assert_eq "routing.solutions.limit" "3" "$(echo "$out" | jq -r '.routing.solutio
 assert_eq "routing.diarizations.paths" '["src/privacy"]' "$(echo "$out" | jq -c '.routing.diarizations.paths')"
 assert_eq "routing.diarizations.keywords" '["pii"]' "$(echo "$out" | jq -c '.routing.diarizations.keywords')"
 
+# Cell 8a: when tags are declared but limit is omitted, the routing
+# block reports the documented default (10) instead of null so
+# consumers auditing the routing output see what actually applied.
+# Codex flagged the silent default on the PR 5 fourth review pass.
+echo "[8a] routing.solutions.limit reports the documented default"
+new_project "cell8a-default-limit"
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "custom_phases": ["license-audit"],
+  "phase_context": {
+    "license-audit": {
+      "solutions": { "tags": ["any"] }
+    }
+  }
+}
+EOF
+out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
+assert_eq "limit omitted with tags declared reports default 10" "10" \
+  "$(echo "$out" | jq -r '.routing.solutions.limit')"
+# Sanity: a config without phase_context at all stays null (no
+# default leaks when nothing was declared).
+new_project "cell8a-no-context"
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{"custom_phases": ["license-audit"]}
+EOF
+out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
+assert_eq "no phase_context: routing.solutions.limit stays null" "null" \
+  "$(echo "$out" | jq -r '.routing.solutions.limit')"
+
 cd "$TMP_ROOT"
 
 echo
