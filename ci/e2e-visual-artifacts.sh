@@ -1523,8 +1523,9 @@ HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest --interactive)
 # The malicious sequence must NOT appear as literal `</script><script>` anywhere.
 LIT_COUNT=$(grep -o '</script><script>' "$HTML" | wc -l | tr -d ' ')
 assert_true "no raw </script><script> sequence in interactive output" sh -c "[ '$LIT_COUNT' = '0' ]"
-# The escaped form should appear (proves we transformed it).
-assert_contains "escaped <\\/script> form present" "$HTML" '<\/script>'
+# PR 4 pass 3 switched the escape from `<\/` to `<`. Confirm
+# the u003c form appears (transformation happened).
+assert_contains "encoded u003c form present in output" "$HTML" "u003c"
 # Manual copy <pre> is HTML-escaped.
 assert_contains "manual-copy <pre> shows escaped tag" "$HTML" '&lt;/script&gt;'
 
@@ -1607,6 +1608,45 @@ set -e
 assert_exit "schema-warning review with --interactive exits 0" 0 test "$RC" = 0
 assert_true "schema-warning review html path is non-empty" sh -c "[ -n '$HTML' ]"
 assert_true "schema-warning review html file exists" test -f "$HTML"
+
+# ─── Cell 23l: <!--<script> in payload neutralized (PR 4 pass 3) ─
+printf "\n  ${DIM}Cell 23l: <!--<script> XSS containment (PR 4 pass 3)${NC}\n"
+PROJ="$TMP_ROOT/cell23l"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && NANOSTACK_STORE="$NANOSTACK_STORE" "$REPO/bin/save-artifact.sh" plan '{
+  "phase":"plan",
+  "summary":{"goal":"<!--<script>alert(1)</script>","scope":"s","planned_files":[],"plan_approval":"manual"},
+  "context_checkpoint":{"summary":"x","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest --interactive)
+# Extract the inline <script>...</script> block. Match the FIRST
+# `<script>` (the renderer's own block) and the FIRST closing tag
+# after it.
+SCRIPT_BODY=$(awk '
+  /^[[:space:]]*<script>/ { in_script=1; next }
+  /^[[:space:]]*<\/script>/ { in_script=0 }
+  in_script { print }
+' "$HTML")
+# Forbidden raw HTML sequences inside the inline JS body.
+for needle in '<!--' '<script' '</script' '<!CDATA'; do
+  if printf '%s' "$SCRIPT_BODY" | grep -qF "$needle"; then
+    FAIL=$((FAIL+1))
+    printf "    ${RED}FAIL${NC}  script body contains literal %s (HTML parser hazard)\n" "$needle"
+  else
+    PASS=$((PASS+1))
+    printf "    ${GREEN}OK${NC}    script body has no literal %s\n" "$needle"
+  fi
+done
+# Encoded form should appear in the file (visible escape sequence).
+if grep -qF 'u003c' "$HTML"; then
+  PASS=$((PASS+1))
+  printf "    ${GREEN}OK${NC}    encoded u003c form present\n"
+else
+  FAIL=$((FAIL+1))
+  printf "    ${RED}FAIL${NC}  encoded u003c form missing\n"
+fi
 
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"

@@ -1013,16 +1013,20 @@ render_copy_actions() {
   fi
 
   # Encode each payload as a JSON string literal so the inline JS
-  # can read it via JSON.parse. nano_json_string emits the full
-  # quoted form including the outer ". Critically: when embedding a
-  # JSON string INSIDE <script>...</script>, any `</` must be
-  # escaped to `<\/` because the HTML parser closes the script tag
-  # at the first literal `</script>` regardless of JS context. Any
-  # following content executes as a new <script> block. JSON.parse
-  # accepts the `<\/` form transparently, so this only hardens the
-  # surrounding HTML parser without changing the runtime payload.
+  # can read it via JSON.parse. Critically: when embedding a JSON
+  # string INSIDE <script>...</script>, several HTML parser states
+  # can swallow or re-interpret the script body. Codex PR 4 pass 3
+  # caught that escaping only `</` left the `<!--<script>` sequence
+  # able to put the parser into the "script data double escaped"
+  # state, which then eats the legitimate closing `</script>`.
+  #
+  # The fix: escape EVERY `<` as `<` in the script-embedded
+  # payload. JSON.parse reads `<` as the literal `<`, so the
+  # clipboard content the user pastes is unchanged. The HTML parser
+  # never sees a `<` inside the script body and stays in the
+  # standard "script data" state until the real closing tag.
   _js_safe_for_script() {
-    sed 's|</|<\\/|g'
+    sed 's|<|\\u003c|g'
   }
   local p_js m_js j_js
   p_js=$(printf '%s' "$prompt_payload" | nano_json_string | _js_safe_for_script)
