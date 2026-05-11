@@ -38,7 +38,7 @@ bin/render-artifact.sh stack [<name>] [--strict] [--manifest-only]
 | `journal --today` | Aggregate every registered phase artifact for today's date into a sprint timeline. |
 | `journal --date YYYY-MM-DD` | Same shape, restricted to the requested date. Filename prefix filter; no 30-day fallback. |
 | `journal` (no flag) | Defaults to today's UTC date. |
-| `stack <name>` | Render a custom workflow DAG. Looks up `examples/custom-stack-template/<name>/stack.json`, then `$NANOSTACK_STORE/stacks/<name>/stack.json`. |
+| `stack <name>` | Render a custom workflow DAG. Looks up `$NANOSTACK_STORE/stacks/<name>/stack.json` first (user-installed), then `examples/custom-stack-template/<name>/stack.json` as a bundled-example fallback. A user-installed stack with the same name as a bundled example always wins. |
 | `stack default` | Falls back to `.nanostack/config.json`'s `phase_graph` when no named stack file is found. Any other unknown name renders a "Stack not found" notice rather than falling back. |
 
 | Flag | Behavior |

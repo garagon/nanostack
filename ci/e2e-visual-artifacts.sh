@@ -1648,6 +1648,59 @@ else
   printf "    ${RED}FAIL${NC}  encoded u003c form missing\n"
 fi
 
+# ─── Cell 24a: user-installed stack wins over bundled example (VA-STACK-001) ─
+# Architect audit 2026-05-11 (Visual Artifacts v1 Security Audit). Without
+# the fix, `bin/render-artifact.sh stack compliance-release` rendered the
+# repo-bundled example even when a user-installed stack of the same name
+# existed under $NANOSTACK_STORE/stacks/<name>/stack.json. The visual and
+# manifest would describe the wrong workflow with no observable error,
+# which breaks the trust contract for compliance/release reviews.
+printf "\n  ${DIM}Cell 24a: user stack wins over bundled (VA-STACK-001)${NC}\n"
+PROJ="$TMP_ROOT/cell24a-projA"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/stacks/compliance-release"
+cat > "$NANOSTACK_STORE/stacks/compliance-release/stack.json" <<'CFG'
+{
+  "schema_version": "1",
+  "name": "compliance-release",
+  "display_name": "User Compliance Override",
+  "description": "User-installed stack must win over the bundled example",
+  "phase_graph": [
+    {"name": "plan", "depends_on": []},
+    {"name": "user-gate", "depends_on": ["plan"]}
+  ]
+}
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+assert_true "user-installed stack render produced HTML" test -f "$HTML"
+assert_contains "user-installed stack display_name surfaces" "$HTML" "User Compliance Override"
+assert_contains "user-installed stack has user-gate phase" "$HTML" 'data-phase="user-gate"'
+assert_not_contains "user-installed stack does NOT show bundled license-audit phase" "$HTML" 'data-phase="license-audit"'
+MFST=$(ls -t "$NANOSTACK_STORE/visual/manifests/"*stack*compliance-release*.manifest.json | head -1)
+FIRST_PATH=$(jq -r '.source_artifacts[0].path' "$MFST")
+assert_true "manifest first source is the user-installed stack file" \
+  sh -c "[ '$FIRST_PATH' = '$NANOSTACK_STORE/stacks/compliance-release/stack.json' ]"
+unset NANOSTACK_STORE
+
+# ─── Cell 24b: bundled example still renders when no user stack (VA-STACK-001) ─
+printf "\n  ${DIM}Cell 24b: bundled fallback (VA-STACK-001)${NC}\n"
+PROJ="$TMP_ROOT/cell24b-clean"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+# No $NANOSTACK_STORE/stacks/compliance-release; the bundled example
+# under examples/custom-stack-template must still render.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+assert_true "bundled fallback produces HTML" test -f "$HTML"
+assert_contains "bundled stack has license-audit phase" "$HTML" 'data-phase="license-audit"'
+assert_contains "bundled stack display_name surfaces" "$HTML" "Compliance Release Stack"
+MFST=$(ls -t "$NANOSTACK_STORE/visual/manifests/"*stack*compliance-release*.manifest.json | head -1)
+FIRST_PATH=$(jq -r '.source_artifacts[0].path' "$MFST")
+assert_true "bundled-fallback manifest references the example file" \
+  sh -c "echo '$FIRST_PATH' | grep -q 'examples/custom-stack-template/compliance-release/stack.json'"
+unset NANOSTACK_STORE
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"
