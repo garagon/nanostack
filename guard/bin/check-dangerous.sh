@@ -147,22 +147,37 @@ fi
 # If a session is active and the current phase is read-only,
 # block write operations to prevent race conditions in parallel execution.
 # Store path already resolved at the top of the script.
+#
+# Skill resolution goes through bin/lib/phases.sh so custom phases are
+# protected the same way built-in ones are. The previous lookup did a
+# raw $NANOSTACK_ROOT/$CURRENT_PHASE/SKILL.md, which silently no-oped
+# for any phase whose SKILL.md lived outside the repo (every custom
+# skill under $NANOSTACK_STORE/skills, ~/.claude/skills, etc.).
 if [ -n "${NANOSTACK_STORE:-}" ]; then
   SESSION_CHECK="$NANOSTACK_STORE/session.json"
 
   if [ -f "$SESSION_CHECK" ]; then
     CURRENT_PHASE=$(jq -r '.current_phase // ""' "$SESSION_CHECK" 2>/dev/null)
 
-    if [ -n "$CURRENT_PHASE" ]; then
-      # Get concurrency from skill frontmatter
-      SKILL_CONC=""
-      case "$CURRENT_PHASE" in
-        plan) SKILL_MD="$NANOSTACK_ROOT/plan/SKILL.md" ;;
-        build) SKILL_MD="" ;;
-        *) SKILL_MD="$NANOSTACK_ROOT/$CURRENT_PHASE/SKILL.md" ;;
-      esac
+    if [ -n "$CURRENT_PHASE" ] && [ "$CURRENT_PHASE" != "build" ]; then
+      # Resolve the skill directory through the phase registry. Returns
+      # silently for unknown phases so the guard never blocks because of
+      # a stale session pointing at a removed skill.
+      SKILL_MD=""
+      PHASES_LIB="$NANOSTACK_ROOT/bin/lib/phases.sh"
+      if [ -f "$PHASES_LIB" ]; then
+        # shellcheck disable=SC1090
+        source "$PHASES_LIB" 2>/dev/null || true
+        if command -v nano_phase_skill_path >/dev/null 2>&1; then
+          SKILL_DIR=$(nano_phase_skill_path "$CURRENT_PHASE" 2>/dev/null || true)
+          if [ -n "$SKILL_DIR" ] && [ -f "$SKILL_DIR/SKILL.md" ]; then
+            SKILL_MD="$SKILL_DIR/SKILL.md"
+          fi
+        fi
+      fi
 
-      if [ -n "${SKILL_MD:-}" ] && [ -f "$SKILL_MD" ]; then
+      SKILL_CONC=""
+      if [ -n "$SKILL_MD" ]; then
         SKILL_CONC=$(sed -n '/^---$/,/^---$/p' "$SKILL_MD" | grep '^concurrency:' | head -1 | sed 's/^concurrency: *//')
       fi
 
@@ -176,6 +191,7 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
             echo ""
             echo "Action: report this as a finding instead of auto-fixing. The current phase is read-only to prevent race conditions when multiple agents run in parallel."
             echo "Bypass: complete the current phase first (\`bin/session.sh phase-complete $CURRENT_PHASE\`), or end the session if you're not in a sprint."
+            audit_trail_append blocked "PHASE-RO"
             exit 1
             ;;
         esac

@@ -14,6 +14,12 @@
 #  10. Conductor batch reads concurrency=read from the custom skill.
 #  11. agents/openai.yaml is present and parses.
 #  12. The copied skill has no repo-relative example paths.
+#  13. Scaffolding from a git subdirectory lands in the repo root store.
+#  14. Scaffolding outside any git repo lands in $HOME/.nanostack.
+#  15. Validator rejects mismatched frontmatter name.
+#  16. Guard blocks writes during a read-only custom phase.
+#  17. Custom write phase does not trigger the concurrency block.
+#  18. Built-in review phase still blocks (regression check).
 #
 # This harness is the contract Codex's spec calls for in PR 6: a clean
 # sandbox user can complete the entire workflow without reading source.
@@ -253,6 +259,59 @@ sed 's/^name:.*/name: audit-licenses/' "$DRIFT_SKILL/SKILL.md" > "$DRIFT_SKILL/S
 mv "$DRIFT_SKILL/SKILL.md.tmp" "$DRIFT_SKILL/SKILL.md"
 assert_false "check-custom-skill rejects mismatched frontmatter name" \
   bash -c "HOME='$DRIFT_HOME' '$REPO/bin/check-custom-skill.sh' '$DRIFT_SKILL'"
+
+cd "$PROJ"
+
+# Cell 16: guard concurrency is registry-aware. A read-only custom phase
+# must block writes the same way a built-in read phase does. Without the
+# registry lookup, guard fell back to $NANOSTACK_ROOT/<phase>/SKILL.md
+# and silently no-oped for every custom skill (which lives under the
+# store's skills/, not the repo).
+echo "[16] guard blocks writes during a read-only custom phase"
+GUARD_HOME="$TMP_ROOT/guard-home"
+GUARD_PROJ="$TMP_ROOT/guard-project"
+mkdir -p "$GUARD_HOME" "$GUARD_PROJ"
+cd "$GUARD_PROJ"
+git init -q
+HOME="$GUARD_HOME" "$REPO/bin/create-skill.sh" license-audit --concurrency read >/dev/null
+GUARD_STORE="$GUARD_PROJ/.nanostack"
+[ -d "$GUARD_STORE/skills/license-audit" ] || GUARD_STORE="$GUARD_HOME/.nanostack"
+echo '{"current_phase":"license-audit"}' > "$GUARD_STORE/session.json"
+set +e
+NANOSTACK_STORE="$GUARD_STORE" HOME="$GUARD_HOME" \
+  "$REPO/guard/bin/check-dangerous.sh" "touch should-not-pass" >/dev/null 2>&1
+guard_rc=$?
+set -e
+assert_eq "custom read phase blocks write (exit 1)" "1" "$guard_rc"
+
+# Cell 17: switching the same custom phase to concurrency: write lifts
+# the concurrency block. (Other guard tiers may still object to specific
+# commands; here we use a path outside the project so Tier 2 in-project
+# fast-path does not auto-pass.)
+echo "[17] custom write phase does not trigger the concurrency block"
+sed_target="$GUARD_STORE/skills/license-audit/SKILL.md"
+sed 's/^concurrency: read$/concurrency: write/' "$sed_target" > "$sed_target.tmp"
+mv "$sed_target.tmp" "$sed_target"
+OUT_TMP=$(mktemp -d /tmp/guard-outside.XXXXXX)
+set +e
+NANOSTACK_STORE="$GUARD_STORE" HOME="$GUARD_HOME" \
+  "$REPO/guard/bin/check-dangerous.sh" "touch $OUT_TMP/x" >/dev/null 2>&1
+guard_rc=$?
+set -e
+rm -rf "$OUT_TMP"
+assert_eq "custom write phase does not block on concurrency (exit 0)" "0" "$guard_rc"
+
+# Cell 18: built-in read phases keep working unchanged. /review is the
+# canonical case: it must keep blocking touch even after the lookup
+# moved through the phase registry.
+echo "[18] built-in review phase still blocks writes"
+echo '{"current_phase":"review"}' > "$GUARD_STORE/session.json"
+set +e
+NANOSTACK_STORE="$GUARD_STORE" HOME="$GUARD_HOME" \
+  "$REPO/guard/bin/check-dangerous.sh" "touch should-not-pass" >/dev/null 2>&1
+guard_rc=$?
+set -e
+assert_eq "built-in review phase blocks write (exit 1)" "1" "$guard_rc"
 
 cd "$PROJ"
 
