@@ -282,6 +282,78 @@ sec_art=$(echo "$out" | jq -r '.upstream_artifacts.security // ""')
 assert_eq "upstream_artifacts.security is the resolved path" \
   "true" "$( [ -n "$sec_art" ] && echo "true" || echo "false" )"
 
+# Cell 7b: phase_context can live in the global ~/.nanostack/
+# config.json. nano_phase_kind already consults the global file as a
+# fallback; resolve.sh now uses the same config-resolution path so
+# routing intent is honored even when the project has no local
+# config.json. Codex caught the missed fallback on the PR 5 second
+# review pass.
+echo "[7b] phase_context in the global ~/.nanostack/config.json is honored"
+GLOBAL_HOME="$TMP_ROOT/global-home"
+GLOBAL_PROJ="$TMP_ROOT/global-proj"
+mkdir -p "$GLOBAL_HOME/.nanostack" \
+         "$GLOBAL_PROJ/.nanostack/skills/license-audit"
+cat > "$GLOBAL_HOME/.nanostack/config.json" <<'EOF'
+{
+  "custom_phases": ["license-audit"],
+  "phase_context": {
+    "license-audit": {
+      "trust": "strict",
+      "upstream_required": ["review"]
+    }
+  }
+}
+EOF
+cat > "$GLOBAL_PROJ/.nanostack/skills/license-audit/SKILL.md" <<'EOF'
+---
+name: license-audit
+description: routed via global config
+concurrency: read
+---
+EOF
+cd "$GLOBAL_PROJ"
+git init -q
+out=$(HOME="$GLOBAL_HOME" NANOSTACK_STORE="$GLOBAL_PROJ/.nanostack" \
+  "$REPO/bin/resolve.sh" license-audit 2>/dev/null)
+assert_eq "global config: routing.declared = true" "true" \
+  "$(echo "$out" | jq -r '.routing.declared')"
+assert_eq "global config: routing.trust = strict" "strict" \
+  "$(echo "$out" | jq -r '.routing.trust')"
+
+# Cell 7c: diarization paths and keywords are matched literally, not
+# as regex. A subject like app/users/[id]/page.tsx must not match a
+# decoy app/users/i/page.tsx even though [id] reads as a character
+# class under default grep. Codex caught the regex-vs-literal bug on
+# the PR 5 second review pass.
+echo "[7c] diarization paths are literal substrings, not regex"
+new_project "cell7c-literal"
+cat > "$NANOSTACK_STORE/know-how/diarizations/exact.md" <<'EOF'
+---
+subject: app/users/[id]/page.tsx
+date: 2026-04-01
+---
+EOF
+cat > "$NANOSTACK_STORE/know-how/diarizations/decoy.md" <<'EOF'
+---
+subject: app/users/i/page.tsx
+date: 2026-04-01
+---
+EOF
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "custom_phases": ["license-audit"],
+  "phase_context": {
+    "license-audit": {
+      "diarizations": { "paths": ["app/users/[id]/page.tsx"], "keywords": [] }
+    }
+  }
+}
+EOF
+out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
+diar_subjects=$(echo "$out" | jq -c '.diarizations | map(.subject) | sort')
+assert_eq "literal match: only the exact subject is loaded" \
+  '["app/users/[id]/page.tsx"]' "$diar_subjects"
+
 # Cell 8: routing block surfaces every applied field so consumers
 # can audit what the resolver did.
 echo "[8] routing block surfaces every applied field"

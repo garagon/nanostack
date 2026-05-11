@@ -201,18 +201,27 @@ ROUTING_DIARIZATION_PATHS_JSON="[]"
 ROUTING_DIARIZATION_KEYWORDS_JSON="[]"
 ROUTING_DECLARED=false
 if [ "$PHASE_KIND" = "custom" ]; then
-  CONFIG_FILE="$NANOSTACK_STORE/config.json"
-  if [ -f "$CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
-    if jq -e --arg p "$PHASE" '.phase_context // {} | has($p)' "$CONFIG_FILE" >/dev/null 2>&1; then
+  # Resolve the same config the phase registry used: prefer the
+  # project-local .nanostack/config.json, fall back to the global
+  # ~/.nanostack/config.json so a user-level routing entry still
+  # applies to a project that has no local config. Codex caught
+  # the missed-fallback regression on the PR 5 second review pass.
+  ROUTING_CFG=""
+  if declare -F _nano_phases_resolve_config >/dev/null 2>&1; then
+    ROUTING_CFG=$(_nano_phases_resolve_config 2>/dev/null || echo "")
+  fi
+  [ -z "$ROUTING_CFG" ] && ROUTING_CFG="$NANOSTACK_STORE/config.json"
+  if [ -f "$ROUTING_CFG" ] && command -v jq >/dev/null 2>&1; then
+    if jq -e --arg p "$PHASE" '.phase_context // {} | has($p)' "$ROUTING_CFG" >/dev/null 2>&1; then
       ROUTING_DECLARED=true
-      ROUTING_TRUST=$(jq -r --arg p "$PHASE" '.phase_context[$p].trust // "normal"' "$CONFIG_FILE" 2>/dev/null)
-      ROUTING_REQUIRED_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].upstream_required // []' "$CONFIG_FILE" 2>/dev/null)
-      ROUTING_OPTIONAL_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].upstream_optional // []' "$CONFIG_FILE" 2>/dev/null)
-      ROUTING_MAX_AGE_DAYS=$(jq -r --arg p "$PHASE" '.phase_context[$p].max_age_days // ""' "$CONFIG_FILE" 2>/dev/null)
-      ROUTING_SOLUTION_TAGS_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].solutions.tags // []' "$CONFIG_FILE" 2>/dev/null)
-      ROUTING_SOLUTION_LIMIT=$(jq -r --arg p "$PHASE" '.phase_context[$p].solutions.limit // ""' "$CONFIG_FILE" 2>/dev/null)
-      ROUTING_DIARIZATION_PATHS_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].diarizations.paths // []' "$CONFIG_FILE" 2>/dev/null)
-      ROUTING_DIARIZATION_KEYWORDS_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].diarizations.keywords // []' "$CONFIG_FILE" 2>/dev/null)
+      ROUTING_TRUST=$(jq -r --arg p "$PHASE" '.phase_context[$p].trust // "normal"' "$ROUTING_CFG" 2>/dev/null)
+      ROUTING_REQUIRED_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].upstream_required // []' "$ROUTING_CFG" 2>/dev/null)
+      ROUTING_OPTIONAL_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].upstream_optional // []' "$ROUTING_CFG" 2>/dev/null)
+      ROUTING_MAX_AGE_DAYS=$(jq -r --arg p "$PHASE" '.phase_context[$p].max_age_days // ""' "$ROUTING_CFG" 2>/dev/null)
+      ROUTING_SOLUTION_TAGS_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].solutions.tags // []' "$ROUTING_CFG" 2>/dev/null)
+      ROUTING_SOLUTION_LIMIT=$(jq -r --arg p "$PHASE" '.phase_context[$p].solutions.limit // ""' "$ROUTING_CFG" 2>/dev/null)
+      ROUTING_DIARIZATION_PATHS_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].diarizations.paths // []' "$ROUTING_CFG" 2>/dev/null)
+      ROUTING_DIARIZATION_KEYWORDS_JSON=$(jq -c --arg p "$PHASE" '.phase_context[$p].diarizations.keywords // []' "$ROUTING_CFG" 2>/dev/null)
       case "$ROUTING_TRUST" in
         strict|normal) ;;
         *) ROUTING_TRUST="normal" ;;
@@ -518,7 +527,11 @@ if [ "$PHASE_KIND" = "custom" ] \
         matched=false
         while IFS= read -r needle; do
           [ -z "$needle" ] && continue
-          if printf '%s' "$SUBJECT" | grep -qi -- "$needle" 2>/dev/null; then
+          # -F: literal substring, not regex. Codex caught the regex
+          # interpretation on the PR 5 second review pass: a path like
+          # app/users/[id]/page.tsx would match unrelated subjects
+          # such as app/users/i/page.tsx because [id] read as a class.
+          if printf '%s' "$SUBJECT" | grep -qiF -- "$needle" 2>/dev/null; then
             matched=true
             break
           fi
