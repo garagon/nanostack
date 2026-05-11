@@ -436,10 +436,6 @@ mkdir -p "$NANOSTACK_STORE"
 (cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
 assert_exit "--interactive reserved (exit 2)" 2 \
   sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan --latest --interactive"
-assert_exit "journal reserved (exit 2)" 2 \
-  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today"
-assert_exit "stack reserved (exit 2)" 2 \
-  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack mystack"
 
 # ─── Cell 7: --manifest-only ────────────────────────────────
 printf "\n  ${DIM}Cell 7: --manifest-only${NC}\n"
@@ -658,6 +654,787 @@ assert_contains "ship ci_passed escaped" "$HTML" '&lt;script&gt;alert(&quot;ci&q
 HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" qa --latest)
 assert_not_contains "qa reproduce no raw script" "$HTML" '<script>alert("qa")'
 assert_not_contains "qa root_cause no raw img" "$HTML" '<img onerror=alert(1)>'
+
+# ─── Cell 18: sprint journal view ───────────────────────────
+printf "\n  ${DIM}Cell 18: sprint journal view${NC}\n"
+PROJ="$TMP_ROOT/cell18"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_think "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_review "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_security "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_qa "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_ship "$NANOSTACK_STORE")
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_true "journal html exists" test -f "$HTML"
+assert_contains "journal page title" "$HTML" "Sprint journal"
+assert_contains "journal data-phase=journal" "$HTML" 'data-phase="journal"'
+assert_contains "journal timeline" "$HTML" "Phase timeline"
+assert_contains "journal think row" "$HTML" 'data-phase="think"'
+assert_contains "journal plan row" "$HTML" 'data-phase="plan"'
+assert_contains "journal review row" "$HTML" 'data-phase="review"'
+assert_contains "journal security row" "$HTML" 'data-phase="security"'
+assert_contains "journal qa row" "$HTML" 'data-phase="qa"'
+assert_contains "journal ship row" "$HTML" 'data-phase="ship"'
+# Manifest must list every source.
+MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*journal*.manifest.json | head -1)
+assert_true "journal manifest kind = journal" sh -c "[ \"\$(jq -r .kind '$MFST')\" = 'journal' ]"
+assert_true "journal sources length >= 6" sh -c "[ \"\$(jq -r '.source_artifacts | length' '$MFST')\" -ge 6 ]"
+# Trust badge aggregated.
+assert_contains "journal aggregated badge" "$HTML" 'data-trust="not_applicable"'
+assert_contains "journal aggregated badge text" "$HTML" '>aggregated<'
+
+# ─── Cell 19: journal flags missing/tampered phases ──────────
+printf "\n  ${DIM}Cell 19: journal flags missing/tampered${NC}\n"
+PROJ="$TMP_ROOT/cell19"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+# Save only think + plan; review/security/qa/ship will be missing.
+(cd "$PROJ" && save_valid_think "$NANOSTACK_STORE")
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_contains "journal renders missing phases" "$HTML" "No artifact found"
+# Tamper with plan; the row must show 'tampered'.
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+jq '.summary.goal = "Tampered"' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_contains "journal flags tampered" "$HTML" '>tampered<'
+# Per-row trust attribute present for the tampered row.
+assert_contains "journal plan row data-trust" "$HTML" 'data-phase="plan" data-trust="integrity_mismatch"'
+
+# ─── Cell 20: custom stack DAG view (compliance-release) ─────
+printf "\n  ${DIM}Cell 20: stack compliance-release DAG${NC}\n"
+PROJ="$TMP_ROOT/cell20"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+assert_true "stack html exists" test -f "$HTML"
+assert_contains "stack title" "$HTML" "Custom stack"
+assert_contains "stack display_name" "$HTML" "Compliance Release Stack"
+assert_contains "stack SVG opens" "$HTML" "<svg"
+assert_contains "stack SVG closes" "$HTML" "</svg>"
+# All 10 expected phases must appear as table rows.
+for ph in think plan build review qa security license-audit privacy-check release-readiness ship; do
+  assert_contains "stack table row $ph" "$HTML" "data-phase=\"$ph\""
+done
+# Missing phases must render as 'missing'.
+assert_contains "stack missing badge" "$HTML" ">missing<"
+# No certification language.
+assert_not_contains "stack no certification language" "$HTML" 'certified'
+assert_not_contains "stack no compliance language" "$HTML" 'compliant'
+
+# ─── Cell 21: stack name validation ─────────────────────────
+printf "\n  ${DIM}Cell 21: stack name validation${NC}\n"
+PROJ="$TMP_ROOT/cell21"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+# Path traversal in stack name must be rejected.
+assert_exit "stack name with .. rejected" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack ../etc"
+assert_exit "stack name with / rejected" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack a/b"
+assert_exit "stack name with space rejected" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack 'foo bar'"
+
+# Unknown stack: graceful "not found", not crash.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack does-not-exist 2>/dev/null || true)
+# When no stack file matches and no config.json exists, default graph
+# applies (the registry returns the built-in sprint).
+[ -n "$HTML" ] && assert_true "stack fallback to default registry produced HTML" test -f "$HTML"
+
+# ─── Cell 22: journal --date validation ────────────────────
+printf "\n  ${DIM}Cell 22: journal --date validation${NC}\n"
+PROJ="$TMP_ROOT/cell22"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+assert_exit "journal --date bad shape exits 1" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --date 2026/05/11"
+assert_exit "journal --date with shell metachars exits 1" 1 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --date '2026-05-11; rm -rf x'"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --date 2026-05-11)
+assert_true "journal --date valid shape works" test -f "$HTML"
+
+# ─── Cell 22a: --date filters by date, not last 30 days (PR 3 pass 1) ─
+printf "\n  ${DIM}Cell 22a: journal --date filter (PR 3 pass 1)${NC}\n"
+PROJ="$TMP_ROOT/cell22a"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+# Rename today's artifact to look like it was saved on 2026-05-09.
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+NEW="$NANOSTACK_STORE/plan/20260509-100000.json"
+jq '.timestamp = "2026-05-09T10:00:00Z"' "$PLAN_PATH" > "$NEW"
+rm "$PLAN_PATH"
+# Now request the journal for 2026-05-09; the plan artifact must appear.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --date 2026-05-09)
+assert_contains "journal --date 2026-05-09 shows the dated plan" "$HTML" "20260509-100000.json"
+# Request another date with no artifacts; plan must show as missing.
+HTML2=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --date 2026-05-08)
+assert_contains "journal --date 2026-05-08 says missing" "$HTML2" "No artifact found"
+assert_not_contains "journal 2026-05-08 does NOT show 2026-05-09 plan path" "$HTML2" "20260509-100000.json"
+
+# ─── Cell 22b: stack falls back to project phase_graph (PR 3 pass 1) ─
+printf "\n  ${DIM}Cell 22b: stack falls back to project phase_graph (PR 3 pass 1)${NC}\n"
+PROJ="$TMP_ROOT/cell22b"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+cat > "$NANOSTACK_STORE/config.json" <<'CFG'
+{
+  "schema_version": "1",
+  "custom_phases": ["license-audit"],
+  "phase_graph": [
+    {"name": "think", "depends_on": []},
+    {"name": "plan", "depends_on": ["think"]},
+    {"name": "build", "depends_on": ["plan"]},
+    {"name": "review", "depends_on": ["build"]},
+    {"name": "license-audit", "depends_on": ["build"]},
+    {"name": "ship", "depends_on": ["review", "license-audit"]}
+  ]
+}
+CFG
+# No stack file under examples or stacks/; the fallback to the
+# project's phase_graph (registry) only kicks in for `stack default`
+# (PR 3 pass 12).
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack default)
+assert_true "stack from project graph renders" test -f "$HTML"
+assert_contains "stack shows the custom phase license-audit" "$HTML" 'data-phase="license-audit"'
+assert_contains "stack shows SVG" "$HTML" "<svg"
+
+# ─── Cell 22c: journal includes custom phases from registry (PR 3 pass 1) ─
+printf "\n  ${DIM}Cell 22c: journal lists custom phases (PR 3 pass 1)${NC}\n"
+PROJ="$TMP_ROOT/cell22c"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+cat > "$NANOSTACK_STORE/config.json" <<'CFG'
+{
+  "schema_version": "1",
+  "custom_phases": ["license-audit", "privacy-check"]
+}
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_contains "journal lists custom license-audit row" "$HTML" 'data-phase="license-audit"'
+assert_contains "journal lists custom privacy-check row" "$HTML" 'data-phase="privacy-check"'
+
+# ─── Cell 22d: bare `journal` defaults to today (PR 3 pass 2) ───
+printf "\n  ${DIM}Cell 22d: bare journal defaults to today (PR 3 pass 2)${NC}\n"
+PROJ="$TMP_ROOT/cell22d"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal)
+TODAY=$(date -u +%Y-%m-%d)
+assert_contains "bare journal renders today's date" "$HTML" "$TODAY"
+# Filename must not contain a trailing dash.
+case "$HTML" in
+  *journal-.html|*journal-*.html) ;;
+  *)
+    PASS=$((PASS+1))
+    printf "    ${GREEN}OK${NC}    bare journal filename has no stray dash\n"
+    ;;
+esac
+case "$HTML" in
+  *journal-.html)
+    FAIL=$((FAIL+1))
+    printf "    ${RED}FAIL${NC}  bare journal filename has stray dash: %s\n" "$HTML"
+    ;;
+esac
+
+# ─── Cell 22e: --strict on aggregate fails for missing integrity (PR 3 pass 2) ─
+printf "\n  ${DIM}Cell 22e: --strict on aggregate (PR 3 pass 2)${NC}\n"
+PROJ="$TMP_ROOT/cell22e"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+# Strip integrity on plan, then journal --strict must reject.
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+jq 'del(.integrity)' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
+assert_exit "journal --strict fails on integrity_missing" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today --strict"
+# Tamper plan; --strict must also fail. Delete prior artifact first
+# so the latest-picker definitely sees the tampered one.
+rm -f "$NANOSTACK_STORE/plan/"*.json
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+jq '.summary.goal = "Tampered"' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
+assert_exit "journal --strict fails on integrity_mismatch" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today --strict"
+# Stack --strict: same.
+assert_exit "stack --strict fails when any artifact tampered" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack compliance-release --strict"
+
+# ─── Cell 22f: scratch dir does not leak (PR 3 pass 2) ──────
+printf "\n  ${DIM}Cell 22f: scratch dir cleanup (PR 3 pass 2)${NC}\n"
+PROJ="$TMP_ROOT/cell22f"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+SCRATCH_BEFORE=$(find /tmp -maxdepth 1 -name "render-artifact.*" -type d 2>/dev/null | wc -l | tr -d ' ')
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest)
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+SCRATCH_AFTER=$(find /tmp -maxdepth 1 -name "render-artifact.*" -type d 2>/dev/null | wc -l | tr -d ' ')
+assert_true "no scratch dir leak across renders" sh -c "[ '$SCRATCH_AFTER' = '$SCRATCH_BEFORE' ]"
+
+# ─── Cell 22g: stack manifest with backslash path (PR 3 pass 2) ─
+printf "\n  ${DIM}Cell 22g: stack manifest JSON escape (PR 3 pass 2)${NC}\n"
+PROJ="$TMP_ROOT/cell22g"
+setup_project "$PROJ"
+# A project path containing a backslash is rare but the renderer
+# should never produce invalid JSON. Validate by rendering with the
+# normal path and confirming the manifest parses cleanly.
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*stack*.manifest.json | head -1)
+assert_true "stack manifest is parseable JSON" jq -e '.' "$MFST"
+assert_true "stack manifest has source_artifacts array" \
+  sh -c "[ \"\$(jq -r 'type' '$MFST')\" = 'object' ] && [ \"\$(jq -r '.source_artifacts | type' '$MFST')\" = 'array' ]"
+
+# ─── Cell 22h: --manifest-only with --strict still enforces (PR 3 pass 3) ─
+printf "\n  ${DIM}Cell 22h: --manifest-only --strict enforces (PR 3 pass 3)${NC}\n"
+PROJ="$TMP_ROOT/cell22h"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+jq '.summary.goal = "Tampered"' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
+assert_exit "journal --strict --manifest-only exits 3 when tampered" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today --strict --manifest-only"
+assert_exit "stack --strict --manifest-only exits 3 when tampered" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack compliance-release --strict --manifest-only"
+
+# ─── Cell 22i: large unsorted phase_graph renders every node (PR 3 pass 3) ─
+printf "\n  ${DIM}Cell 22i: large unsorted phase_graph (PR 3 pass 3)${NC}\n"
+PROJ="$TMP_ROOT/cell22i"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+# 15-node linear chain in reverse topological order. The previous
+# cap of 10 rounds left the tail of the chain out of the SVG.
+cat > "$NANOSTACK_STORE/config.json" <<'CFG'
+{
+  "schema_version": "1",
+  "custom_phases": ["c1","c2","c3","c4","c5","c6","c7","c8","c9","c10","c11","c12","c13"],
+  "phase_graph": [
+    {"name": "c13", "depends_on": ["c12"]},
+    {"name": "c12", "depends_on": ["c11"]},
+    {"name": "c11", "depends_on": ["c10"]},
+    {"name": "c10", "depends_on": ["c9"]},
+    {"name": "c9", "depends_on": ["c8"]},
+    {"name": "c8", "depends_on": ["c7"]},
+    {"name": "c7", "depends_on": ["c6"]},
+    {"name": "c6", "depends_on": ["c5"]},
+    {"name": "c5", "depends_on": ["c4"]},
+    {"name": "c4", "depends_on": ["c3"]},
+    {"name": "c3", "depends_on": ["c2"]},
+    {"name": "c2", "depends_on": ["c1"]},
+    {"name": "c1", "depends_on": []}
+  ]
+}
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack default)
+# Every node must appear in the SVG (as a <g data-phase=...> wrapper).
+for n in c1 c5 c10 c13; do
+  assert_contains "stack svg contains $n" "$HTML" "data-phase=\"$n\""
+done
+
+# ─── Cell 22j: symlinked visual/stack rejected without leak (PR 3 pass 4) ─
+printf "\n  ${DIM}Cell 22j: symlinked visual/stack rejected (PR 3 pass 4)${NC}\n"
+PROJ="$TMP_ROOT/cell22j"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/visual"
+mkdir -p "$TMP_ROOT/cell22j-outside"
+ln -s "$TMP_ROOT/cell22j-outside" "$NANOSTACK_STORE/visual/stack"
+assert_exit "stack with symlinked visual/stack exits 4" 4 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack compliance-release"
+# No directory was created at the symlink target.
+LEAK=$(find "$TMP_ROOT/cell22j-outside" -maxdepth 1 -type d -name "compliance-release" 2>/dev/null | wc -l | tr -d ' ')
+assert_true "no directory leaked through symlinked visual/stack" sh -c "[ '$LEAK' = '0' ]"
+
+# Same for visual/journal symlink.
+PROJ="$TMP_ROOT/cell22k"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/visual"
+mkdir -p "$TMP_ROOT/cell22k-outside"
+ln -s "$TMP_ROOT/cell22k-outside" "$NANOSTACK_STORE/visual/journal"
+assert_exit "journal with symlinked visual/journal exits 4" 4 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today"
+
+# ─── Cell 22l: --today does not pull stale artifacts (PR 3 pass 4) ─
+printf "\n  ${DIM}Cell 22l: --today strict-date filter (PR 3 pass 4)${NC}\n"
+PROJ="$TMP_ROOT/cell22l"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/plan"
+# Save a plan with yesterday's date.
+YEST_DATE=$(date -u -v-1d +%Y%m%d 2>/dev/null || date -u -d "yesterday" +%Y%m%d 2>/dev/null || echo "20260510")
+YEST_FILE="$NANOSTACK_STORE/plan/${YEST_DATE}-120000.json"
+jq -n --arg p "$PROJ" '{
+  schema_version: "1",
+  phase: "plan",
+  timestamp: "2026-05-10T12:00:00Z",
+  project: $p,
+  branch: "main",
+  summary: {goal:"yesterday", scope:"small", planned_files:[], plan_approval:"manual"},
+  context_checkpoint: {summary:"x", key_files:[], decisions_made:[], open_questions:[]}
+}' > "$YEST_FILE"
+# Render today's journal; plan must show as missing, not yesterday's.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_not_contains "today's journal does not show yesterday's plan" "$HTML" "${YEST_DATE}-120000.json"
+# Plan row says missing.
+assert_contains "today's journal shows plan as missing" "$HTML" 'data-phase="plan"'
+
+# ─── Cell 22m: tampered .project surfaces as integrity_mismatch (PR 3 pass 5) ─
+printf "\n  ${DIM}Cell 22m: tampered .project surfaces (PR 3 pass 5)${NC}\n"
+PROJ="$TMP_ROOT/cell22m"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+# Tamper .project. The integrity hash now mismatches but the project
+# filter would otherwise drop this file.
+jq '.project = "/other"' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_contains "tampered .project surfaces as integrity_mismatch row" "$HTML" 'data-trust="integrity_mismatch"'
+# --strict must now fail.
+assert_exit "journal --strict catches tampered .project" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today --strict"
+
+# ─── Cell 22n: malformed stack phase_graph renders graceful notice (PR 3 pass 5) ─
+printf "\n  ${DIM}Cell 22n: malformed stack graph (PR 3 pass 5)${NC}\n"
+PROJ="$TMP_ROOT/cell22n"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/stacks/badstack"
+cat > "$NANOSTACK_STORE/stacks/badstack/stack.json" <<'CFG'
+{
+  "schema_version": "1",
+  "name": "badstack",
+  "phase_graph": "this should be an array, not a string"
+}
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack badstack 2>/dev/null || true)
+# The render returns 0 because the contract is to render gracefully.
+assert_true "malformed stack still produces HTML" test -f "${HTML:-/dev/null}"
+[ -f "${HTML:-/dev/null}" ] && {
+  assert_contains "stack invalid notice rendered" "$HTML" "Stack invalid"
+}
+
+# Array of scalars (not objects).
+mkdir -p "$NANOSTACK_STORE/stacks/badstack2"
+cat > "$NANOSTACK_STORE/stacks/badstack2/stack.json" <<'CFG'
+{
+  "schema_version": "1",
+  "name": "badstack2",
+  "phase_graph": ["just", "strings", "not", "objects"]
+}
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack badstack2 2>/dev/null || true)
+[ -f "${HTML:-/dev/null}" ] && {
+  assert_contains "scalar-array stack also invalid" "$HTML" "Stack invalid"
+}
+
+# ─── Cell 22o: stack --strict surfaces tampered .project (PR 3 pass 6) ─
+printf "\n  ${DIM}Cell 22o: stack --strict surfaces tampered .project (PR 3 pass 6)${NC}\n"
+PROJ="$TMP_ROOT/cell22o"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+jq '.project = "/other-project"' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
+assert_exit "stack --strict catches tampered .project" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack compliance-release --strict"
+# Without --strict, the row must show data-trust=integrity_mismatch.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+assert_contains "stack table shows tampered .project as integrity_mismatch" "$HTML" 'data-phase="plan" data-trust="integrity_mismatch"'
+
+# ─── Cell 22p: stricter graph validation (PR 3 pass 6) ──────
+printf "\n  ${DIM}Cell 22p: strict graph validation (PR 3 pass 6)${NC}\n"
+PROJ="$TMP_ROOT/cell22p"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+
+# depends_on as a string (not array).
+mkdir -p "$NANOSTACK_STORE/stacks/bad_deps"
+cat > "$NANOSTACK_STORE/stacks/bad_deps/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"bad_deps",
+  "phase_graph": [ {"name":"a","depends_on":"not-array"} ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack bad_deps)
+assert_contains "depends_on string rejected with invalid notice" "$HTML" "Stack invalid"
+
+# Empty array.
+mkdir -p "$NANOSTACK_STORE/stacks/empty_graph"
+cat > "$NANOSTACK_STORE/stacks/empty_graph/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"empty_graph", "phase_graph": [] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack empty_graph)
+assert_contains "empty phase_graph rejected" "$HTML" "non-empty array"
+
+# Dangling dependency.
+mkdir -p "$NANOSTACK_STORE/stacks/dangling"
+cat > "$NANOSTACK_STORE/stacks/dangling/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"dangling",
+  "phase_graph": [
+    {"name":"a","depends_on":[]},
+    {"name":"b","depends_on":["nonexistent"]}
+  ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack dangling)
+assert_contains "dangling dependency rejected" "$HTML" "dangling dependency"
+
+# Empty name string.
+mkdir -p "$NANOSTACK_STORE/stacks/empty_name"
+cat > "$NANOSTACK_STORE/stacks/empty_name/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"empty_name",
+  "phase_graph": [ {"name":"","depends_on":[]} ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack empty_name)
+assert_contains "empty name rejected" "$HTML" "Stack invalid"
+
+# ─── Cell 22q: integrity_missing + .project flip caught (PR 3 pass 7) ─
+printf "\n  ${DIM}Cell 22q: integrity_missing + .project flip (PR 3 pass 7)${NC}\n"
+PROJ="$TMP_ROOT/cell22q"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+# Strip .integrity AND flip .project.
+jq 'del(.integrity) | .project = "/other"' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_contains "journal surfaces .integrity-strip + .project-flip" "$HTML" 'data-trust="integrity_missing"'
+assert_exit "journal --strict catches integrity_missing + .project flip" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today --strict"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+assert_contains "stack surfaces .integrity-strip + .project-flip" "$HTML" 'data-phase="plan" data-trust="integrity_missing"'
+assert_exit "stack --strict catches integrity_missing + .project flip" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack compliance-release --strict"
+
+# ─── Cell 22r: cyclic phase_graph rejected (PR 3 pass 7) ────
+printf "\n  ${DIM}Cell 22r: cyclic phase_graph rejected (PR 3 pass 7)${NC}\n"
+PROJ="$TMP_ROOT/cell22r"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+
+mkdir -p "$NANOSTACK_STORE/stacks/cycle2"
+cat > "$NANOSTACK_STORE/stacks/cycle2/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"cycle2",
+  "phase_graph": [
+    {"name":"a","depends_on":["b"]},
+    {"name":"b","depends_on":["a"]}
+  ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack cycle2)
+assert_contains "2-node cycle rejected" "$HTML" "cycle"
+
+mkdir -p "$NANOSTACK_STORE/stacks/cycle3"
+cat > "$NANOSTACK_STORE/stacks/cycle3/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"cycle3",
+  "phase_graph": [
+    {"name":"a","depends_on":["c"]},
+    {"name":"b","depends_on":["a"]},
+    {"name":"c","depends_on":["b"]}
+  ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack cycle3)
+assert_contains "3-node cycle rejected" "$HTML" "cycle"
+
+mkdir -p "$NANOSTACK_STORE/stacks/self_cycle"
+cat > "$NANOSTACK_STORE/stacks/self_cycle/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"self_cycle",
+  "phase_graph": [
+    {"name":"a","depends_on":["a"]}
+  ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack self_cycle)
+assert_contains "self-cycle rejected" "$HTML" "cycle"
+
+# ─── Cell 22s: malformed phase names rejected (PR 3 pass 8) ──
+printf "\n  ${DIM}Cell 22s: malformed phase names rejected (PR 3 pass 8)${NC}\n"
+PROJ="$TMP_ROOT/cell22s"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+
+# Whitespace in phase name.
+mkdir -p "$NANOSTACK_STORE/stacks/spacename"
+cat > "$NANOSTACK_STORE/stacks/spacename/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"spacename",
+  "phase_graph": [
+    {"name":"license audit","depends_on":[]}
+  ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack spacename)
+assert_contains "phase name with whitespace rejected" "$HTML" "phase names must match"
+
+# Path separator in phase name.
+mkdir -p "$NANOSTACK_STORE/stacks/slashname"
+cat > "$NANOSTACK_STORE/stacks/slashname/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"slashname",
+  "phase_graph": [
+    {"name":"bad/name","depends_on":[]}
+  ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack slashname)
+assert_contains "phase name with slash rejected" "$HTML" "phase names must match"
+
+# Duplicate names.
+mkdir -p "$NANOSTACK_STORE/stacks/dup"
+cat > "$NANOSTACK_STORE/stacks/dup/stack.json" <<'CFG'
+{ "schema_version":"1", "name":"dup",
+  "phase_graph": [
+    {"name":"plan","depends_on":[]},
+    {"name":"plan","depends_on":[]}
+  ] }
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack dup)
+assert_contains "duplicate phase names rejected" "$HTML" "duplicate node names"
+
+# ─── Cell 22t: malformed stack metadata does not crash and does not fall back (PR 3 pass 9+10) ─
+printf "\n  ${DIM}Cell 22t: malformed stack metadata (PR 3 pass 9+10)${NC}\n"
+PROJ="$TMP_ROOT/cell22t"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/stacks/badjson"
+# Truncated JSON in stack.json.
+printf '{"name":"badjson","phase_graph":[' > "$NANOSTACK_STORE/stacks/badjson/stack.json"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack badjson)
+assert_true "malformed stack JSON renders an HTML page" test -f "$HTML"
+# PR 3 pass 10: do not silently fall back to the project graph; emit
+# a Stack invalid notice instead so the broken definition is visible.
+assert_contains "named-but-malformed stack -> Stack invalid notice" "$HTML" "Stack invalid"
+assert_not_contains "named-but-malformed stack does NOT render default phases" "$HTML" 'data-phase="think"'
+
+# ─── Cell 22u: malformed same-day artifact does not crash journal (PR 3 pass 9) ─
+printf "\n  ${DIM}Cell 22u: malformed same-day artifact (PR 3 pass 9)${NC}\n"
+PROJ="$TMP_ROOT/cell22u"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/plan"
+# Drop a malformed (truncated) JSON file with today's date prefix.
+TODAY_COMPACT=$(date -u +%Y%m%d)
+printf '{"phase":"plan","summary":{' > "$NANOSTACK_STORE/plan/${TODAY_COMPACT}-120000.json"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_true "malformed plan artifact does not crash journal" test -f "$HTML"
+# The row should surface as unreadable or integrity_missing, not abort.
+assert_contains "malformed artifact row appears" "$HTML" 'data-phase="plan"'
+
+# ─── Cell 22v: stack survives truncated phase artifact (PR 3 pass 11) ─
+printf "\n  ${DIM}Cell 22v: stack survives truncated artifact (PR 3 pass 11)${NC}\n"
+PROJ="$TMP_ROOT/cell22v"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/plan"
+# Truncated plan artifact.
+printf '{"phase":"plan","summary":{' > "$NANOSTACK_STORE/plan/$(date -u +%Y%m%d)-100000.json"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+assert_true "stack html exists despite truncated artifact" test -f "$HTML"
+# The plan row in the table surfaces as integrity_missing (not a crash).
+assert_contains "stack table shows plan as integrity_missing" "$HTML" 'data-phase="plan" data-trust="integrity_missing"'
+# --strict catches it.
+assert_exit "stack --strict catches truncated artifact" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack compliance-release --strict"
+
+# ─── Cell 22w: typo stack name -> Stack not found (PR 3 pass 12) ─
+printf "\n  ${DIM}Cell 22w: typo stack name (PR 3 pass 12)${NC}\n"
+PROJ="$TMP_ROOT/cell22w"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+# No stack file for "compliance-relase" (typo of "compliance-release").
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-relase)
+assert_true "typo stack still produces HTML" test -f "$HTML"
+assert_contains "typo stack shows Stack not found" "$HTML" "Stack not found"
+assert_not_contains "typo stack does NOT render default phases" "$HTML" 'data-phase="think"'
+
+# Bare `stack default` still falls back to the project graph.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack default)
+assert_contains "stack default falls back to project graph" "$HTML" 'data-phase="think"'
+
+# ─── Cell 22x: shared store does not surface other-project tamper (PR 3 pass 13) ─
+printf "\n  ${DIM}Cell 22x: shared store project isolation (PR 3 pass 13)${NC}\n"
+SHARED_STORE="$TMP_ROOT/cell22x-shared"
+mkdir -p "$SHARED_STORE"
+# Project A owns the store legitimately.
+PROJ_A="$TMP_ROOT/cell22x-projA"
+setup_project "$PROJ_A"
+(cd "$PROJ_A" && NANOSTACK_STORE="$SHARED_STORE" "$REPO/bin/save-artifact.sh" plan '{
+  "phase":"plan",
+  "summary":{"goal":"A","scope":"small","planned_files":[],"plan_approval":"manual"},
+  "context_checkpoint":{"summary":"x","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+# Some other project also saved here, then tampered. From project B's
+# perspective, this is foreign noise.
+PROJ_OTHER="$TMP_ROOT/cell22x-other"
+setup_project "$PROJ_OTHER"
+(cd "$PROJ_OTHER" && NANOSTACK_STORE="$SHARED_STORE" "$REPO/bin/save-artifact.sh" plan '{
+  "phase":"plan",
+  "summary":{"goal":"OTHER","scope":"small","planned_files":[],"plan_approval":"manual"},
+  "context_checkpoint":{"summary":"x","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+OTHER_PLAN=$(ls -t "$SHARED_STORE/plan/"*.json | head -1)
+jq 'del(.integrity)' "$OTHER_PLAN" > "$OTHER_PLAN.tmp" && mv "$OTHER_PLAN.tmp" "$OTHER_PLAN"
+
+# Project B renders its own journal against the shared store. It is
+# NOT the same git-root, so the store is "shared" from B's view.
+PROJ_B="$TMP_ROOT/cell22x-projB"
+setup_project "$PROJ_B"
+export NANOSTACK_STORE="$SHARED_STORE"
+HTML=$(cd "$PROJ_B" && "$REPO/bin/render-artifact.sh" journal --today)
+# Project B has no plan; the row should say missing, NOT surface the
+# OTHER project's tampered plan.
+assert_contains "B's journal shows plan as missing" "$HTML" "No artifact found"
+assert_not_contains "B's journal does NOT surface OTHER project's tampered plan" "$HTML" "OTHER"
+# Strict must also pass (no tampered source attributed to B).
+assert_exit "B's journal --strict succeeds despite shared-store tamper" 0 \
+  sh -c "cd '$PROJ_B' && '$REPO/bin/render-artifact.sh' journal --today --strict"
+unset NANOSTACK_STORE
+
+# ─── Cell 22y: stack lookup walks past 30 newer foreign artifacts (PR 3 pass 14) ─
+printf "\n  ${DIM}Cell 22y: stack lookup uncapped (PR 3 pass 14)${NC}\n"
+SHARED_STORE="$TMP_ROOT/cell22y-shared"
+mkdir -p "$SHARED_STORE/plan"
+# Our project saves a plan FIRST (oldest).
+PROJ_OURS="$TMP_ROOT/cell22y-ours"
+setup_project "$PROJ_OURS"
+(cd "$PROJ_OURS" && NANOSTACK_STORE="$SHARED_STORE" "$REPO/bin/save-artifact.sh" plan '{
+  "phase":"plan",
+  "summary":{"goal":"OURS","scope":"small","planned_files":[],"plan_approval":"manual"},
+  "context_checkpoint":{"summary":"x","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+OUR_PLAN=$(ls "$SHARED_STORE/plan/"*.json | head -1)
+OUR_PROJECT=$(jq -r '.project' "$OUR_PLAN")
+# Now write 35 newer "other project" artifacts.
+PROJ_OTHER="$TMP_ROOT/cell22y-other"
+setup_project "$PROJ_OTHER"
+sleep 1  # ensure mtime is strictly newer
+for i in $(seq 1 35); do
+  TS="2026-05-12-$(printf "%06d" $((100000 + i)))"
+  cat > "$SHARED_STORE/plan/${TS//-/}.json" <<JSON
+{"phase":"plan","project":"/other/$i","timestamp":"$TS","summary":{"goal":"other$i"}}
+JSON
+done
+# Render our project's stack. Without the fix, our plan was beyond
+# the 30-candidate cap and the row would render as missing.
+export NANOSTACK_STORE="$SHARED_STORE"
+HTML=$(cd "$PROJ_OURS" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+assert_contains "stack finds OUR plan past 30 newer foreign artifacts" "$HTML" "$OUR_PLAN"
+unset NANOSTACK_STORE
+
+# ─── Cell 22z: invalid stack manifest has >= 1 source (PR 3 pass 15) ─
+printf "\n  ${DIM}Cell 22z: invalid stack manifest sources (PR 3 pass 15)${NC}\n"
+PROJ="$TMP_ROOT/cell22z"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+
+# Stack invalid: malformed stack file.
+mkdir -p "$NANOSTACK_STORE/stacks/inv_manifest"
+printf '{"name":"inv_manifest","phase_graph":[' > "$NANOSTACK_STORE/stacks/inv_manifest/stack.json"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack inv_manifest)
+MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*inv_manifest*.manifest.json | head -1)
+LEN=$(jq -r '.source_artifacts | length' "$MFST")
+assert_true "invalid-stack manifest has >= 1 source" sh -c "[ '$LEN' -ge 1 ]"
+assert_true "invalid-stack source phase begins with stack:" \
+  sh -c "jq -re '.source_artifacts[0].phase | startswith(\"stack:\")' '$MFST' >/dev/null"
+
+# Stack not found: typo.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack does_not_exist_typo)
+MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*does_not_exist_typo*.manifest.json | head -1)
+LEN=$(jq -r '.source_artifacts | length' "$MFST")
+assert_true "not-found-stack manifest has >= 1 source" sh -c "[ '$LEN' -ge 1 ]"
+
+# Graph validation error: empty graph.
+mkdir -p "$NANOSTACK_STORE/stacks/empty_graph2"
+echo '{"name":"empty_graph2","phase_graph":[]}' > "$NANOSTACK_STORE/stacks/empty_graph2/stack.json"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack empty_graph2)
+MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*empty_graph2*.manifest.json | head -1)
+LEN=$(jq -r '.source_artifacts | length' "$MFST")
+assert_true "graph-invalid manifest has >= 1 source" sh -c "[ '$LEN' -ge 1 ]"
+
+# ─── Cell 23a: stack manifest records the stack definition (PR 3 pass 16) ─
+printf "\n  ${DIM}Cell 23a: stack manifest records the stack def (PR 3 pass 16)${NC}\n"
+PROJ="$TMP_ROOT/cell23a"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*stack*compliance-release*.manifest.json | head -1)
+# First source must be the stack definition file itself.
+FIRST_PHASE=$(jq -r '.source_artifacts[0].phase' "$MFST")
+FIRST_PATH=$(jq -r '.source_artifacts[0].path' "$MFST")
+assert_true "first source phase is 'stack:compliance-release'" \
+  sh -c "[ '$FIRST_PHASE' = 'stack:compliance-release' ]"
+assert_true "first source path is the stack file" \
+  sh -c "echo '$FIRST_PATH' | grep -q 'compliance-release/stack.json'"
+# Total sources = stack def + 10 phases.
+TOTAL=$(jq -r '.source_artifacts | length' "$MFST")
+assert_true "manifest has 11 sources (1 stack def + 10 phases)" sh -c "[ '$TOTAL' = '11' ]"
+
+# ─── Cell 23b: stack sorts by filename, not mtime (PR 3 pass 17) ─
+printf "\n  ${DIM}Cell 23b: stack sort by filename (PR 3 pass 17)${NC}\n"
+PROJ="$TMP_ROOT/cell23b"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+# Save plan first.
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+sleep 1
+# Save plan AGAIN to get a newer-timestamp file.
+(cd "$PROJ" && NANOSTACK_STORE="$NANOSTACK_STORE" "$REPO/bin/save-artifact.sh" plan '{
+  "phase":"plan",
+  "summary":{"goal":"NEWER","scope":"small","planned_files":[],"plan_approval":"manual"},
+  "context_checkpoint":{"summary":"x","key_files":[],"decisions_made":[],"open_questions":[]}
+}' >/dev/null)
+NEWER=$(ls "$NANOSTACK_STORE/plan/"*.json | sort -r | head -1)
+OLDER=$(ls "$NANOSTACK_STORE/plan/"*.json | sort | head -1)
+# Touch the older file so its mtime is newer than the new one.
+touch "$OLDER"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+# The stack table should reference the file with the LATER FILENAME,
+# not the touched OLDER one.
+assert_contains "stack picks newer-by-filename plan" "$HTML" "$NEWER"
+
+# ─── Cell 23c: stack default records .nanostack/config.json (PR 3 pass 17) ─
+printf "\n  ${DIM}Cell 23c: default-stack manifest records config.json (PR 3 pass 17)${NC}\n"
+PROJ="$TMP_ROOT/cell23c"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+cat > "$NANOSTACK_STORE/config.json" <<'CFG'
+{
+  "schema_version": "1",
+  "custom_phases": ["audit"],
+  "phase_graph": [
+    {"name": "think", "depends_on": []},
+    {"name": "build", "depends_on": ["think"]},
+    {"name": "audit", "depends_on": ["build"]},
+    {"name": "ship",  "depends_on": ["audit"]}
+  ]
+}
+CFG
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack default)
+MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*stack*default*.manifest.json | head -1)
+FIRST_PATH=$(jq -r '.source_artifacts[0].path' "$MFST")
+assert_true "default stack manifest records config.json" \
+  sh -c "echo '$FIRST_PATH' | grep -q '\.nanostack/config\.json$'"
 
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"

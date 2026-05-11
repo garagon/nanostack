@@ -285,6 +285,7 @@ nano_visual_trust_badge_text() {
     verified)            printf 'verified\n' ;;
     integrity_missing)   printf 'unverified\n' ;;
     integrity_mismatch)  printf 'tampered\n' ;;
+    not_applicable)      printf 'aggregated\n' ;;
     *)                   printf 'unknown\n' ;;
   esac
 }
@@ -342,6 +343,7 @@ nano_visual_page_start() {
     .trust-badge[data-trust="verified"] { background: rgba(74,222,128,0.15); color: var(--ok); border: 1px solid var(--ok); }
     .trust-badge[data-trust="integrity_missing"] { background: rgba(250,204,21,0.15); color: var(--warn); border: 1px solid var(--warn); }
     .trust-badge[data-trust="integrity_mismatch"] { background: rgba(251,113,133,0.15); color: var(--bad); border: 1px solid var(--bad); }
+    .trust-badge[data-trust="not_applicable"] { background: rgba(96,165,250,0.15); color: var(--info); border: 1px solid var(--info); }
     section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
     section.card h2 { margin: 0 0 12px 0; font-size: 1.15rem; }
     .muted { color: var(--muted); }
@@ -472,7 +474,7 @@ nano_visual_safe_screenshot_path() {
   case "$p" in
     "")                printf 'unsafe\n'; return ;;
     *..*|*"\\"*)       printf 'unsafe\n'; return ;;
-    http://*|https://*|//*|data:*|javascript:*|file://*|*\<*|*\>*|*\"*)
+    http://*|https://*|//*|data:*|javascript:*|file://*|*\<*|*\>*|*\"*)  # url-allowlist
                        printf 'unsafe\n'; return ;;
   esac
   case "$p" in

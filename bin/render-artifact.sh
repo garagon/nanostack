@@ -23,6 +23,13 @@ source "$SCRIPT_DIR/lib/html-escape.sh"
 source "$SCRIPT_DIR/lib/visual-render.sh"
 source "$SCRIPT_DIR/lib/artifact-trust.sh"
 [ -f "$SCRIPT_DIR/lib/artifact-schemas.sh" ] && source "$SCRIPT_DIR/lib/artifact-schemas.sh"
+# Sourced so render_journal_body / render_stack_body can ask the
+# registry for custom phases and the project's phase_graph. Codex
+# PR 3 pass 1 caught the missing source: nano_all_phases and
+# nano_phase_graph_json were never defined, so journal silently
+# skipped custom phases and stack fell back to "stack not found"
+# instead of the project graph.
+[ -f "$SCRIPT_DIR/lib/phases.sh" ] && source "$SCRIPT_DIR/lib/phases.sh"
 
 usage() {
   cat <<USAGE
@@ -30,11 +37,15 @@ Usage: render-artifact.sh <phase> [artifact-path|--latest] [--strict]
                                   [--interactive] [--out <path>]
                                   [--manifest-only]
 
-PR 1+2 scope:
+PR 1+2+3 scope:
   phase = plan|think|review|security|qa|ship
                              render the latest or explicit artifact
-  phase = journal            reserved for PR 3 (exit 2)
-  phase = stack              reserved for PR 3 (exit 2)
+  phase = journal            render today's sprint journal view
+                             (positional arg ignored; use --today or
+                             --date YYYY-MM-DD)
+  phase = stack [name]       render a custom stack DAG view; the
+                             positional arg names the stack and is
+                             looked up in .nanostack/config.json
 
 Flags:
   --strict                   require nano_artifact_trust == verified
@@ -67,18 +78,10 @@ INTERACTIVE=false
 MANIFEST_ONLY=false
 OUT_PATH=""
 
-# Reserved phase kinds. Surface a clear message and use the contract
-# exit code so CI can categorize.
-case "$PHASE" in
-  journal)
-    echo "render-artifact: 'journal' is reserved for PR 3 (sprint journal renderer)" >&2
-    exit 2
-    ;;
-  stack)
-    echo "render-artifact: 'stack' is reserved for PR 3 (custom stack graph renderer)" >&2
-    exit 2
-    ;;
-esac
+# journal and stack are derived kinds (not phase artifacts). They
+# follow different argument shapes from the per-phase renderers.
+JOURNAL_DATE=""
+STACK_NAME=""
 
 # Argument parsing. The first non-flag argument after <phase> is the
 # explicit artifact path. Flags can appear before or after.
@@ -96,71 +99,136 @@ while [ $# -gt 0 ]; do
       [ -z "${1:-}" ] && { echo "render-artifact: --out requires a path" >&2; exit 1; }
       OUT_PATH="$1"
       ;;
+    --today)          JOURNAL_DATE="$(date -u +%Y-%m-%d)" ;;
+    --date)
+      shift
+      [ -z "${1:-}" ] && { echo "render-artifact: --date requires YYYY-MM-DD" >&2; exit 1; }
+      # Validate shape (codex pass 1 of PR 1 lesson: regex-validate
+      # before passing to GNU date or storing in HTML).
+      case "$1" in
+        [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) JOURNAL_DATE="$1" ;;
+        *) echo "render-artifact: --date must be YYYY-MM-DD" >&2; exit 1 ;;
+      esac
+      ;;
     --help|-h)        usage; exit 0 ;;
     -*)
       echo "render-artifact: unknown flag: $1" >&2
       exit 1
       ;;
     *)
-      if [ -n "$ART_PATH" ]; then
-        echo "render-artifact: extra positional argument: $1" >&2
-        exit 1
-      fi
-      ART_PATH="$1"
+      # For journal/stack the positional is name/date, not artifact path.
+      case "$PHASE" in
+        journal)
+          if [ -n "$JOURNAL_DATE" ]; then
+            echo "render-artifact: extra positional for journal: $1" >&2
+            exit 1
+          fi
+          case "$1" in
+            [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) JOURNAL_DATE="$1" ;;
+            *) echo "render-artifact: journal positional must be YYYY-MM-DD: $1" >&2; exit 1 ;;
+          esac
+          ;;
+        stack)
+          if [ -n "$STACK_NAME" ]; then
+            echo "render-artifact: extra positional for stack: $1" >&2
+            exit 1
+          fi
+          # Reject anything that is not alnum + dash.
+          case "$1" in
+            *[!a-zA-Z0-9_-]*)
+              echo "render-artifact: stack name must be alnum/-/_ only: $1" >&2
+              exit 1
+              ;;
+          esac
+          STACK_NAME="$1"
+          ;;
+        *)
+          if [ -n "$ART_PATH" ]; then
+            echo "render-artifact: extra positional argument: $1" >&2
+            exit 1
+          fi
+          ART_PATH="$1"
+          ;;
+      esac
       ;;
   esac
   shift
 done
 
-# Validate phase. Core phases supported by PR 1+2: plan/think/review/
-# security/qa/ship.
+# Validate phase. Core phases: plan/think/review/security/qa/ship.
+# Derived kinds: journal (PR 3), stack (PR 3).
 case "$PHASE" in
   plan|think|review|security|qa|ship) ;;
+  journal|stack) ;;
   *)
     echo "render-artifact: unsupported phase: $PHASE" >&2
     exit 1
     ;;
 esac
 
-# Resolve the source artifact. --no-session-sync keeps the renderer
-# strictly downstream: find-artifact.sh otherwise calls
-# `session.sh phase-start` as a convenience for skills, which would
-# mutate session.json just because a user viewed an artifact. Codex
-# PR 1 pass 7 caught the boundary violation.
-if [ -z "$ART_PATH" ] || [ "$USE_LATEST" = true ]; then
-  ART_PATH=$("$SCRIPT_DIR/find-artifact.sh" "$PHASE" 30 --no-session-sync 2>/dev/null || true)
-  if [ -z "$ART_PATH" ]; then
-    echo "render-artifact: no $PHASE artifact found in the last 30 days" >&2
+# Default the journal date to today if neither --today nor --date
+# was supplied (codex PR 3 pass 2: bare `journal` left this empty
+# and the page banner read "journal · " with the filename containing
+# a stray dash).
+if [ "$PHASE" = "journal" ] && [ -z "$JOURNAL_DATE" ]; then
+  JOURNAL_DATE="$(date -u +%Y-%m-%d)"
+fi
+# Stack name defaults to "default" so a bare `render-artifact.sh
+# stack` exercises the project's phase_graph without forcing the
+# caller to name a stack.
+if [ "$PHASE" = "stack" ] && [ -z "$STACK_NAME" ]; then
+  STACK_NAME="default"
+fi
+
+# Journal and stack do not source from a single phase artifact; they
+# aggregate. Skip the per-phase trust/schema branch for them and use
+# a sentinel ART_PHASE so the manifest writer below works uniformly.
+if [ "$PHASE" = "journal" ] || [ "$PHASE" = "stack" ]; then
+  ART_PATH=""
+  ART_PHASE="$PHASE"
+else
+  # Resolve the source artifact. --no-session-sync keeps the renderer
+  # strictly downstream: find-artifact.sh otherwise calls
+  # `session.sh phase-start` as a convenience for skills, which would
+  # mutate session.json just because a user viewed an artifact. Codex
+  # PR 1 pass 7 caught the boundary violation.
+  if [ -z "$ART_PATH" ] || [ "$USE_LATEST" = true ]; then
+    ART_PATH=$("$SCRIPT_DIR/find-artifact.sh" "$PHASE" 30 --no-session-sync 2>/dev/null || true)
+    if [ -z "$ART_PATH" ]; then
+      echo "render-artifact: no $PHASE artifact found in the last 30 days" >&2
+      exit 1
+    fi
+  fi
+
+  if [ ! -f "$ART_PATH" ]; then
+    echo "render-artifact: artifact not found: $ART_PATH" >&2
     exit 1
   fi
-fi
 
-if [ ! -f "$ART_PATH" ]; then
-  echo "render-artifact: artifact not found: $ART_PATH" >&2
-  exit 1
-fi
+  # JSON must parse.
+  if ! jq -e '.' "$ART_PATH" >/dev/null 2>&1; then
+    echo "render-artifact: artifact is not valid JSON: $ART_PATH" >&2
+    exit 1
+  fi
 
-# JSON must parse.
-if ! jq -e '.' "$ART_PATH" >/dev/null 2>&1; then
-  echo "render-artifact: artifact is not valid JSON: $ART_PATH" >&2
-  exit 1
-fi
-
-# .phase field must match the requested phase. Codex PR 1 pass 6
-# caught: a top-level JSON array or string crashes `jq -r '.phase //
-# ""'` with exit 5 under set -e; the documented input-error exit is
-# 1. The `?` operator suppresses the path error so non-object JSON
-# falls through cleanly and the phase mismatch branch handles it.
-ART_PHASE=$(jq -r '.phase? // ""' "$ART_PATH")
-if [ "$ART_PHASE" != "$PHASE" ]; then
-  echo "render-artifact: artifact phase '$ART_PHASE' does not match requested phase '$PHASE': $ART_PATH" >&2
-  exit 1
+  # .phase field must match the requested phase.
+  ART_PHASE=$(jq -r '.phase? // ""' "$ART_PATH")
+  if [ "$ART_PHASE" != "$PHASE" ]; then
+    echo "render-artifact: artifact phase '$ART_PHASE' does not match requested phase '$PHASE': $ART_PATH" >&2
+    exit 1
+  fi
 fi
 
 # Trust check. integrity_mismatch always fails (exit 3). Under
 # --strict, integrity_missing also fails. integrity_missing without
 # strict renders with an "unverified" badge.
-TRUST=$(nano_artifact_trust "$ART_PATH" 2>/dev/null || echo "not_found")
+# Journal/stack aggregate many sources; per-source trust is rendered
+# inline in the page, not on the page header badge.
+if [ "$PHASE" = "journal" ] || [ "$PHASE" = "stack" ]; then
+  TRUST="not_applicable"
+else
+  TRUST=$(nano_artifact_trust "$ART_PATH" 2>/dev/null || echo "not_found")
+fi
 case "$TRUST" in
   verified) ;;
   integrity_missing)
@@ -172,6 +240,9 @@ case "$TRUST" in
   integrity_mismatch)
     echo "render-artifact: source artifact integrity check failed: $ART_PATH" >&2
     exit 3
+    ;;
+  not_applicable)
+    # Journal/stack: aggregated view. Trust shown inline per source.
     ;;
   *)
     echo "render-artifact: artifact unreadable: $ART_PATH" >&2
@@ -194,9 +265,33 @@ if [ -n "$OUT_PATH" ]; then
   nano_visual_assert_safe_output "$OUT_PATH"
   HTML_PATH="$OUT_PATH"
 else
-  HTML_PATH=$(nano_visual_html_path "$PHASE" "$TS")
+  # Codex PR 3 pass 4: do not mkdir under visual/ before the descend
+  # safety check runs. A symlinked visual/stack or visual/journal
+  # would otherwise be followed and the renderer would write the
+  # node directory outside the root before exit 4 fires. The post-
+  # validation `mkdir -p "$(dirname "$HTML_PATH")"` later in the
+  # script creates the directory only after the descend check
+  # confirms no component is a symlink.
+  case "$PHASE" in
+    journal) HTML_PATH="$(nano_visual_root)/journal/${TS}-journal-${JOURNAL_DATE}.html" ;;
+    stack)   HTML_PATH="$(nano_visual_root)/stack/$STACK_NAME/${TS}-stack-${STACK_NAME}.html" ;;
+    *)       HTML_PATH=$(nano_visual_html_path "$PHASE" "$TS") ;;
+  esac
 fi
-MANIFEST_PATH=$(nano_visual_manifest_path "phase" "$PHASE" "$TS")
+case "$PHASE" in
+  journal)
+    MANIFEST_KIND="journal"
+    MANIFEST_PATH="$(nano_visual_root)/manifests/${TS}-journal-${JOURNAL_DATE}.manifest.json"
+    ;;
+  stack)
+    MANIFEST_KIND="stack"
+    MANIFEST_PATH="$(nano_visual_root)/manifests/${TS}-stack-${STACK_NAME}.manifest.json"
+    ;;
+  *)
+    MANIFEST_KIND="phase"
+    MANIFEST_PATH=$(nano_visual_manifest_path "phase" "$PHASE" "$TS")
+    ;;
+esac
 
 # Codex PR 1 pass 6 caught: even after lexical normalization passes
 # the safety check, mkdir -p and mv use the ORIGINAL path, and the
@@ -243,20 +338,24 @@ nano_resolve_abs() {
 }
 HTML_PATH="$(nano_resolve_abs "$HTML_PATH")"
 MANIFEST_PATH="$(nano_resolve_abs "$MANIFEST_PATH")"
-ART_PATH="$(nano_resolve_abs "$ART_PATH")"
+if [ -n "$ART_PATH" ]; then
+  ART_PATH="$(nano_resolve_abs "$ART_PATH")"
+fi
 
-# Pull the stored integrity hash. It is recorded in the manifest so a
-# later check can decide whether the rendered view's source still
-# matches what was on disk at render time.
-SRC_INTEGRITY=$(jq -r '.integrity // ""' "$ART_PATH" 2>/dev/null || echo "")
+# Pull the stored integrity hash. Journal/stack have no single source
+# artifact (they aggregate), so SRC_INTEGRITY stays empty.
+SRC_INTEGRITY=""
+if [ -n "$ART_PATH" ]; then
+  SRC_INTEGRITY=$(jq -r '.integrity // ""' "$ART_PATH" 2>/dev/null || echo "")
+fi
 
 # Optional schema validation. A failing schema does not block the
 # render; it adds a visible warning to the HTML and is recorded in the
 # manifest. This is intentional: a malformed artifact still benefits
-# from being inspectable.
+# from being inspectable. Skipped for journal/stack.
 SCHEMA_OK=true
 SCHEMA_ERR=""
-if declare -F nano_validate_artifact >/dev/null 2>&1; then
+if [ -n "$ART_PATH" ] && declare -F nano_validate_artifact >/dev/null 2>&1; then
   if ! SCHEMA_ERR=$(nano_validate_artifact "$PHASE" "$(cat "$ART_PATH")" 2>&1); then
     SCHEMA_OK=false
   fi
@@ -388,6 +487,78 @@ HTML
     printf '      </ul>\n'
   fi
   printf '    </section>\n'
+}
+
+# Shared helper: find the latest artifact for <phase>, surfacing
+# tampered candidates even when their .project no longer matches.
+# Used by stack (no date filter) and indirectly by journal (which
+# has its own helper that adds the date prefix). Codex PR 3 pass 6
+# extended the tampered-surface logic from journal to stack so
+# `stack --strict` cannot be bypassed by flipping .project.
+_latest_safe_artifact_for_stack() {
+  local ph="$1"
+  local dir="$NANOSTACK_STORE/$ph"
+  [ -d "$dir" ] || return 0
+  local project_root
+  project_root="$(pwd)"
+  # Codex PR 3 pass 13: in a shared store (e.g. $HOME/.nanostack),
+  # other projects' tampered artifacts must not pollute this
+  # project's stack rows. Surface tamper aggressively ONLY when the
+  # store is project-local (the git-root/.nanostack path); for a
+  # shared store, require .project to match. Canonicalize both
+  # paths so macOS /tmp -> /private/tmp does not falsely report a
+  # mismatch.
+  local store_is_local=false
+  local git_root store_canon root_canon
+  git_root=$(git -C "$project_root" rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -n "$git_root" ]; then
+    if command -v realpath >/dev/null 2>&1; then
+      store_canon=$(realpath "$NANOSTACK_STORE" 2>/dev/null || echo "$NANOSTACK_STORE")
+      root_canon=$(realpath "$git_root" 2>/dev/null || echo "$git_root")
+    else
+      store_canon="$NANOSTACK_STORE"
+      root_canon="$git_root"
+    fi
+    if [ "$store_canon" = "$root_canon/.nanostack" ]; then
+      store_is_local=true
+    fi
+  fi
+  # Codex PR 3 pass 14: do NOT cap the candidate list before the
+  # project filter. In a shared store with many newer other-project
+  # artifacts, the cap would hide this project's older legitimate
+  # (or tampered) artifact and the stack row would render as missing.
+  # The early-return inside the loop keeps the walk bounded.
+  #
+  # Codex PR 3 pass 17: sort by FILENAME descending (not mtime).
+  # save-artifact.sh names files YYYYMMDD-HHMMSS.json, so the
+  # filename is the canonical ordering. A copied/restored/touched
+  # artifact gets a fresh mtime but the same filename timestamp; the
+  # per-phase resolver and journal sort by filename, so the stack
+  # helper should too for consistent results.
+  # shellcheck disable=SC2012
+  local candidates
+  candidates=$(ls -1 "$dir"/*.json 2>/dev/null | sort -r)
+  [ -z "$candidates" ] && return 0
+  local f
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    local t
+    t=$(nano_artifact_trust "$f" 2>/dev/null || echo "not_found")
+    # In a project-local store, any tampered file is suspect because
+    # no one else writes there. In a shared store, only consider it
+    # ours if .project matches.
+    if [ "$store_is_local" = true ] && \
+       { [ "$t" = "integrity_mismatch" ] || [ "$t" = "integrity_missing" ]; }; then
+      printf '%s\n' "$f"
+      return 0
+    fi
+    if jq -e --arg p "$project_root" '.project == $p' "$f" >/dev/null 2>&1; then
+      printf '%s\n' "$f"
+      return 0
+    fi
+  done <<EOF
+$candidates
+EOF
 }
 
 render_think_body() {
@@ -765,6 +936,592 @@ render_context_checkpoint() {
   printf '    </section>\n'
 }
 
+# ─── Journal renderer ───────────────────────────────────────
+#
+# Aggregates every core + custom phase artifact for the current
+# project on a given date and renders a phase timeline. The timeline
+# shows: phase name, status (present / missing / tampered), summary,
+# link to the per-phase render. SOURCE_ARTIFACTS_JSON is populated as
+# the renderer walks phases so the manifest records every read source.
+
+render_journal_body() {
+  local date="$1"
+  local project_path
+  project_path="$(pwd)"
+  # Codex PR 3 pass 1: --date <YYYY-MM-DD> previously called
+  # find-artifact.sh which returns the LATEST in the last N days, not
+  # the latest on the requested date. Compute the compact form
+  # (YYYYMMDD) so we can filter artifact filenames by date prefix.
+  local date_compact
+  date_compact="${date//-/}"
+
+  # find the latest artifact for <phase> on <date>. Uses filename
+  # convention `YYYYMMDD-HHMMSS.json` under `.nanostack/<phase>/`.
+  # Returns the path on stdout (empty if none).
+  #
+  # Codex PR 3 pass 5 caught a strict-mode bypass: if a same-day
+  # artifact was tampered so .project no longer matches, the project
+  # filter dropped it and the row rendered as "missing". Aggregate
+  # --strict allows "missing" (phase not run yet), so a tampered file
+  # would escape the trust check entirely. To close that gap, surface
+  # ANY same-day candidate whose integrity is broken even when its
+  # .project field flipped: the trust helper still detects the hash
+  # mismatch and the journal row gets data-trust="integrity_mismatch".
+  _journal_latest_on_date() {
+    local ph="$1" dc="$2"
+    local dir="$NANOSTACK_STORE/$ph"
+    [ -d "$dir" ] || return 0
+    local project_root="$project_path"
+    # Codex PR 3 pass 13: only surface tamper aggressively when the
+    # store is project-local (git-root/.nanostack). For a shared
+    # $HOME/.nanostack store, require .project to match so other
+    # projects' tampered artifacts cannot pollute this journal.
+    # Canonicalize both paths via realpath so macOS /tmp ->
+    # /private/tmp does not produce a false mismatch.
+    local store_is_local=false
+    local git_root store_canon root_canon
+    git_root=$(git -C "$project_root" rev-parse --show-toplevel 2>/dev/null || true)
+    if [ -n "$git_root" ]; then
+      if command -v realpath >/dev/null 2>&1; then
+        store_canon=$(realpath "$NANOSTACK_STORE" 2>/dev/null || echo "$NANOSTACK_STORE")
+        root_canon=$(realpath "$git_root" 2>/dev/null || echo "$git_root")
+      else
+        store_canon="$NANOSTACK_STORE"
+        root_canon="$git_root"
+      fi
+      if [ "$store_canon" = "$root_canon/.nanostack" ]; then
+        store_is_local=true
+      fi
+    fi
+    # shellcheck disable=SC2012
+    local candidates
+    candidates=$(ls -1 "$dir"/"$dc"-*.json 2>/dev/null | sort -r)
+    [ -z "$candidates" ] && return 0
+    local f
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      local t
+      t=$(nano_artifact_trust "$f" 2>/dev/null || echo "not_found")
+      if [ "$store_is_local" = true ] && \
+         { [ "$t" = "integrity_mismatch" ] || [ "$t" = "integrity_missing" ]; }; then
+        printf '%s\n' "$f"
+        return 0
+      fi
+      if jq -e --arg p "$project_root" '.project == $p' "$f" >/dev/null 2>&1; then
+        printf '%s\n' "$f"
+        return 0
+      fi
+    done <<EOF
+$candidates
+EOF
+  }
+
+  # Build the list of phases to enumerate. Use the phase registry
+  # so custom phases declared in .nanostack/config.json appear too.
+  local phases_list
+  if declare -F nano_all_phases >/dev/null 2>&1; then
+    phases_list=$(nano_all_phases 2>/dev/null || true)
+  fi
+  if [ -z "$phases_list" ]; then
+    phases_list="think plan review qa security ship"
+  fi
+
+  printf '    <section class="card">\n      <h2>Sprint journal · %s</h2>\n' \
+    "$(printf '%s' "$date" | nano_html_escape)"
+  printf '      <p class="muted">Project: <code>%s</code></p>\n' \
+    "$(printf '%s' "$project_path" | nano_html_escape)"
+  printf '    </section>\n'
+
+  # Phase timeline.
+  printf '    <section class="card">\n      <h2>Phase timeline</h2>\n      <ol class="timeline">\n'
+  local sources='[]'
+  for ph in $phases_list; do
+    [ -z "$ph" ] && continue
+    case "$ph" in
+      build) continue ;;  # Not a saved phase; build is editor work.
+    esac
+    # Find the latest artifact for this phase on the requested date.
+    # _journal_latest_on_date filters by filename prefix YYYYMMDD,
+    # which matches save-artifact.sh's naming convention. Codex PR 3
+    # pass 4 caught the gap: an earlier "fall back to find-artifact.sh
+    # for today" branch would return any artifact in the last 30
+    # days, so a fresh day's journal showed yesterday's artifacts as
+    # present. Strict date filtering now applies to both --today and
+    # --date so the journal banner is honest.
+    local art_path trust status_label sev_class summary
+    art_path=$(_journal_latest_on_date "$ph" "$date_compact")
+    if [ -z "$art_path" ] || [ ! -f "$art_path" ]; then
+      status_label="missing"
+      sev_class="sev-warn"
+      trust="not_found"
+      summary="No artifact found"
+      printf '        <li class="timeline-item %s" data-phase="%s">' \
+        "$sev_class" "$(printf '%s' "$ph" | nano_attr_escape)"
+      printf '<span class="chip">%s</span> <span class="chip %s">%s</span> <span class="muted">%s</span>' \
+        "$(printf '%s' "$ph" | nano_html_escape)" \
+        "$sev_class" \
+        "$(printf '%s' "$status_label" | nano_html_escape)" \
+        "$(printf '%s' "$summary" | nano_html_escape)"
+      printf '</li>\n'
+      sources=$(printf '%s' "$sources" | jq -c \
+        --arg phase "$ph" \
+        --arg path "" \
+        --arg integrity "" \
+        --arg trust "$trust" \
+        '. + [{phase: $phase, path: $path, integrity: $integrity, trust: $trust}]')
+      continue
+    fi
+    art_path=$(nano_resolve_abs "$art_path")
+    trust=$(nano_artifact_trust "$art_path" 2>/dev/null || echo "not_found")
+    case "$trust" in
+      verified)            status_label="verified"; sev_class="sev-ok" ;;
+      integrity_missing)   status_label="unverified"; sev_class="sev-warn" ;;
+      integrity_mismatch)  status_label="tampered"; sev_class="sev-bad" ;;
+      *)                   status_label="unreadable"; sev_class="sev-warn" ;;
+    esac
+    # Phase-specific summary line. Each jq call appends `|| echo
+    # "(unreadable)"` so a malformed artifact (which already surfaced
+    # as integrity_missing above) does not abort the whole journal
+    # render. Codex PR 3 pass 9 caught the unguarded reads.
+    case "$ph" in
+      think)   summary=$(jq -r '.summary.narrowest_wedge // .summary.value_proposition // "(no summary)"' "$art_path" 2>/dev/null || echo "(unreadable)") ;;
+      plan)    summary=$(jq -r '.summary.goal // "(no summary)"' "$art_path" 2>/dev/null || echo "(unreadable)") ;;
+      review)  summary=$(jq -r '"\(.summary.blocking // 0) blocking / \(.summary.should_fix // 0) should-fix / \(.summary.nitpicks // 0) nitpicks"' "$art_path" 2>/dev/null || echo "(unreadable)") ;;
+      security) summary=$(jq -r '"\(.summary.critical // 0) critical / \(.summary.high // 0) high / \(.summary.total_findings // 0) total"' "$art_path" 2>/dev/null || echo "(unreadable)") ;;
+      qa)      summary=$(jq -r '"\(.summary.tests_passed // 0)/\(.summary.tests_run // 0) tests / \(.summary.bugs_found // 0) bugs"' "$art_path" 2>/dev/null || echo "(unreadable)") ;;
+      ship)
+        if [ "$(jq -r '.run_mode // ""' "$art_path" 2>/dev/null || echo "")" = "report_only" ]; then
+          summary="report_only"
+        else
+          summary=$(jq -r '"PR #\(.summary.pr_number // "?") · \(.summary.status // "unknown")"' "$art_path" 2>/dev/null || echo "(unreadable)")
+        fi
+        ;;
+      *)       summary=$(jq -r '.summary | (if type == "object" then (.summary // (. | tostring)) else . end)' "$art_path" 2>/dev/null || echo "(unreadable)") ;;
+    esac
+    local integrity
+    integrity=$(jq -r '.integrity // ""' "$art_path" 2>/dev/null || echo "")
+    printf '        <li class="timeline-item %s" data-phase="%s" data-trust="%s">' \
+      "$sev_class" \
+      "$(printf '%s' "$ph" | nano_attr_escape)" \
+      "$(printf '%s' "$trust" | nano_attr_escape)"
+    printf '<span class="chip">%s</span> <span class="chip %s">%s</span> <span>%s</span>' \
+      "$(printf '%s' "$ph" | nano_html_escape)" \
+      "$sev_class" \
+      "$(printf '%s' "$status_label" | nano_html_escape)" \
+      "$(printf '%s' "$summary" | nano_html_escape)"
+    printf '<div class="muted timeline-source">Source: <code>%s</code></div>' \
+      "$(printf '%s' "$art_path" | nano_html_escape)"
+    printf '</li>\n'
+    sources=$(printf '%s' "$sources" | jq -c \
+      --arg phase "$ph" \
+      --arg path "$art_path" \
+      --arg integrity "$integrity" \
+      --arg trust "$trust" \
+      '. + [{phase: $phase, path: $path, integrity: $integrity, trust: $trust}]')
+  done
+  printf '      </ol>\n    </section>\n'
+
+  SOURCE_ARTIFACTS_JSON="$sources"
+}
+
+# ─── Stack renderer ─────────────────────────────────────────
+#
+# Renders a custom workflow stack as a DAG using SVG. Reads
+# phase_graph either from a named stack file (examples/custom-stack-
+# template/<name>/stack.json) or from .nanostack/config.json. For each
+# node, looks up the latest artifact and shows trust status + last-
+# render link if one exists under visual/.
+
+render_stack_body() {
+  local name="$1"
+
+  # Locate the stack definition. Order:
+  #   1. examples/custom-stack-template/<name>/stack.json (repo-bundled)
+  #   2. $NANOSTACK_STORE/stacks/<name>/stack.json (user-installed)
+  #   3. .nanostack/config.json (.phase_graph) for "default" / current project
+  local stack_file=""
+  local repo_root
+  repo_root="$SCRIPT_DIR/.."
+  if [ -f "$repo_root/examples/custom-stack-template/$name/stack.json" ]; then
+    stack_file="$repo_root/examples/custom-stack-template/$name/stack.json"
+  elif [ -f "$NANOSTACK_STORE/stacks/$name/stack.json" ]; then
+    stack_file="$NANOSTACK_STORE/stacks/$name/stack.json"
+  fi
+
+  local graph_json=""
+  local display_name="$name"
+  local description=""
+
+  local named_stack_file_present=false
+  if [ -n "$stack_file" ]; then
+    named_stack_file_present=true
+    # Codex PR 3 pass 9: the metadata reads ran without `|| true`,
+    # so a malformed stack.json aborted the render before the
+    # documented "Stack invalid" notice could be emitted. Guard
+    # every jq read on the user-controlled file.
+    graph_json=$(jq -c '.phase_graph' "$stack_file" 2>/dev/null || echo "")
+    display_name=$(jq -r '.display_name // .name // ""' "$stack_file" 2>/dev/null || echo "")
+    description=$(jq -r '.description // ""' "$stack_file" 2>/dev/null || echo "")
+    [ -z "$display_name" ] && display_name="$name"
+  fi
+
+  # Codex PR 3 pass 10: when a NAMED stack file exists but is
+  # malformed (missing .phase_graph), do NOT fall back to the
+  # project/default graph. That fallback would render an unrelated
+  # graph under the requested stack's name and hide the broken
+  # definition. The fallback is only for the bare `stack` / `stack
+  # default` form when no stack file was found at all.
+  # Codex PR 3 pass 15: every manifest must have at least one
+  # source entry per the visual artifact contract. For stack
+  # failure modes (invalid file, not found), emit a synthetic
+  # source pointing at the stack file (when present) or the
+  # requested name. This keeps downstream manifest consumers happy.
+  _stack_synthetic_source() {
+    local path="$1" trust="$2"
+    jq -n --arg phase "stack:$name" --arg path "$path" --arg trust "$trust" \
+      '[{phase: $phase, path: $path, integrity: "", trust: $trust}]'
+  }
+
+  if [ "$named_stack_file_present" = true ] && { [ -z "$graph_json" ] || [ "$graph_json" = "null" ]; }; then
+    printf '    <section class="card">\n      <h2>Stack invalid</h2>\n      <p>The stack file <code>%s</code> exists but its <code>phase_graph</code> is missing or unreadable.</p>\n    </section>\n' \
+      "$(printf '%s' "$stack_file" | nano_html_escape)"
+    SOURCE_ARTIFACTS_JSON=$(_stack_synthetic_source "$stack_file" "integrity_missing")
+    return 0
+  fi
+
+  if [ -z "$graph_json" ] || [ "$graph_json" = "null" ]; then
+    # Fall back to project's phase_graph via the registry, but ONLY
+    # for the bare `stack` / `stack default` form. A named stack
+    # that does not exist (e.g. typo `compliance-relase`) must not
+    # render the default DAG under the wrong name. Codex PR 3
+    # pass 12 caught the misleading fallback.
+    if [ "$name" = "default" ] && declare -F nano_phase_graph_json >/dev/null 2>&1; then
+      graph_json=$(nano_phase_graph_json 2>/dev/null || echo "")
+    fi
+  fi
+  if [ -z "$graph_json" ] || [ "$graph_json" = "null" ]; then
+    printf '    <section class="card">\n      <h2>Stack not found</h2>\n      <p>No stack definition found for <code>%s</code>.</p>\n    </section>\n' \
+      "$(printf '%s' "$name" | nano_html_escape)"
+    SOURCE_ARTIFACTS_JSON=$(_stack_synthetic_source "" "not_found")
+    return 0
+  fi
+
+  # Codex PR 3 pass 5+6: tighten graph validation. Required shape:
+  #   - non-empty array
+  #   - each entry is an object
+  #   - .name is a non-empty string
+  #   - .depends_on is an array of strings (default [])
+  #   - every name in depends_on exists as a node name (no dangling
+  #     references; cycle detection is bounded by the SVG loop cap)
+  # On failure render a "Stack invalid" notice with the validation
+  # reason and bail gracefully.
+  local graph_validation_error=""
+  if ! printf '%s' "$graph_json" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
+    graph_validation_error="phase_graph must be a non-empty array"
+  elif ! printf '%s' "$graph_json" | jq -e '
+    all(.[]; type == "object"
+              and (.name | type == "string") and (.name | length > 0)
+              and ((.depends_on // []) | type == "array")
+              and ((.depends_on // []) | all(type == "string")))
+  ' >/dev/null 2>&1; then
+    graph_validation_error="every node needs string .name and array-of-string .depends_on"
+  elif ! printf '%s' "$graph_json" | jq -e '
+    # Phase names must match [A-Za-z0-9_-]+ so shell word-splitting
+    # in the depth/SVG loops cannot break them apart, and a `find`
+    # under .nanostack/<phase>/ stays well-defined. Codex PR 3 pass 8.
+    all(.[]; .name | test("^[A-Za-z0-9_-]+$"))
+  ' >/dev/null 2>&1; then
+    graph_validation_error="phase names must match [A-Za-z0-9_-]+ (no whitespace or path separators)"
+  elif ! printf '%s' "$graph_json" | jq -e '
+    # Reject duplicate names; otherwise dependencies are ambiguous.
+    ([.[].name] | length) == ([.[].name] | unique | length)
+  ' >/dev/null 2>&1; then
+    graph_validation_error="phase_graph has duplicate node names"
+  elif ! printf '%s' "$graph_json" | jq -e '
+    . as $g
+    | ([.[].name] | unique) as $names
+    | all(.[]; (.depends_on // []) | all(. as $d | $names | index($d) != null))
+  ' >/dev/null 2>&1; then
+    graph_validation_error="phase_graph has a dangling dependency (depends_on points at an undeclared phase)"
+  else
+    # Cycle detection via iterative Kahn-style topological pass in
+    # bash. The depth resolver in render_stack_svg cannot draw a
+    # cyclic graph; rather than leave nodes out of the SVG silently,
+    # reject the stack up front (codex PR 3 pass 7). For each round,
+    # remove nodes whose deps are all in `done`; if a round makes no
+    # progress while nodes remain, declare a cycle.
+    local _cycle_done=" " _cycle_pending _cycle_total _cycle_round _cycle_progressed
+    _cycle_total=$(printf '%s' "$graph_json" | jq -r 'length')
+    _cycle_pending=$(printf '%s' "$graph_json" | jq -r '.[].name' | tr '\n' ' ')
+    for _cycle_round in $(seq 1 "$((_cycle_total + 1))"); do
+      _cycle_progressed=0
+      local _cycle_next=""
+      for _n in $_cycle_pending; do
+        local _deps _ok=1
+        _deps=$(printf '%s' "$graph_json" | jq -r --arg n "$_n" '.[] | select(.name == $n) | .depends_on // [] | .[]')
+        for _d in $_deps; do
+          case "$_cycle_done" in
+            *" $_d "*) ;;
+            *) _ok=0; break ;;
+          esac
+        done
+        if [ "$_ok" = "1" ]; then
+          _cycle_done="$_cycle_done$_n "
+          _cycle_progressed=1
+        else
+          _cycle_next="$_cycle_next$_n "
+        fi
+      done
+      _cycle_pending="$_cycle_next"
+      [ "$_cycle_progressed" = "0" ] && break
+      [ -z "$_cycle_pending" ] && break
+    done
+    if [ -n "$_cycle_pending" ]; then
+      graph_validation_error="phase_graph contains a cycle (cannot draw the DAG); unresolved: $(echo $_cycle_pending | sed 's/ *$//')"
+    fi
+  fi
+  if [ -n "$graph_validation_error" ]; then
+    printf '    <section class="card">\n      <h2>Stack invalid</h2>\n      <p>The stack definition for <code>%s</code> has a malformed <code>phase_graph</code>: %s.</p>\n    </section>\n' \
+      "$(printf '%s' "$name" | nano_html_escape)" \
+      "$(printf '%s' "$graph_validation_error" | nano_html_escape)"
+    SOURCE_ARTIFACTS_JSON=$(_stack_synthetic_source "$stack_file" "integrity_missing")
+    return 0
+  fi
+
+  printf '    <section class="card">\n      <h2>Custom stack · %s</h2>\n' \
+    "$(printf '%s' "$display_name" | nano_html_escape)"
+  if [ -n "$description" ]; then
+    printf '      <p class="muted">%s</p>\n' "$(printf '%s' "$description" | nano_html_escape)"
+  fi
+  printf '    </section>\n'
+
+  # Compute per-phase trust + last artifact path. Build the row list.
+  local sources='[]'
+  local node_count
+  node_count=$(printf '%s' "$graph_json" | jq -r 'length')
+  printf '    <section class="card">\n      <h2>Phase graph (%s phases)</h2>\n      <table>\n        <thead><tr><th>Phase</th><th>Depends on</th><th>Trust</th><th>Last artifact</th></tr></thead>\n        <tbody>\n' \
+    "$(printf '%s' "$node_count" | nano_html_escape)"
+
+  printf '%s' "$graph_json" | jq -c '.[]' | while IFS= read -r node; do
+    local nname deps_csv art_path trust label
+    nname=$(printf '%s' "$node" | jq -r '.name')
+    deps_csv=$(printf '%s' "$node" | jq -r '.depends_on // [] | join(", ")')
+    # Use the tampered-aware lookup so a flipped .project cannot hide
+    # a tampered artifact as "missing" (codex PR 3 pass 6).
+    art_path=$(_latest_safe_artifact_for_stack "$nname")
+    if [ -n "$art_path" ] && [ -f "$art_path" ]; then
+      art_path=$(nano_resolve_abs "$art_path")
+      trust=$(nano_artifact_trust "$art_path" 2>/dev/null || echo "not_found")
+      label="present"
+    else
+      art_path=""
+      trust="missing"
+      label="missing"
+    fi
+    local sev_class
+    case "$trust" in
+      verified)            sev_class="sev-ok"; label="verified" ;;
+      integrity_missing)   sev_class="sev-warn"; label="unverified" ;;
+      integrity_mismatch)  sev_class="sev-bad"; label="tampered" ;;
+      missing)             sev_class="sev-warn" ;;
+      *)                   sev_class="sev-warn"; label="unreadable" ;;
+    esac
+    printf '          <tr data-phase="%s" data-trust="%s">\n' \
+      "$(printf '%s' "$nname" | nano_attr_escape)" \
+      "$(printf '%s' "$trust" | nano_attr_escape)"
+    printf '            <td><code>%s</code></td>\n' "$(printf '%s' "$nname" | nano_html_escape)"
+    printf '            <td>%s</td>\n' \
+      "$(if [ -n "$deps_csv" ]; then printf '<code>%s</code>' "$(printf '%s' "$deps_csv" | nano_html_escape)"; else printf '<span class="muted">none</span>'; fi)"
+    printf '            <td><span class="chip %s">%s</span></td>\n' "$sev_class" \
+      "$(printf '%s' "$label" | nano_html_escape)"
+    if [ -n "$art_path" ]; then
+      printf '            <td><code>%s</code></td>\n' "$(printf '%s' "$art_path" | nano_html_escape)"
+    else
+      printf '            <td><span class="muted">no artifact</span></td>\n'
+    fi
+    printf '          </tr>\n'
+  done
+  printf '        </tbody>\n      </table>\n    </section>\n'
+
+  # SVG graph. Keep it simple: vertical chain with branch labels.
+  # Layout: one column per "level" computed via depends_on depth.
+  # We compute levels with jq + bash and lay out nodes on a grid.
+  render_stack_svg "$graph_json"
+
+  # Build sources array for the manifest using jq for correct JSON
+  # escaping. Codex PR 3 pass 2: the previous awk builder only
+  # escaped double quotes; a project path with a backslash or
+  # control character produced invalid JSON.
+  #
+  # Codex PR 3 pass 16: include the stack definition file as the
+  # first source. Pass 17: when `stack default` falls back to
+  # .nanostack/config.json via nano_phase_graph_json, record THAT
+  # config file as the source instead. Either way the manifest
+  # captures the file that determined the rendered DAG.
+  sources='[]'
+  local config_src=""
+  if [ -n "$stack_file" ] && [ -f "$stack_file" ]; then
+    config_src="$stack_file"
+  elif [ "$name" = "default" ] && [ -f "$NANOSTACK_STORE/config.json" ]; then
+    config_src="$NANOSTACK_STORE/config.json"
+  fi
+  if [ -n "$config_src" ]; then
+    local sf_abs
+    sf_abs=$(nano_resolve_abs "$config_src")
+    sources=$(printf '%s' "$sources" | jq -c \
+      --arg phase "stack:$name" \
+      --arg path "$sf_abs" \
+      '. + [{phase: $phase, path: $path, integrity: "", trust: "not_applicable"}]')
+  fi
+  while IFS= read -r nm; do
+    [ -z "$nm" ] && continue
+    local ap tr ig
+    ap=$(_latest_safe_artifact_for_stack "$nm")
+    if [ -n "$ap" ] && [ -f "$ap" ]; then
+      ap=$(nano_resolve_abs "$ap")
+      tr=$(nano_artifact_trust "$ap" 2>/dev/null || echo "not_found")
+      # Codex PR 3 pass 11: a truncated artifact would already
+      # surface as integrity_missing above, but the unguarded jq
+      # read below aborted the whole stack render under set -e
+      # before the manifest could be written. Guard with `|| echo`.
+      ig=$(jq -r '.integrity // ""' "$ap" 2>/dev/null || echo "")
+    else
+      ap=""; tr="missing"; ig=""
+    fi
+    sources=$(printf '%s' "$sources" | jq -c \
+      --arg phase "$nm" \
+      --arg path "$ap" \
+      --arg integrity "$ig" \
+      --arg trust "$tr" \
+      '. + [{phase: $phase, path: $path, integrity: $integrity, trust: $trust}]')
+  done < <(printf '%s' "$graph_json" | jq -r '.[].name')
+
+  SOURCE_ARTIFACTS_JSON="$sources"
+}
+
+# Emit a simple SVG DAG. Computes node levels by depends_on chain
+# depth so the DAG flows left-to-right. Edges are drawn as straight
+# lines between centers. No external assets; no JavaScript.
+render_stack_svg() {
+  local graph_json="$1"
+
+  # Iterative depth resolution in bash. Root nodes (no depends_on) get
+  # depth 0; children get 1 + max(parent depths). Cap rounds at the
+  # node count + 1 so a valid topologically-unsorted graph is fully
+  # resolved (worst case is a linear chain). Codex PR 3 pass 3 caught
+  # the fixed cap of 10 truncating larger custom stacks.
+  local names depths_tsv node_count round_cap
+  names=$(printf '%s' "$graph_json" | jq -r '.[].name')
+  node_count=$(printf '%s\n' "$names" | grep -c .)
+  round_cap=$(( node_count + 1 ))
+  : > "$TMP_ROOT_FALLBACK/depths.tsv"
+  local round
+  for round in $(seq 1 "$round_cap"); do
+    local progressed=0
+    for n in $names; do
+      local already
+      already=$(awk -F'\t' -v n="$n" '$1==n {print $2; exit}' "$TMP_ROOT_FALLBACK/depths.tsv")
+      [ -n "$already" ] && continue
+      local deps
+      deps=$(printf '%s' "$graph_json" | jq -r --arg n "$n" '.[] | select(.name == $n) | .depends_on // [] | .[]')
+      local max=-1 all_have=true
+      for d in $deps; do
+        local dd
+        dd=$(awk -F'\t' -v n="$d" '$1==n {print $2; exit}' "$TMP_ROOT_FALLBACK/depths.tsv")
+        if [ -z "$dd" ]; then all_have=false; break; fi
+        [ "$dd" -gt "$max" ] && max="$dd"
+      done
+      if [ "$all_have" = true ]; then
+        printf '%s\t%d\n' "$n" "$((max + 1))" >> "$TMP_ROOT_FALLBACK/depths.tsv"
+        progressed=1
+      fi
+    done
+    [ "$progressed" = 0 ] && break
+  done
+
+  # Build SVG: nodes positioned by depth column, with index-within-
+  # column for y. Width 900, node 140x40, padding 20.
+  local total_depth max_per_col
+  total_depth=$(awk -F'\t' '{print $2}' "$TMP_ROOT_FALLBACK/depths.tsv" | sort -nu | tail -1)
+  total_depth="${total_depth:-0}"
+  max_per_col=$(awk -F'\t' '{print $2}' "$TMP_ROOT_FALLBACK/depths.tsv" | sort | uniq -c | awk '{print $1}' | sort -n | tail -1)
+  max_per_col="${max_per_col:-1}"
+  local svg_w=$(( (total_depth + 1) * 180 + 40 ))
+  local svg_h=$(( max_per_col * 70 + 40 ))
+
+  printf '    <section class="card">\n      <h2>DAG</h2>\n'
+  # url-allowlist: the SVG xmlns is an XML namespace identifier; it
+  # is not fetched and the browser ignores it as a URL. Required by
+  # the SVG spec when SVG appears outside of an HTML5 parser.
+  printf '      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %s %s" width="100%%" style="max-width:100%%;height:auto;background:var(--panel-2);border-radius:6px;">\n' \
+    "$svg_w" "$svg_h"
+
+  # Compute positions per node and persist.
+  : > "$TMP_ROOT_FALLBACK/positions.tsv"
+  local col col_index
+  for col in $(seq 0 "$total_depth"); do
+    col_index=0
+    while IFS=$'\t' read -r nm d; do
+      [ "$d" = "$col" ] || continue
+      local x=$(( col * 180 + 20 ))
+      local y=$(( col_index * 70 + 20 ))
+      printf '%s\t%d\t%d\n' "$nm" "$x" "$y" >> "$TMP_ROOT_FALLBACK/positions.tsv"
+      col_index=$((col_index + 1))
+    done < "$TMP_ROOT_FALLBACK/depths.tsv"
+  done
+
+  # Draw edges first (under nodes).
+  printf '%s' "$graph_json" | jq -r '.[] | .name as $n | .depends_on // [] | .[] | "\($n)\t\(.)"' \
+    | while IFS=$'\t' read -r child parent; do
+      local cx cy px py
+      cx=$(awk -F'\t' -v n="$child" '$1==n {print $2+70}' "$TMP_ROOT_FALLBACK/positions.tsv")
+      cy=$(awk -F'\t' -v n="$child" '$1==n {print $3+20}' "$TMP_ROOT_FALLBACK/positions.tsv")
+      px=$(awk -F'\t' -v n="$parent" '$1==n {print $2+70}' "$TMP_ROOT_FALLBACK/positions.tsv")
+      py=$(awk -F'\t' -v n="$parent" '$1==n {print $3+20}' "$TMP_ROOT_FALLBACK/positions.tsv")
+      if [ -n "$cx" ] && [ -n "$px" ]; then
+        printf '        <line x1="%s" y1="%s" x2="%s" y2="%s" stroke="#666" stroke-width="1.5"/>\n' \
+          "$px" "$py" "$cx" "$cy"
+      fi
+  done
+
+  # Draw nodes with trust class. Tampered-aware lookup so a flipped
+  # .project surfaces visually rather than appearing as missing.
+  while IFS=$'\t' read -r nm x y; do
+    local trust label fill stroke
+    local ap
+    ap=$(_latest_safe_artifact_for_stack "$nm")
+    if [ -n "$ap" ]; then
+      trust=$(nano_artifact_trust "$ap" 2>/dev/null || echo "not_found")
+    else
+      trust="missing"
+    fi
+    case "$trust" in
+      verified)            fill="#1f3a2a"; stroke="#4ade80"; label="ok" ;;
+      integrity_missing)   fill="#3a321a"; stroke="#facc15"; label="?" ;;
+      integrity_mismatch)  fill="#3a1f24"; stroke="#fb7185"; label="!" ;;
+      *)                   fill="#2a2e38"; stroke="#666"; label="-" ;;
+    esac
+    local label_x label_y text_x text_y badge_x
+    label_x=$(( x + 5 ))
+    label_y=$(( y + 28 ))
+    text_x=$(( x + 70 ))
+    text_y=$(( y + 26 ))
+    badge_x=$(( x + 135 - 14 ))
+    local nm_esc
+    nm_esc=$(printf '%s' "$nm" | nano_attr_escape)
+    printf '        <g data-phase="%s" data-trust="%s">\n' "$nm_esc" "$(printf '%s' "$trust" | nano_attr_escape)"
+    printf '          <rect x="%s" y="%s" width="140" height="40" rx="6" fill="%s" stroke="%s" stroke-width="2"/>\n' \
+      "$x" "$y" "$fill" "$stroke"
+    printf '          <text x="%s" y="%s" font-family="monospace" font-size="13" fill="#f4f4f5" text-anchor="middle">%s</text>\n' \
+      "$text_x" "$text_y" "$(printf '%s' "$nm" | nano_html_escape)"
+    printf '          <text x="%s" y="%s" font-size="11" fill="%s">%s</text>\n' \
+      "$badge_x" "$label_y" "$stroke" "$(printf '%s' "$label" | nano_html_escape)"
+    printf '        </g>\n'
+  done < "$TMP_ROOT_FALLBACK/positions.tsv"
+
+  printf '      </svg>\n    </section>\n'
+}
+
 # ─── Atomic write ───────────────────────────────────────────
 # Codex PR 1 pass 8: a predictable temp name (HTML_PATH.tmp.$$) lets
 # an attacker pre-create a symlink at that path; the redirect would
@@ -781,30 +1538,89 @@ TMP_MFST=$(mktemp "$MANIFEST_PATH.tmp.XXXXXX" 2>/dev/null) || {
   echo "render-artifact: failed to create secure temp for manifest: $MANIFEST_PATH" >&2
   exit 4
 }
+# Scratch directory for renderer-internal state (stack layout, etc).
+# mktemp on macOS does not accept --tmpdir without -t; use the
+# portable directory form. Cleaned up via the EXIT trap below.
+TMP_ROOT_FALLBACK=$(mktemp -d "${TMPDIR:-/tmp}/render-artifact.XXXXXX") || {
+  echo "render-artifact: failed to create scratch dir" >&2
+  rm -f "$TMP_HTML" "$TMP_MFST"
+  exit 4
+}
+
 cleanup() {
   rm -f "$TMP_HTML" "$TMP_MFST" 2>/dev/null || true
+  rm -rf "$TMP_ROOT_FALLBACK" 2>/dev/null || true
 }
 trap cleanup EXIT
 
-# ─── Manifest ───────────────────────────────────────────────
-# Build manifest first; if the HTML render fails we can still leave a
-# clean state. We move both files into place at the very end.
-
 CREATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-# Use jq to construct the manifest so all string escaping is correct.
+# ─── HTML ───────────────────────────────────────────────────
+# Render the HTML first. The body renderers for journal/stack
+# populate SOURCE_ARTIFACTS_JSON with the aggregated sources they
+# read, so the manifest below describes what was actually rendered.
+# A brace group is not a subshell in bash; SOURCE_ARTIFACTS_JSON
+# survives outside.
+if [ "$MANIFEST_ONLY" != true ]; then
+  {
+    nano_visual_page_start "$PHASE" "$TRUST" "static"
+
+    if [ "$SCHEMA_OK" = false ]; then
+      printf '    <div class="schema-warning" data-testid="schema-warning">%s</div>\n' \
+        "$(printf 'Schema validation: %s' "$SCHEMA_ERR" | nano_html_escape)"
+    fi
+
+    case "$PHASE" in
+      plan)     render_plan_body "$ART_PATH" ;;
+      think)    render_think_body "$ART_PATH" ;;
+      review)   render_review_body "$ART_PATH" ;;
+      security) render_security_body "$ART_PATH" ;;
+      qa)       render_qa_body "$ART_PATH" ;;
+      ship)     render_ship_body "$ART_PATH" ;;
+      journal)  render_journal_body "$JOURNAL_DATE" ;;
+      stack)    render_stack_body "$STACK_NAME" ;;
+    esac
+
+    # Journal and stack do not have a single source artifact path or
+    # integrity; the provenance footer points to the manifest only.
+    if [ -n "$ART_PATH" ]; then
+      nano_visual_page_end "$ART_PATH" "$MANIFEST_PATH" "$SRC_INTEGRITY"
+    else
+      nano_visual_page_end "(aggregated: ${PHASE})" "$MANIFEST_PATH" ""
+    fi
+  } > "$TMP_HTML"
+else
+  # In --manifest-only mode the body renderers still need to run so
+  # the manifest can describe the aggregated sources. Render to the
+  # bit bucket; the body still mutates SOURCE_ARTIFACTS_JSON.
+  case "$PHASE" in
+    journal) render_journal_body "$JOURNAL_DATE" >/dev/null ;;
+    stack)   render_stack_body "$STACK_NAME"   >/dev/null ;;
+  esac
+fi
+
+# ─── Manifest ───────────────────────────────────────────────
+# Phase renders set SOURCE_ARTIFACTS_JSON to a single-element array
+# from the source artifact; journal/stack body renderers set it to
+# the aggregated source list.
+if [ -z "${SOURCE_ARTIFACTS_JSON:-}" ]; then
+  SOURCE_ARTIFACTS_JSON=$(jq -n \
+    --arg src_phase "$ART_PHASE" \
+    --arg src_path "${ART_PATH:-}" \
+    --arg src_integrity "$SRC_INTEGRITY" \
+    --arg src_trust "$TRUST" \
+    '[{phase: $src_phase, path: $src_path, integrity: $src_integrity, trust: $src_trust}]')
+fi
+
 jq -n \
   --arg schema_version "1" \
-  --arg kind "phase" \
+  --arg kind "$MANIFEST_KIND" \
   --arg phase "$PHASE" \
   --argjson custom_phase false \
   --arg format "html" \
   --argjson interactive false \
   --argjson strict "$($STRICT && echo true || echo false)" \
-  --arg src_phase "$ART_PHASE" \
-  --arg src_path "$ART_PATH" \
-  --arg src_integrity "$SRC_INTEGRITY" \
-  --arg src_trust "$TRUST" \
+  --argjson source_artifacts "$SOURCE_ARTIFACTS_JSON" \
   --arg output_path "$HTML_PATH" \
   --arg renderer_name "$NANO_VISUAL_RENDERER_NAME" \
   --arg renderer_version "$NANO_VISUAL_RENDERER_VERSION" \
@@ -819,12 +1635,7 @@ jq -n \
     format: $format,
     interactive: $interactive,
     strict: $strict,
-    source_artifacts: [{
-      phase: $src_phase,
-      path: $src_path,
-      integrity: $src_integrity,
-      trust: $src_trust
-    }],
+    source_artifacts: $source_artifacts,
     output_path: $output_path,
     renderer: { name: $renderer_name, version: $renderer_version },
     schema_valid: $schema_valid,
@@ -832,40 +1643,41 @@ jq -n \
     created_at: $created_at
   }' > "$TMP_MFST"
 
+# Strict mode for aggregate renders: enforce after sources are
+# collected, BEFORE the manifest-only branch returns. Codex PR 3
+# pass 3 caught that running before the early exit was required so
+# `journal --strict --manifest-only` cannot ship a "strict: true"
+# manifest with tampered sources. "missing" sources stay acceptable
+# because they are an expected aggregate state (the user has not
+# run that phase yet). integrity_missing and integrity_mismatch are
+# the actually-suspect cases.
+if [ "$STRICT" = true ] && { [ "$PHASE" = "journal" ] || [ "$PHASE" = "stack" ]; }; then
+  bad=$(printf '%s' "$SOURCE_ARTIFACTS_JSON" | jq -r \
+    '.[] | select(.trust == "integrity_missing" or .trust == "integrity_mismatch") | "\(.phase): \(.trust)"' 2>/dev/null)
+  if [ -n "$bad" ]; then
+    echo "render-artifact: --strict requires every aggregated source to be verified; failing on:" >&2
+    printf '  %s\n' $bad >&2
+    exit 3
+  fi
+fi
+
 if [ "$MANIFEST_ONLY" = true ]; then
   # Codex PR 1 pass 9: the manifest-only branch must not leave the
   # mktemp'd HTML temp file behind. Clean it before disabling the
-  # cleanup trap.
+  # cleanup trap. Same for the scratch dir (PR 3 pass 2).
   rm -f "$TMP_HTML"
+  rm -rf "$TMP_ROOT_FALLBACK"
   mv "$TMP_MFST" "$MANIFEST_PATH"
   trap - EXIT
   echo "$MANIFEST_PATH"
   exit 0
 fi
 
-# ─── HTML ───────────────────────────────────────────────────
-{
-  nano_visual_page_start "$PHASE" "$TRUST" "static"
-
-  if [ "$SCHEMA_OK" = false ]; then
-    printf '    <div class="schema-warning" data-testid="schema-warning">%s</div>\n' \
-      "$(printf 'Schema validation: %s' "$SCHEMA_ERR" | nano_html_escape)"
-  fi
-
-  case "$PHASE" in
-    plan)     render_plan_body "$ART_PATH" ;;
-    think)    render_think_body "$ART_PATH" ;;
-    review)   render_review_body "$ART_PATH" ;;
-    security) render_security_body "$ART_PATH" ;;
-    qa)       render_qa_body "$ART_PATH" ;;
-    ship)     render_ship_body "$ART_PATH" ;;
-  esac
-
-  nano_visual_page_end "$ART_PATH" "$MANIFEST_PATH" "$SRC_INTEGRITY"
-} > "$TMP_HTML"
-
 mv "$TMP_HTML" "$HTML_PATH"
 mv "$TMP_MFST" "$MANIFEST_PATH"
+# Codex PR 3 pass 2: the scratch dir was leaking on every successful
+# render because the cleanup trap was unset before it was removed.
+rm -rf "$TMP_ROOT_FALLBACK"
 trap - EXIT
 
 echo "$HTML_PATH"
