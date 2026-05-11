@@ -170,6 +170,24 @@ jobs:
           chmod +x ci/e2e-onboarding-flows.sh
           ci/e2e-onboarding-flows.sh
 
+  e2e-custom-routing:
+    name: E2E Custom Routing Contract (8 cells)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # PR 5 of the 2026-05-10 architecture audit. Locks the
+    # phase_context routing contract: trust strict/normal,
+    # upstream_required vs optional, max_age_days override, solution
+    # tags, diarization paths/keywords. Backward compat: custom phases
+    # without phase_context keep the dependency-only behavior.
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq is present
+        run: jq --version
+      - name: Run custom routing E2E
+        run: |
+          chmod +x ci/e2e-custom-routing.sh
+          ci/e2e-custom-routing.sh
+
   e2e-graph-aware-session:
     name: E2E Graph-aware Session + Next-step (10 cells)
     runs-on: ubuntu-latest
