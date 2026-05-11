@@ -90,60 +90,44 @@ fi
 # graph like build -> license-audit -> ... or a serialized review ->
 # qa -> security override would otherwise fall back to the legacy
 # peer logic and miss the configured dependencies.
-DEFAULT_GRAPH_JSON='[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"review","depends_on":["build"]},{"name":"qa","depends_on":["build"]},{"name":"security","depends_on":["build"]},{"name":"ship","depends_on":["review","qa","security"]}]'
-GRAPH_AWARE_NEXT=""
-GRAPH_AWARE_READY="[]"
-IS_CUSTOM_GRAPH=0
+# When a session exists, trust the session-computed ready_phases /
+# next_phase. session.sh already runs nano_phase_ready_from_graph on
+# every phase-start and phase-complete with the correct completed +
+# in_progress lists, so we get parallel-graph correctness AND
+# in-progress exclusion for free. The legacy artifact-based fallback
+# only kicks in when no session file exists.
+#
+# Codex flagged the in-progress leak on the PR 4 fourth review pass:
+# the previous default-sprint branch only consulted phase_completed,
+# so an active /review showed up in ready_phases and could trigger
+# duplicate starts.
+SESSION_READY="[]"
+SESSION_NEXT=""
+HAS_SESSION=0
 if [ -f "$SESSION_FILE" ]; then
-  # Preserve the graph's declared node order during comparison. The
-  # depends_on array inside each node is a set (so it sorts for
-  # equality), but the array of nodes itself is order-sensitive
-  # because nano_phase_ready_from_graph returns ready phases in the
-  # graph's declared order and session.sh writes next_phase from
-  # that order. A project that keeps the default names and deps but
-  # reorders the nodes (for example security before review) is a
-  # legitimate custom graph; sorting the outer array would have
-  # collapsed it to the default and the script would have suggested
-  # review while session.json said security. Codex caught the
-  # declared-order regression on the PR 4 second review pass.
-  session_graph=$(jq -c '
-    (.phase_graph // [])
-    | map({name: .name, depends_on: (.depends_on // [] | sort)})
-  ' "$SESSION_FILE" 2>/dev/null || echo "[]")
-  default_normalized=$(echo "$DEFAULT_GRAPH_JSON" | jq -c '
-    map({name: .name, depends_on: (.depends_on // [] | sort)})
-  ')
-  if [ -n "$session_graph" ] && [ "$session_graph" != "[]" ] && [ "$session_graph" != "$default_normalized" ]; then
-    IS_CUSTOM_GRAPH=1
-    GRAPH_AWARE_NEXT=$(jq -r '.next_phase // ""' "$SESSION_FILE" 2>/dev/null || echo "")
-    GRAPH_AWARE_READY=$(jq -c '.ready_phases // []' "$SESSION_FILE" 2>/dev/null || echo "[]")
-  fi
+  HAS_SESSION=1
+  SESSION_READY=$(jq -c '.ready_phases // []' "$SESSION_FILE" 2>/dev/null || echo "[]")
+  SESSION_NEXT=$(jq -r '.next_phase // ""' "$SESSION_FILE" 2>/dev/null || echo "")
 fi
 
-if [ "$IS_CUSTOM_GRAPH" = "1" ]; then
-  PENDING_JSON="$GRAPH_AWARE_READY"
-  NEXT_PHASE="$GRAPH_AWARE_NEXT"
+if [ "$HAS_SESSION" = "1" ]; then
+  PENDING_JSON="$SESSION_READY"
+  NEXT_PHASE="$SESSION_NEXT"
   PENDING_COUNT=$(echo "$PENDING_JSON" | jq 'length')
   if [ -z "$NEXT_PHASE" ] || [ "$NEXT_PHASE" = "null" ]; then
     # No phase is ready right now. This can mean two things:
     #   - The sprint is finished (everything past ship completed).
     #   - The sprint has not started yet and the initial ready set
     #     was not snapshotted (legacy session pre-PR-4).
-    # In both cases the safe answer is "no specific next phase" with
-    # can_ship gated on the required_before_ship chain still being
-    # incomplete. We do not collapse to "ship" because that wrongly
-    # suggested a fresh custom session was ship-ready (Codex caught
-    # this on the PR 4 first review pass).
+    # Safe answer: "no specific next phase" with can_ship gated on
+    # ship having actually completed. We never collapse to "ship"
+    # implicitly; that wrongly suggested a fresh session was ship-
+    # ready (Codex caught this on the PR 4 first review pass).
     NEXT_PHASE=""
-    if [ "$PENDING_COUNT" -eq 0 ]; then
-      # Check whether ship has actually completed in this session.
-      ship_done=$(jq -r '[.phase_log[]? | select(.phase == "ship" and .status == "completed")] | length' "$SESSION_FILE" 2>/dev/null || echo "0")
-      if [ "$ship_done" -gt 0 ]; then
-        NEXT_PHASE="compound"
-        CAN_SHIP="true"
-      else
-        CAN_SHIP="false"
-      fi
+    ship_done=$(jq -r '[.phase_log[]? | select(.phase == "ship" and .status == "completed")] | length' "$SESSION_FILE" 2>/dev/null || echo "0")
+    if [ "$ship_done" -gt 0 ]; then
+      NEXT_PHASE="compound"
+      CAN_SHIP="true"
     else
       CAN_SHIP="false"
     fi
@@ -153,6 +137,9 @@ if [ "$IS_CUSTOM_GRAPH" = "1" ]; then
     CAN_SHIP="false"
   fi
 else
+  # No session file. Fall back to the legacy artifact-based lookup
+  # so a host that drives /review/security/qa without going through
+  # session.sh init still gets sensible output.
   PENDING_JSON="[]"
   for phase in $PEERS; do
     if ! phase_completed "$phase"; then
@@ -212,7 +199,12 @@ fi
 # hardcoded shape continue to receive it when the session uses the
 # default graph.
 REQUIRED_BEFORE_SHIP_JSON='["review","security","qa"]'
-if [ "$IS_CUSTOM_GRAPH" = "1" ] && [ -f "$SESSION_FILE" ]; then
+if [ "$HAS_SESSION" = "1" ]; then
+  # The graph snapshot inside session.json is authoritative. For the
+  # default sprint that yields ["review","qa","security"] (same set
+  # as the legacy default); for a custom graph it returns the actual
+  # transitive chain ship depends on. Falls back to the legacy default
+  # if the jq filter fails (legacy session pre-PR-4).
   REQUIRED_BEFORE_SHIP_JSON=$(jq -c '
     (.phase_graph // []) as $g
     | def ancestors($name):
@@ -220,6 +212,11 @@ if [ "$IS_CUSTOM_GRAPH" = "1" ] && [ -f "$SESSION_FILE" ]; then
         | $deps + ($deps | map(ancestors(.)) | add // []);
       ancestors("ship") | unique | map(select(. != "think" and . != "plan" and . != "build"))
   ' "$SESSION_FILE" 2>/dev/null || echo '["review","security","qa"]')
+  # Empty filter result (e.g. session has no phase_graph) keeps the
+  # legacy default so existing consumers do not see an empty array.
+  if [ -z "$REQUIRED_BEFORE_SHIP_JSON" ] || [ "$REQUIRED_BEFORE_SHIP_JSON" = "[]" ]; then
+    REQUIRED_BEFORE_SHIP_JSON='["review","security","qa"]'
+  fi
 fi
 
 jq -n \

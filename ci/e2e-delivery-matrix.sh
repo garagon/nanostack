@@ -272,11 +272,19 @@ cell_professional_next_step_uses_slash() {
   new_project "cell8"
   git init -q
   "$REPO/bin/session.sh" init development --profile professional --autopilot >/dev/null
+  # PR 4 of the 2026-05-10 audit made session.sh init seed next_phase
+  # with the graph root (think). Walk past think+plan so the state is
+  # post-build, when the graph reports review as the next phase — that
+  # is the state this cell wants to exercise (professional uses slash
+  # commands in user_message).
+  for ph in think plan; do
+    "$REPO/bin/session.sh" phase-start "$ph" >/dev/null
+    "$REPO/bin/session.sh" phase-complete "$ph" >/dev/null
+  done
   local out msg
   out=$("$REPO/bin/next-step.sh" --json 2>/dev/null)
   msg=$(echo "$out" | jq -r .user_message)
   assert_eq "professional profile propagated" "professional" "$(echo "$out" | jq -r .profile)"
-  # Empty post-build state suggests review next.
   assert_contains "professional user_message names /review" "/review" "$msg"
 }
 
