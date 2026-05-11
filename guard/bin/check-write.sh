@@ -165,8 +165,13 @@ BASENAME_DENY=(
   # firebaseadminsdk.json, googlecredentials.json, clientsecret.json)
   # are caught too. Codex flagged the missing separator-less forms
   # on the PR 7 first review pass.
-  '(^|/)credentials?\.json$'
-  '(^|/)secrets?\.json$'
+  # `[^/]*` allows env / region suffixes (credentials-prod.json,
+  # secrets-backup.json, credential-staging.json) without breaking
+  # the TEMPLATE_ALLOW exemption that runs first and lets
+  # credentials.example.json through. Codex flagged the missing
+  # suffix support on the PR 7 second review pass.
+  '(^|/)credentials?[^/]*\.json$'
+  '(^|/)secrets?[^/]*\.json$'
   '(^|/)service[-_]?account[^/]*\.json$'
   '(^|/)firebase[-_]?adminsdk[^/]*\.json$'
   '(^|/)google[-_]?credentials[^/]*\.json$'

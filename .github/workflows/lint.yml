@@ -852,6 +852,15 @@ jobs:
           run_case 1 'clientsecret.json'
           run_case 1 'awscredentials.json'
           run_case 1 'gcpcredentials.json'
+          # Suffixed generic credential / secret JSON. Codex caught
+          # the missing suffix support on the PR 7 second review
+          # pass: G-035 read-side blocks credentials-prod.json and
+          # secrets-backup.json; the write side now does too.
+          run_case 1 'credentials-prod.json'
+          run_case 1 'credential-staging.json'
+          run_case 1 'secret-prod.json'
+          run_case 1 'secrets-backup.json'
+          run_case 1 'credentials.dev.json'
           # Protected directories still block even when the leaf has
           # a template-looking basename. Codex caught the over-broad
           # template exemption on the PR 7 first review pass:
