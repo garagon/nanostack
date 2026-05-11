@@ -94,6 +94,15 @@ in_enum() {
 
 parse_iso_date() {
   local d="$1"
+  # Strict ISO YYYY-MM-DD only. GNU `date -d` accepts non-ISO values
+  # like "yesterday" or "04/25/2026", which would let a malformed
+  # last_verified slip through the freshness gate on the Ubuntu
+  # CI runner. The shape check rejects those before parsing.
+  # Codex caught the permissive parse on the PR 6 seventh review pass.
+  case "$d" in
+    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+    *) return 0 ;;
+  esac
   if command -v gdate >/dev/null 2>&1; then
     gdate -u -d "$d" +%s 2>/dev/null
   else

@@ -415,6 +415,28 @@ echo "$out" | grep -q "install_target is not a string" && \
   assert_eq "scalar-type message present" "yes" "yes" || \
   assert_eq "scalar-type message present" "yes" "no"
 
+# Cell 7n: non-ISO last_verified values (e.g. "yesterday" or
+# "04/25/2026") must be rejected. GNU `date -d` on Ubuntu accepts
+# these forms, which would let a malformed value pass the freshness
+# gate on CI. Codex caught the permissive parse on the PR 6 seventh
+# review pass.
+echo "[7n] non-ISO last_verified is rejected"
+root=$(new_repo "cell7n-non-iso")
+cat > "$root/README.md" <<'EOF'
+README mentions `claude`.
+EOF
+write_adapter "$root" claude "yesterday"
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "'yesterday' exits 1" "1" "$rc"
+echo "$out" | grep -q "does not parse as a date" && \
+  assert_eq "non-ISO message present" "yes" "yes" || \
+  assert_eq "non-ISO message present" "yes" "no"
+write_adapter "$root" claude "04/25/2026"
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "'04/25/2026' exits 1" "1" "$rc"
+
 # Cell 8: --json output emits a parseable summary object.
 echo "[8] --json output is parseable"
 root=$(new_repo "cell8")
