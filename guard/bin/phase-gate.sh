@@ -169,8 +169,15 @@ if [ -f "$SESSION_FILE" ]; then
       exit 0
     fi
 
-    # Skip if no phases have started (session just initialized)
-    PHASES_STARTED=$(jq -r '.phase_log | length' "$SESSION_FILE" 2>/dev/null || echo "0")
+    # Skip if no phases have started (session just initialized). The
+    # filter excludes synthetic entries (source: "feature-skip" or
+    # similar markers) so a /feature session that pre-seeded think as
+    # completed at init does not activate the gate before /plan runs.
+    # Codex caught the premature-block regression on the PR 4
+    # thirteenth review pass.
+    PHASES_STARTED=$(jq -r '
+      [.phase_log[]? | select((.source // "") | startswith("feature-skip") | not)] | length
+    ' "$SESSION_FILE" 2>/dev/null || echo "0")
     if [ "$PHASES_STARTED" -eq 0 ]; then
       exit 0
     fi

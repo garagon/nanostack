@@ -656,6 +656,31 @@ rc=$?
 set -e
 assert_eq "no-gate graph: phase-gate allows commit (rc 0)" "0" "$rc"
 
+# Cell 9l: phase-gate must not activate solely because /feature
+# pre-seeded think as completed. Before /plan starts, the gate
+# stays dormant; once /plan runs, the gate enforces. Codex caught
+# the premature-block regression on the PR 4 thirteenth review
+# pass.
+echo "[9l] /feature pre-seed does not activate the phase gate"
+new_project "cell9l-feature-gate"
+"$SESSION_SH" init feature --autopilot --plan-approval auto >/dev/null
+echo "scratch" > scratch.txt
+git add scratch.txt && git commit -q -m "scratch" >/dev/null 2>&1 || true
+echo "more" >> scratch.txt
+set +e
+"$REPO/guard/bin/phase-gate.sh" "git commit -m wip" >/dev/null 2>&1
+rc=$?
+set -e
+assert_eq "/feature post-init: gate allows commit (rc 0)" "0" "$rc"
+"$SESSION_SH" phase-start plan >/dev/null
+"$SESSION_SH" phase-complete plan >/dev/null
+echo "more2" >> scratch.txt
+set +e
+"$REPO/guard/bin/phase-gate.sh" "git commit -m wip" >/dev/null 2>&1
+rc=$?
+set -e
+assert_eq "/feature after plan: gate now enforces (rc 1)" "1" "$rc"
+
 # Cell 10: default sprint user_message remains exactly the historical
 # wording. No regression for built-in flows.
 echo "[10] default sprint user_message is unchanged"
