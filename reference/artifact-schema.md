@@ -14,9 +14,39 @@ All artifacts share this base structure:
   "mode": "<quick|standard|thorough>",
   "summary": {},
   "findings": [],
-  "conflicts": []
+  "conflicts": [],
+  "integrity": "<sha256 hex digest of the artifact with .integrity stripped>"
 }
 ```
+
+## Artifact trust model
+
+Every artifact saved by `bin/save-artifact.sh` carries a `.integrity` field: a SHA-256 over the canonical (sorted, no-integrity) JSON. Readers verify integrity through one of two shared primitives so every layer agrees on what "trustworthy" means.
+
+### Trust statuses
+
+`bin/lib/artifact-trust.sh` exposes `nano_artifact_trust <path>` which echoes one of four statuses:
+
+| Status | Meaning |
+|--------|---------|
+| `verified` | Regular JSON file. `.integrity` is present and the recomputed hash matches. Safe to use as evidence. |
+| `integrity_missing` | Regular JSON file. `.integrity` is absent or empty. An attacker who can write the file can also delete the field, so release gates treat this as untrusted. |
+| `integrity_mismatch` | Regular JSON file. `.integrity` is present but the recomputed hash does not match. The artifact was modified after `save-artifact.sh` wrote it. |
+| `not_found` | Path is empty, does not exist, or is not a regular file. The helper returns exit 1 in this case. |
+
+### Verification flags on `bin/find-artifact.sh`
+
+| Flag | Behavior on `verified` | Behavior on `integrity_missing` | Behavior on `integrity_mismatch` |
+|------|------------------------|---------------------------------|----------------------------------|
+| (none) | path on stdout, exit 0 | path on stdout, exit 0 | path on stdout, exit 0 |
+| `--verify` | path on stdout, exit 0 | path on stdout, exit 0 (backward compatible with legacy artifacts) | `INTEGRITY FAILED:` on stderr, exit 1 |
+| `--require-integrity` | path on stdout, exit 0 | `INTEGRITY MISSING:` on stderr, exit 1 | `INTEGRITY FAILED:` on stderr, exit 1 |
+
+`--require-integrity` implies `--verify`. Use it from release gates and any consumer that cannot tolerate unverifiable evidence. The shared primitive replaces the per-skill jq checks that grew up around `--verify` before this flag existed.
+
+### `resolve.sh` `upstream_status`
+
+`bin/resolve.sh` adds a `upstream_status` field to its JSON output: a map from each declared upstream phase to its trust status (`verified`, `integrity_missing`, `integrity_mismatch`, `missing`, or `not_applicable` for the conductor's `build` stage). `upstream_artifacts` continues to include `verified` and `integrity_missing` paths so legacy stores load; consumers that need strict semantics read `upstream_status` and decide for themselves.
 
 ## Context Checkpoint
 

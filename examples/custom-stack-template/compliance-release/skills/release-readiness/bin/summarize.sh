@@ -20,11 +20,15 @@
 #   - artifact present + verified, status absent or
 #     unrecognized                                  -> WARN
 #
-# Each lookup goes through find-artifact.sh --verify so a tampered
-# artifact (mtime untouched, content rewritten) cannot quietly roll
-# the gate up to OK. The tampered case is recorded as TAMPERED in
-# the per-check entry and forces the rollup to BLOCKED, separately
-# from "artifact never saved" which records as MISSING.
+# Each lookup goes through find-artifact.sh --require-integrity so a
+# tampered artifact (mtime untouched, content rewritten) or one whose
+# .integrity field has been stripped cannot quietly roll the gate up
+# to OK. Both failure modes are recorded as TAMPERED in the per-check
+# entry and force the rollup to BLOCKED, separately from "artifact
+# never saved" which records as MISSING. The --require-integrity flag
+# is the shared primitive added in the 2026-05-10 architecture audit
+# (PR 2); release gates that need strict semantics call it directly
+# instead of layering their own jq checks on top of --verify.
 #
 # save-artifact.sh always writes the .integrity field, so a
 # legitimate artifact never trips the missing-integrity check.
@@ -68,34 +72,33 @@ for phase in $UPSTREAMS; do
     status="MISSING"
     evidence=""
   else
-    # Then: does it pass integrity verification? --verify exits 1 and
-    # prints "INTEGRITY FAILED" to stderr when the stored hash does
-    # not match the recomputed hash. A release gate must surface that
-    # explicitly, not treat a tampered file as clean evidence.
-    verified=$( "$FIND_ARTIFACT" "$phase" 30 --verify 2>/dev/null || true )
+    # Second: does the artifact pass strict integrity verification?
+    # find-artifact.sh --require-integrity fails on BOTH a hash
+    # mismatch AND a missing .integrity field, with distinct stderr
+    # categories ("INTEGRITY FAILED" / "INTEGRITY MISSING"). Before
+    # PR 2 of the 2026-05-10 architecture audit this skill grew its
+    # own jq-based check because --verify alone passed missing-
+    # integrity artifacts; the strict flag is the shared primitive
+    # so every release gate agrees on the trust model.
+    err_file=$(mktemp /tmp/release-readiness-err.XXXXXX)
+    verified=$( "$FIND_ARTIFACT" "$phase" 30 --require-integrity 2>"$err_file" || true )
     if [ -z "$verified" ] || [ ! -f "$verified" ]; then
       status="TAMPERED"
-      evidence="integrity_failure"
-    else
-      # find-artifact.sh --verify silently accepts artifacts whose
-      # .integrity field is missing — it only fails on a hash
-      # MISMATCH, not on absence. A release gate cannot afford that:
-      # an attacker who can write the file can delete the field as
-      # easily as mutate the hash. Require .integrity to be present.
-      stored_integrity=$( jq -r '.integrity // ""' "$verified" 2>/dev/null )
-      if [ -z "$stored_integrity" ]; then
-        status="TAMPERED"
+      if grep -q "^INTEGRITY MISSING:" "$err_file" 2>/dev/null; then
         evidence="missing_integrity"
       else
-        raw_status=$( jq -r '.summary.status // ""' "$verified" 2>/dev/null )
-        case "$raw_status" in
-          OK|WARN|BLOCKED) status="$raw_status" ;;
-          "") status="WARN" ;;
-          *)  status="WARN" ;;
-        esac
-        evidence="artifact"
+        evidence="integrity_failure"
       fi
+    else
+      raw_status=$( jq -r '.summary.status // ""' "$verified" 2>/dev/null )
+      case "$raw_status" in
+        OK|WARN|BLOCKED) status="$raw_status" ;;
+        "") status="WARN" ;;
+        *)  status="WARN" ;;
+      esac
+      evidence="artifact"
     fi
+    rm -f "$err_file"
   fi
 
   case "$status" in
