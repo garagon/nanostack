@@ -1,0 +1,277 @@
+#!/usr/bin/env bash
+# e2e-graph-aware-session.sh — PR 4 of the 2026-05-10 architecture audit.
+#
+# Locks the graph-aware session lifecycle end-to-end:
+#
+#   - bin/session.sh init snapshots the active phase_graph into
+#     session.json (default sprint OR project custom graph).
+#   - bin/session.sh phase-complete sets next_phase and ready_phases
+#     from the snapshot, not from a hardcoded sequence.
+#   - bin/next-step.sh --json surfaces ready_phases plus a
+#     custom-graph-aware required_before_ship list.
+#   - Guided wording never exposes "phase graph" / "DAG" jargon, even
+#     for custom phases.
+#
+# Spec acceptance, verbatim:
+#   "In a graph build -> license-audit -> privacy-check ->
+#    release-readiness -> ship, completing license-audit sets
+#    next_phase = 'privacy-check'."
+#   "Default sprint output remains unchanged."
+#   "When multiple ready phases exist, next-step.sh --json returns
+#    all ready phases in pending_phases or a new ready_phases field."
+set -e
+set -u
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+TMP_ROOT=$(mktemp -d /tmp/nanostack-graph-session.XXXXXX)
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+PASS=0
+FAIL=0
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+DIM='\033[0;90m'
+NC='\033[0m'
+
+assert_eq() {
+  local name="$1" expected="$2" actual="$3"
+  if [ "$expected" = "$actual" ]; then
+    PASS=$((PASS+1))
+    printf "    ${GREEN}OK${NC}    %s\n" "$name"
+  else
+    FAIL=$((FAIL+1))
+    printf "    ${RED}FAIL${NC}  %s\n" "$name"
+    printf "          ${DIM}expected: %s${NC}\n" "$expected"
+    printf "          ${DIM}actual:   %s${NC}\n" "$actual"
+  fi
+}
+
+assert_true() {
+  local name="$1"; shift
+  if "$@" >/dev/null 2>&1; then
+    PASS=$((PASS+1))
+    printf "    ${GREEN}OK${NC}    %s\n" "$name"
+  else
+    FAIL=$((FAIL+1))
+    printf "    ${RED}FAIL${NC}  %s\n" "$name"
+    printf "          ${DIM}cmd: %s${NC}\n" "$*"
+  fi
+}
+
+assert_not_contains() {
+  local name="$1" needle="$2" haystack="$3"
+  if echo "$haystack" | grep -qF "$needle"; then
+    FAIL=$((FAIL+1))
+    printf "    ${RED}FAIL${NC}  %s\n" "$name"
+    printf "          ${DIM}did not want to find: %s${NC}\n" "$needle"
+  else
+    PASS=$((PASS+1))
+    printf "    ${GREEN}OK${NC}    %s\n" "$name"
+  fi
+}
+
+new_project() {
+  local name="$1"
+  local proj="$TMP_ROOT/$name"
+  mkdir -p "$proj/.nanostack"
+  cd "$proj"
+  git init -q
+  git config user.email "ci@graph.test"
+  git config user.name  "ci"
+  export NANOSTACK_STORE="$proj/.nanostack"
+}
+
+echo "Graph-aware Session E2E"
+echo "======================="
+echo "Tmp root: $TMP_ROOT"
+echo
+
+SESSION_SH="$REPO/bin/session.sh"
+NEXT_STEP="$REPO/bin/next-step.sh"
+
+# Cell 1: session init snapshots the default phase_graph.
+echo "[1] session init snapshots the active phase_graph"
+new_project "cell1-default"
+"$SESSION_SH" init development >/dev/null
+nodes=$(jq -r '.phase_graph // [] | map(.name) | join(",")' "$NANOSTACK_STORE/session.json")
+assert_eq "default graph nodes" "think,plan,build,review,qa,security,ship" "$nodes"
+ready_init=$(jq -c '.ready_phases // []' "$NANOSTACK_STORE/session.json")
+assert_eq "ready_phases starts empty" "[]" "$ready_init"
+
+# Cell 2: default sprint progression matches the legacy ordering.
+# review/qa/security ARE ready in parallel after plan, but next_phase
+# picks the first in graph order so existing skills continue to land
+# on /review first.
+echo "[2] default sprint walk preserves the historical next_phase order"
+new_project "cell2-default-walk"
+"$SESSION_SH" init development >/dev/null
+declare -a expected_next=("plan" "review" "qa" "security" "ship" "compound")
+declare -a phases_to_complete=("think" "plan" "review" "qa" "security" "ship")
+for i in 0 1 2 3 4 5; do
+  ph="${phases_to_complete[$i]}"
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+  np=$(jq -r '.next_phase // "null"' "$NANOSTACK_STORE/session.json")
+  assert_eq "after $ph, next_phase = ${expected_next[$i]}" "${expected_next[$i]}" "$np"
+done
+
+# Cell 3: after /plan, ready_phases lists every parallel branch
+# (review, qa, security) so next-step can fan out.
+echo "[3] ready_phases lists every parallel branch after /plan"
+new_project "cell3-fanout"
+"$SESSION_SH" init development >/dev/null
+for ph in think plan; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+ready=$(jq -c '.ready_phases | sort' "$NANOSTACK_STORE/session.json")
+assert_eq "ready_phases after plan" '["qa","review","security"]' "$ready"
+
+# Cell 4: spec custom graph — license-audit -> privacy-check ->
+# release-readiness -> ship. Each completion advances the next ready
+# phase.
+echo "[4] custom compliance-release graph advances spec-correctly"
+new_project "cell4-custom"
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "custom_phases": ["license-audit","privacy-check","release-readiness"],
+  "phase_graph": [
+    {"name":"think","depends_on":[]},
+    {"name":"plan","depends_on":["think"]},
+    {"name":"build","depends_on":["plan"]},
+    {"name":"license-audit","depends_on":["build"]},
+    {"name":"privacy-check","depends_on":["license-audit"]},
+    {"name":"release-readiness","depends_on":["privacy-check"]},
+    {"name":"ship","depends_on":["release-readiness"]}
+  ]
+}
+EOF
+mkdir -p "$NANOSTACK_STORE/skills/license-audit" \
+         "$NANOSTACK_STORE/skills/privacy-check" \
+         "$NANOSTACK_STORE/skills/release-readiness"
+for skill in license-audit privacy-check release-readiness; do
+  cat > "$NANOSTACK_STORE/skills/$skill/SKILL.md" <<EOF
+---
+name: $skill
+description: custom skill
+concurrency: read
+---
+EOF
+done
+"$SESSION_SH" init development >/dev/null
+
+# Spec walk: license-audit -> privacy-check (the documented case)
+declare -a custom_chain=("think" "plan" "license-audit" "privacy-check" "release-readiness" "ship")
+declare -a custom_next=("plan" "license-audit" "privacy-check" "release-readiness" "ship" "compound")
+for i in 0 1 2 3 4 5; do
+  ph="${custom_chain[$i]}"
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+  np=$(jq -r '.next_phase // "null"' "$NANOSTACK_STORE/session.json")
+  assert_eq "custom: after $ph, next_phase = ${custom_next[$i]}" "${custom_next[$i]}" "$np"
+done
+
+# Cell 5: next-step --json on a custom graph reports the custom
+# required_before_ship chain, not the default review/security/qa.
+echo "[5] next-step --json reports custom required_before_ship"
+new_project "cell5-required"
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "custom_phases": ["license-audit","privacy-check","release-readiness"],
+  "phase_graph": [
+    {"name":"think","depends_on":[]},
+    {"name":"plan","depends_on":["think"]},
+    {"name":"build","depends_on":["plan"]},
+    {"name":"license-audit","depends_on":["build"]},
+    {"name":"privacy-check","depends_on":["license-audit"]},
+    {"name":"release-readiness","depends_on":["privacy-check"]},
+    {"name":"ship","depends_on":["release-readiness"]}
+  ]
+}
+EOF
+mkdir -p "$NANOSTACK_STORE/skills/license-audit"
+cat > "$NANOSTACK_STORE/skills/license-audit/SKILL.md" <<'EOF'
+---
+name: license-audit
+description: custom
+concurrency: read
+---
+EOF
+"$SESSION_SH" init development >/dev/null
+for ph in think plan license-audit; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+out=$("$NEXT_STEP" --json 2>/dev/null)
+required_sorted=$(echo "$out" | jq -c '.required_before_ship | sort')
+assert_eq "required_before_ship reflects the custom graph" \
+  '["license-audit","privacy-check","release-readiness"]' \
+  "$required_sorted"
+next=$(echo "$out" | jq -r '.next_phase')
+assert_eq "next_phase = privacy-check (spec acceptance)" "privacy-check" "$next"
+
+# Cell 6: guided wording never exposes graph jargon for custom phases.
+# "I will run the <phase> step next." is acceptable; anything that
+# mentions graph, DAG, dependency, topology, or upstream is not.
+echo "[6] guided wording stays plain for custom phases"
+new_project "cell6-guided"
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "custom_phases": ["license-audit","privacy-check","release-readiness"],
+  "phase_graph": [
+    {"name":"think","depends_on":[]},
+    {"name":"plan","depends_on":["think"]},
+    {"name":"build","depends_on":["plan"]},
+    {"name":"license-audit","depends_on":["build"]},
+    {"name":"privacy-check","depends_on":["license-audit"]},
+    {"name":"release-readiness","depends_on":["privacy-check"]},
+    {"name":"ship","depends_on":["release-readiness"]}
+  ]
+}
+EOF
+mkdir -p "$NANOSTACK_STORE/skills/license-audit"
+cat > "$NANOSTACK_STORE/skills/license-audit/SKILL.md" <<'EOF'
+---
+name: license-audit
+description: custom
+concurrency: read
+---
+EOF
+"$SESSION_SH" init development --profile guided >/dev/null
+for ph in think plan license-audit; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+msg=$("$NEXT_STEP" --json 2>/dev/null | jq -r '.user_message')
+for jargon in "phase_graph" "phase graph" "DAG" "dependency" "topology" "upstream"; do
+  assert_not_contains "guided user_message has no \"$jargon\"" "$jargon" "$msg"
+done
+assert_true "guided user_message names the custom phase" \
+  bash -c "echo '$msg' | grep -qiF 'privacy-check'"
+
+# Cell 7: default sprint user_message remains exactly the historical
+# wording. No regression for built-in flows.
+echo "[7] default sprint user_message is unchanged"
+new_project "cell7-default-msg"
+"$SESSION_SH" init development >/dev/null
+for ph in think plan; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+msg=$("$NEXT_STEP" --json 2>/dev/null | jq -r '.user_message')
+assert_eq "professional after plan = review wording" \
+  "Run /review to check scope, structure, and edge cases." \
+  "$msg"
+
+cd "$TMP_ROOT"
+
+echo
+echo "======================="
+TOTAL=$((PASS + FAIL))
+if [ "$FAIL" -eq 0 ]; then
+  printf "${GREEN}Graph-aware Session E2E: %d checks passed, 0 failed${NC}\n" "$PASS"
+  exit 0
+else
+  printf "${RED}Graph-aware Session E2E: %d failed of %d total${NC}\n" "$FAIL" "$TOTAL"
+  exit 1
+fi

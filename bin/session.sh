@@ -14,6 +14,7 @@ NANOSTACK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
 source "$SCRIPT_DIR/lib/audit.sh"
 [ -f "$SCRIPT_DIR/lib/preflight.sh" ] && { source "$SCRIPT_DIR/lib/preflight.sh"; nanostack_require jq; }
+[ -f "$SCRIPT_DIR/lib/phases.sh" ] && . "$SCRIPT_DIR/lib/phases.sh"
 
 SESSION_FILE="$NANOSTACK_STORE/session.json"
 PROJECT="$(pwd)"
@@ -206,6 +207,17 @@ cmd_init() {
     fi
   fi
 
+  # Snapshot the active phase_graph at session creation. Custom
+  # workflow stacks read this back during phase-complete so the
+  # graph cannot drift mid-sprint (e.g. user edits config.json after
+  # /think runs). Falls back to an empty array when the helper is
+  # unavailable; cmd_phase_complete handles that by skipping the
+  # graph-aware path.
+  local phase_graph_json="[]"
+  if declare -F nano_phase_graph_json >/dev/null 2>&1; then
+    phase_graph_json=$(nano_phase_graph_json 2>/dev/null || echo "[]")
+  fi
+
   jq -n \
     --arg id "$session_id" \
     --arg type "$type" \
@@ -221,6 +233,7 @@ cmd_init() {
     --argjson autopilot "$autopilot" \
     --argjson capabilities "$capabilities_json" \
     --argjson policy "$policy_json" \
+    --argjson phase_graph "$phase_graph_json" \
     '{
       schema_version: "2",
       session_id: $id,
@@ -238,6 +251,8 @@ cmd_init() {
       policy: $policy,
       current_phase: null,
       next_phase: null,
+      ready_phases: [],
+      phase_graph: $phase_graph,
       stop_conditions_met: [],
       phase_log: [],
       evidence: {review:null, security:null, qa:null, ship:null},
@@ -357,43 +372,58 @@ cmd_phase_complete() {
     exit 1
   fi
 
-  # Calculate next phase from default sequence
-  local next=""
-  case "$phase" in
-    think) next="plan" ;;
-    plan)  next="build" ;;
-    build) next="review" ;;
-    review)
-      # Check if qa and security are done
-      local qa_done sec_done
-      qa_done=$(jq -r '[.phase_log[] | select(.phase == "qa" and .status == "completed")] | length' "$SESSION_FILE")
-      sec_done=$(jq -r '[.phase_log[] | select(.phase == "security" and .status == "completed")] | length' "$SESSION_FILE")
-      if [ "$qa_done" -gt 0 ] && [ "$sec_done" -gt 0 ]; then next="ship"
-      elif [ "$qa_done" -gt 0 ]; then next="security"
-      else next="qa"
+  # ─── next phase via phase_graph ───────────────────────────
+  # PR 4 of the 2026-05-10 architecture audit: next-phase logic now
+  # consumes the active phase_graph (default sprint OR the project's
+  # custom graph from .nanostack/config.json). nano_phase_ready_from_graph
+  # returns every phase whose deps are met and which has not yet been
+  # completed or started; next_phase is the first such phase and
+  # ready_phases captures the full list so next-step.sh can surface
+  # parallel options. The previous hardcoded case statement only knew
+  # about think/plan/build/review/qa/security/ship/compound and left
+  # custom workflow stacks with next_phase=null forever.
+  local next="" ready_json="[]"
+  local completed_now
+  # Add the phase we just completed in case the JSON write below has
+  # not landed yet (this function runs immediately after the in-flight
+  # jq mutation), then dedup. Also include any prior completed phases.
+  completed_now=$(jq -c --arg p "$phase" \
+    '[(.phase_log // [])[] | select(.status == "completed") | .phase] + [$p] | unique' \
+    "$SESSION_FILE" 2>/dev/null || echo "[]")
+  local in_progress_now
+  in_progress_now=$(jq -c --arg p "$phase" \
+    '[(.phase_log // [])[] | select(.status == "in_progress" and .phase != $p) | .phase] | unique' \
+    "$SESSION_FILE" 2>/dev/null || echo "[]")
+
+  if declare -F nano_phase_ready_from_graph >/dev/null 2>&1; then
+    # Prefer the graph snapshot inside session.json (set at init time)
+    # so a mid-sprint edit to .nanostack/config.json cannot change the
+    # path under the session. Fall back to nano_phase_graph_json (which
+    # rereads config) only when the session has no snapshot.
+    local graph
+    graph=$(jq -c '.phase_graph // empty' "$SESSION_FILE" 2>/dev/null || echo "")
+    if [ -z "$graph" ] || [ "$graph" = "null" ] || [ "$graph" = "[]" ]; then
+      if declare -F nano_phase_graph_json >/dev/null 2>&1; then
+        graph=$(nano_phase_graph_json 2>/dev/null || echo "")
       fi
-      ;;
-    qa)
-      local rev_done sec_done
-      rev_done=$(jq -r '[.phase_log[] | select(.phase == "review" and .status == "completed")] | length' "$SESSION_FILE")
-      sec_done=$(jq -r '[.phase_log[] | select(.phase == "security" and .status == "completed")] | length' "$SESSION_FILE")
-      if [ "$rev_done" -gt 0 ] && [ "$sec_done" -gt 0 ]; then next="ship"
-      elif [ "$rev_done" -gt 0 ]; then next="security"
-      else next="review"
+    fi
+    if [ -n "$graph" ] && [ "$graph" != "null" ] && [ "$graph" != "[]" ]; then
+      local ready_list
+      ready_list=$(nano_phase_ready_from_graph "$graph" "$completed_now" "$in_progress_now" 2>/dev/null || true)
+      if [ -n "$ready_list" ]; then
+        next=$(echo "$ready_list" | head -1)
+        ready_json=$(echo "$ready_list" | jq -R . | jq -sc 'map(select(length > 0))')
       fi
-      ;;
-    security)
-      local rev_done qa_done
-      rev_done=$(jq -r '[.phase_log[] | select(.phase == "review" and .status == "completed")] | length' "$SESSION_FILE")
-      qa_done=$(jq -r '[.phase_log[] | select(.phase == "qa" and .status == "completed")] | length' "$SESSION_FILE")
-      if [ "$rev_done" -gt 0 ] && [ "$qa_done" -gt 0 ]; then next="ship"
-      elif [ "$rev_done" -gt 0 ]; then next="qa"
-      else next="review"
-      fi
-      ;;
-    ship) next="compound" ;;
-    compound) next="" ;;
-  esac
+    fi
+  fi
+
+  # Compound is intentionally not in the canonical phase_graph (it is
+  # a post-sprint reflection skill). Preserve the historical post-ship
+  # hint so the existing user prompts and tests continue to advance.
+  if [ -z "$next" ] && [ "$phase" = "ship" ]; then
+    next="compound"
+    ready_json='["compound"]'
+  fi
 
   # Calculate duration from stored epoch. save-artifact.sh auto-calls
   # phase-complete after writing the artifact, so this function must be
@@ -415,11 +445,13 @@ cmd_phase_complete() {
     --arg date "$NOW" \
     --arg artifact "$artifact" \
     --arg next "$next" \
+    --argjson ready "$ready_json" \
     --argjson duration "$duration" \
     '(.phase_log[] | select(.phase == $phase and .status == "in_progress")) |=
        (.status = "completed" | .completed_at = $date | .duration_seconds = $duration | .artifact = (if $artifact != "" then $artifact else null end)) |
      .current_phase = ([.phase_log[] | select(.status == "in_progress") | .phase] | last // null) |
      .next_phase = (if $next != "" then $next else null end) |
+     .ready_phases = $ready |
      .last_updated = $date' "$SESSION_FILE" > "${SESSION_FILE}.tmp"
   mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
 

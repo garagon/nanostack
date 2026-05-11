@@ -16,6 +16,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
+[ -f "$SCRIPT_DIR/lib/phases.sh" ] && . "$SCRIPT_DIR/lib/phases.sh"
 
 JSON=0
 CURRENT=""
@@ -81,30 +82,65 @@ if [ -f "$SESSION_FILE" ]; then
   PROFILE=$(jq -r '.profile // (if (.capabilities // null) == null then "guided" else "professional" end)' "$SESSION_FILE" 2>/dev/null || echo "professional")
 fi
 
-PENDING_JSON="[]"
-for phase in $PEERS; do
-  if ! phase_completed "$phase"; then
-    PENDING_JSON=$(echo "$PENDING_JSON" | jq --arg p "$phase" '. + [$p]')
+# PR 4 of the 2026-05-10 architecture audit: when the session has a
+# non-default phase_graph (custom workflow stack), read next_phase and
+# ready_phases that session.sh already computed graph-aware. The
+# review/security/qa shape only describes the built-in sprint, so a
+# compliance-release graph like build -> license-audit -> ...
+# would otherwise see next_phase always default to "review".
+GRAPH_AWARE_NEXT=""
+GRAPH_AWARE_READY="[]"
+IS_CUSTOM_GRAPH=0
+if [ -f "$SESSION_FILE" ]; then
+  default_graph_names="think plan build review qa security ship"
+  session_graph_names=$(jq -r '(.phase_graph // []) | map(.name) | join(" ")' "$SESSION_FILE" 2>/dev/null || echo "")
+  if [ -n "$session_graph_names" ] && [ "$session_graph_names" != "$default_graph_names" ]; then
+    IS_CUSTOM_GRAPH=1
+    GRAPH_AWARE_NEXT=$(jq -r '.next_phase // ""' "$SESSION_FILE" 2>/dev/null || echo "")
+    GRAPH_AWARE_READY=$(jq -c '.ready_phases // []' "$SESSION_FILE" 2>/dev/null || echo "[]")
   fi
-done
+fi
 
-NEXT_PHASE=$(echo "$PENDING_JSON" | jq -r '.[0] // "ship"')
-PENDING_COUNT=$(echo "$PENDING_JSON" | jq 'length')
-if [ "$PENDING_COUNT" -eq 0 ]; then
-  if phase_completed "ship"; then
-    NEXT_PHASE="compound"
-    CAN_SHIP="true"
-  else
+if [ "$IS_CUSTOM_GRAPH" = "1" ]; then
+  PENDING_JSON="$GRAPH_AWARE_READY"
+  NEXT_PHASE="${GRAPH_AWARE_NEXT:-ship}"
+  if [ -z "$NEXT_PHASE" ] || [ "$NEXT_PHASE" = "null" ]; then
     NEXT_PHASE="ship"
     CAN_SHIP="true"
+  elif [ "$NEXT_PHASE" = "ship" ] || [ "$NEXT_PHASE" = "compound" ]; then
+    CAN_SHIP="true"
+  else
+    CAN_SHIP="false"
   fi
 else
-  CAN_SHIP="false"
+  PENDING_JSON="[]"
+  for phase in $PEERS; do
+    if ! phase_completed "$phase"; then
+      PENDING_JSON=$(echo "$PENDING_JSON" | jq --arg p "$phase" '. + [$p]')
+    fi
+  done
+
+  NEXT_PHASE=$(echo "$PENDING_JSON" | jq -r '.[0] // "ship"')
+  PENDING_COUNT=$(echo "$PENDING_JSON" | jq 'length')
+  if [ "$PENDING_COUNT" -eq 0 ]; then
+    if phase_completed "ship"; then
+      NEXT_PHASE="compound"
+      CAN_SHIP="true"
+    else
+      NEXT_PHASE="ship"
+      CAN_SHIP="true"
+    fi
+  else
+    CAN_SHIP="false"
+  fi
 fi
 
 # user_message wording rules:
 #  - guided: one plain action, no slash commands, no phase jargon.
 #  - professional: name the phase explicitly (callers print evidence).
+# Custom phases (anything outside the built-in sprint) fall back to
+# generic wording that uses the phase name without exposing "graph"
+# or "DAG" jargon to a Guided user.
 case "$PROFILE:$NEXT_PHASE" in
   guided:review)   MSG="I will check that what was built actually works and has no obvious risks." ;;
   guided:security) MSG="I will check for risky patterns or leaked secrets." ;;
@@ -116,20 +152,41 @@ case "$PROFILE:$NEXT_PHASE" in
   professional:qa)       MSG="Run /qa to verify the feature works." ;;
   professional:ship)     MSG="Run /ship to commit, push, and create the PR." ;;
   professional:compound) MSG="Sprint complete. Run /compound to record learnings." ;;
-  *) MSG="" ;;
+  guided:*)              MSG="I will run the $NEXT_PHASE step next." ;;
+  professional:*)        MSG="Run /$NEXT_PHASE next." ;;
+  *)                     MSG="" ;;
 esac
+
+# required_before_ship reflects the active graph: for the default
+# sprint that is ["review","security","qa"]; for a custom graph it is
+# every phase that ship transitively depends on (excluding think/plan/
+# build, which are pre-build phases). Consumers that gated on the
+# hardcoded shape continue to receive it when the session uses the
+# default graph.
+REQUIRED_BEFORE_SHIP_JSON='["review","security","qa"]'
+if [ "$IS_CUSTOM_GRAPH" = "1" ] && [ -f "$SESSION_FILE" ]; then
+  REQUIRED_BEFORE_SHIP_JSON=$(jq -c '
+    (.phase_graph // []) as $g
+    | def ancestors($name):
+        ($g | map(select(.name == $name)) | first // {depends_on:[]}).depends_on as $deps
+        | $deps + ($deps | map(ancestors(.)) | add // []);
+      ancestors("ship") | unique | map(select(. != "think" and . != "plan" and . != "build"))
+  ' "$SESSION_FILE" 2>/dev/null || echo '["review","security","qa"]')
+fi
 
 jq -n \
   --arg profile "$PROFILE" \
   --arg next "$NEXT_PHASE" \
   --argjson pending "$PENDING_JSON" \
+  --argjson required "$REQUIRED_BEFORE_SHIP_JSON" \
   --arg can_ship "$CAN_SHIP" \
   --arg msg "$MSG" \
   '{
     profile: $profile,
     next_phase: $next,
     pending_phases: $pending,
-    required_before_ship: ["review","security","qa"],
+    ready_phases: $pending,
+    required_before_ship: $required,
     user_message: $msg,
     can_ship: ($can_ship == "true")
   }'

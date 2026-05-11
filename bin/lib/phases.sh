@@ -228,6 +228,77 @@ nano_phase_graph_json() {
   printf '%s\n' "$default_graph"
 }
 
+# Compute the ready phases for a phase_graph given the set of phases
+# that have already been completed (and optionally the phases currently
+# in_progress). A phase is "ready" when every entry in its depends_on
+# is in the completed set AND the phase itself is neither completed nor
+# in_progress. Returns the ready phase names, one per line, in the
+# graph's declared order so callers that need a single "next_phase"
+# pick the first line.
+#
+# The conductor's "build" stage produces no session-tracked artifact
+# (developers do the work, no phase-complete call lands), so the helper
+# treats "build" as auto-satisfied for dependency checks unless the
+# caller passes it explicitly in completed. Without that escape hatch,
+# the default sprint graph (review/qa/security depend on build) would
+# never advance.
+#
+# Arguments:
+#   $1  graph JSON array of {name, depends_on}
+#   $2  completed JSON array of phase names
+#   $3  in_progress JSON array of phase names (optional, defaults to [])
+#
+# PR 4 of the 2026-05-10 architecture audit: replaces the hardcoded
+# next-phase case statement in bin/session.sh with registry-aware
+# traversal so custom workflow stacks get the same lifecycle support
+# as the built-in sprint.
+nano_phase_ready_from_graph() {
+  local graph="${1:?nano_phase_ready_from_graph requires a graph JSON argument}"
+  local completed="${2:-[]}"
+  local in_progress="${3:-[]}"
+  command -v jq >/dev/null 2>&1 || return 1
+  # IN() is used instead of `index()` because some jq builds (1.6 on
+  # macOS in particular) refuse `array | index(.field)` when the field
+  # is computed inside a .[] context, while IN() accepts the stream
+  # syntax cleanly. The filter does not need the returned position,
+  # only set membership.
+  #
+  # "build" is auto-promoted into the satisfied set, but ONLY when its
+  # own depends_on entries are all satisfied. Without that gate the
+  # default sprint graph (review/qa/security depend on build, build
+  # depends on plan) would report review/qa/security as ready right
+  # after /think completes, even though /plan has not run yet.
+  echo "$graph" | jq -r \
+    --argjson done "$completed" \
+    --argjson active "$in_progress" \
+    '
+    . as $graph
+    | $done as $base
+    # Auto-promote "build" when its declared deps (if any) are all
+    # already completed. Treat a "build"-less graph as a no-op for
+    # this step.
+    | (
+        ($graph | map(select(.name == "build")) | first // null) as $build_node
+        | if $build_node == null then $base
+          else
+            ($build_node.depends_on // []) as $bdeps
+            | if ($bdeps | all(. as $d | $base | any(. == $d))) then ($base + ["build"] | unique)
+              else $base
+              end
+          end
+      ) as $satisfied
+    | [.[]
+        | select(
+            (.name | IN($satisfied[]) | not)
+            and (.name | IN($active[]) | not)
+            and ((.depends_on // []) | all(. as $d | $satisfied | any(. == $d)))
+          )
+        | .name
+      ]
+    | .[]
+    ' 2>/dev/null
+}
+
 # Topologically sort a phase_graph and emit the phase names, one per
 # line. Uses Kahn's algorithm (the same shape as the cycle check in
 # the validator). The graph is assumed valid; pass a graph that has

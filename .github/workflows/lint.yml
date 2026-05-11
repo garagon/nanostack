@@ -3357,6 +3357,60 @@ jobs:
           fi
           echo "OK: guard concurrency tier uses the phase registry."
 
+  session-graph-aware-wiring:
+    name: session.sh + next-step.sh route through the phase registry
+    runs-on: ubuntu-latest
+    # PR 4 of the 2026-05-10 architecture audit. The case-statement
+    # next-phase logic in session.sh used to hardcode the built-in
+    # sprint sequence; the registry-aware replacement must stay in
+    # place so custom workflow stacks advance correctly. Same gate
+    # for next-step.sh: it must source the phase registry and emit
+    # the ready_phases field that downstream skills now read.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: session.sh sources the phase registry
+        run: |
+          set -e
+          script=bin/session.sh
+          if ! grep -qF 'lib/phases.sh' "$script"; then
+            echo "FAIL: $script does not source bin/lib/phases.sh."
+            exit 1
+          fi
+          if ! grep -qF 'nano_phase_ready_from_graph' "$script"; then
+            echo "FAIL: $script does not call nano_phase_ready_from_graph."
+            echo "The next-phase computation must consume the active phase_graph."
+            exit 1
+          fi
+      - name: session.sh init writes phase_graph + ready_phases
+        run: |
+          set -e
+          script=bin/session.sh
+          for field in phase_graph ready_phases; do
+            if ! grep -qE "^\s*$field:" "$script"; then
+              echo "FAIL: $script does not write the $field field at session init."
+              exit 1
+            fi
+          done
+      - name: next-step.sh emits ready_phases and routes through phases.sh
+        run: |
+          set -e
+          script=bin/next-step.sh
+          if ! grep -qF 'lib/phases.sh' "$script"; then
+            echo "FAIL: $script does not source bin/lib/phases.sh."
+            exit 1
+          fi
+          if ! grep -qF 'ready_phases:' "$script"; then
+            echo "FAIL: $script does not emit ready_phases in its JSON output."
+            exit 1
+          fi
+          if ! grep -qF 'phase_graph' "$script"; then
+            echo "FAIL: $script does not read .phase_graph from session.json."
+            exit 1
+          fi
+          echo "OK: graph-aware wiring is present in both scripts."
+
   core-skills-save-structured:
     name: Core skills save structured artifacts (no --from-session normal path)
     runs-on: ubuntu-latest
