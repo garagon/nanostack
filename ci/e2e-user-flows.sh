@@ -319,8 +319,10 @@ flow_sprint_phase_gate() {
   "$NS" init development --autopilot >/dev/null
 
   # Save think + plan artifacts the way the real skills would.
+  # PR 3 of the 2026-05-10 architecture audit: structured shape with
+  # context_checkpoint for plan, plus the required summary fields.
   "$ART" think '{"phase":"think","summary":{"value":"e2e think"}}' >/dev/null
-  "$ART" plan  '{"phase":"plan","summary":{"value":"e2e plan","planned_files":["index.html","app.js","tests/todo.test.js"]}}' >/dev/null
+  "$ART" plan  '{"phase":"plan","summary":{"value":"e2e plan","planned_files":["index.html","app.js","tests/todo.test.js"],"plan_approval":"manual"},"context_checkpoint":{"summary":"e2e plan"}}' >/dev/null
 
   # Mini TODO app so /review and /qa have something real to look at.
   cat > index.html <<'HTML'
@@ -354,10 +356,19 @@ JS
   # Run the sprint trio. save-artifact.sh auto-calls session.sh
   # phase-complete after writing each artifact, so the harness only
   # needs to start each phase and save its artifact — exactly the
-  # contract a real skill follows.
+  # contract a real skill follows. PR 3 of the 2026-05-10 architecture
+  # audit added the structured shape (findings, scope_drift,
+  # context_checkpoint) to the validator; the fixtures match it.
   for phase in review security qa; do
     "$NS" phase-start "$phase" >/dev/null
-    "$ART" "$phase" "{\"phase\":\"$phase\",\"summary\":{\"v\":1}}" >/dev/null
+    case "$phase" in
+      review)
+        "$ART" "$phase" '{"phase":"review","summary":{"v":1,"blocking":0},"scope_drift":{"status":"clean"},"findings":[],"context_checkpoint":{"summary":"e2e review"}}' >/dev/null
+        ;;
+      security|qa)
+        "$ART" "$phase" "{\"phase\":\"$phase\",\"summary\":{\"v\":1},\"findings\":[],\"context_checkpoint\":{\"summary\":\"e2e $phase\"}}" >/dev/null
+        ;;
+    esac
   done
 
   # *** Regression check: current_phase must be null after qa-complete. ***
@@ -390,7 +401,7 @@ JS
   assert_contains "resolve.sh ship loads security artifact" '"security"' "$resolved"
   assert_contains "resolve.sh ship loads qa artifact"       '"qa"'       "$resolved"
 
-  "$ART" ship '{"phase":"ship","summary":{"v":1,"pr_number":null,"ci_passed":true}}' >/dev/null
+  "$ART" ship '{"phase":"ship","summary":{"v":1,"pr_number":null,"ci_passed":true},"context_checkpoint":{"summary":"e2e ship"}}' >/dev/null
   assert_true "ship artifact saved" \
     bash -c "ls '$NANOSTACK_STORE/ship/'*.json 2>/dev/null | head -1 | grep -q ."
 
@@ -465,7 +476,7 @@ flow_local_no_git() {
 
   export NANOSTACK_STORE="$proj/.nanostack"
   "$REPO/bin/session.sh" init development >/dev/null
-  "$REPO/bin/save-artifact.sh" plan '{"phase":"plan","summary":{"v":1}}' >/dev/null
+  "$REPO/bin/save-artifact.sh" plan '{"phase":"plan","summary":{"v":1,"planned_files":[],"plan_approval":"manual"},"context_checkpoint":{"summary":"local-mode plan"}}' >/dev/null
   echo "hola" > notes.txt
 
   local out
@@ -584,7 +595,7 @@ flow_phase_registry() {
   # build appears as null (no artifact dir), plan appears as a path.
   printf '%s' '{"custom_phases":["audit-licenses"],"phase_graph":[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"audit-licenses","depends_on":["build","plan"]},{"name":"ship","depends_on":["audit-licenses"]}]}' > .nanostack/config.json
   "$REPO/bin/save-artifact.sh" plan \
-    '{"phase":"plan","summary":{"goal":"x"},"context_checkpoint":{"summary":"y"}}' >/dev/null
+    '{"phase":"plan","summary":{"goal":"x","planned_files":[],"plan_approval":"manual"},"context_checkpoint":{"summary":"y"}}' >/dev/null
   resolved=$( "$REPO/bin/resolve.sh" audit-licenses 2>/dev/null )
   assert_true "resolver: build dep renders as null" \
     bash -c "echo '$resolved' | jq -e '.upstream_artifacts.build == null' >/dev/null"

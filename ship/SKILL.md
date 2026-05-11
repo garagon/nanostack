@@ -223,17 +223,51 @@ Before creating the PR, verify the standards in `ship/references/repo-quality-st
 
 After shipping, do these steps in order:
 
-**Step 1: Save the artifact.** Run this command now — do not skip it:
+**Step 1: Save the artifact.** Run this command now — do not skip it. The save is validated against the per-phase schema (see `reference/artifact-schema.md`); a normal-mode ship artifact requires `summary` (object) and `context_checkpoint`. Report-only ship runs may save a looser shape with `run_mode: "report_only"`.
+
+The snippet below sets safe JSON defaults first so `jq --argjson` does not fail when a shell variable is unset (`PR_NUMBER` may legitimately be unset in local-mode ships, on a no-PR push, or when CI has not reported yet).
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh --from-session ship 'PR #N: title. Status: merged/open. CI: passed/failed.'
+# Safe defaults so --argjson always gets valid JSON, even when a
+# variable was not exported in this ship path.
+: "${PR_NUMBER:=null}"
+: "${PR_URL:=}"
+: "${PR_TITLE:=}"
+: "${PR_STATUS:=open}"
+: "${CI_PASSED:=false}"
+
+SHIP_JSON=$(jq -n \
+  --argjson pr_number "$PR_NUMBER" \
+  --arg     pr_url    "$PR_URL" \
+  --arg     title     "$PR_TITLE" \
+  --arg     status    "$PR_STATUS" \
+  --argjson ci_passed "$CI_PASSED" \
+  --arg     checkpoint_summary "PR #N <title> shipped, CI status, deploy result." \
+  '{
+     phase: "ship",
+     summary: {
+       pr_number: $pr_number,
+       pr_url:    $pr_url,
+       title:     $title,
+       status:    $status,
+       ci_passed: $ci_passed
+     },
+     context_checkpoint: {
+       summary: $checkpoint_summary,
+       key_files: [],
+       decisions_made: [],
+       open_questions: []
+     }
+   }')
+~/.claude/skills/nanostack/bin/save-artifact.sh ship "$SHIP_JSON"
 ~/.claude/skills/nanostack/bin/sprint-journal.sh
 ```
 
-Or pass full JSON for richer detail:
+For a report-only ship (no PR cut, no commit), save the artifact with `run_mode: "report_only"` instead so the validator accepts the looser shape:
+
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh ship '<json with phase, summary including pr_number, pr_url, title, status, ci_passed, context_checkpoint>'
-~/.claude/skills/nanostack/bin/sprint-journal.sh
+~/.claude/skills/nanostack/bin/save-artifact.sh ship \
+  '{"phase":"ship","run_mode":"report_only","summary":"Pre-flight check only; nothing was pushed."}'
 ```
 
 **Step 2: Proof block.** Before "How to see the result", emit a proof block summarizing what was verified during the sprint. Read it from session phase_log:

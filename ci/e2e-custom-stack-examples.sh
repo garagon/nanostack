@@ -141,14 +141,18 @@ done
 # Each is OK so the rollup later only depends on license-audit /
 # privacy-check / release-readiness.
 echo "[4] save core artifacts (review, qa, security) via save-artifact.sh"
+# PR 3 of the 2026-05-10 architecture audit: core skills must save
+# the structured shape (summary as object, findings array,
+# context_checkpoint). The fixtures below pass the per-phase
+# validator in bin/lib/artifact-schemas.sh.
 "$REPO/bin/save-artifact.sh" review \
-  '{"phase":"review","summary":{"status":"OK","blocking":0,"should_fix":0,"nitpicks":0,"positive":1},"context_checkpoint":{"summary":"reviewed"}}' \
+  '{"phase":"review","summary":{"status":"OK","blocking":0,"should_fix":0,"nitpicks":0,"positive":1},"scope_drift":{"status":"clean"},"findings":[],"context_checkpoint":{"summary":"reviewed"}}' \
   >/dev/null
 "$REPO/bin/save-artifact.sh" qa \
-  '{"phase":"qa","summary":{"status":"OK","tests_run":1,"tests_passed":1,"tests_failed":0,"bugs_found":0,"bugs_fixed":0},"context_checkpoint":{"summary":"qa"}}' \
+  '{"phase":"qa","summary":{"status":"OK","tests_run":1,"tests_passed":1,"tests_failed":0,"bugs_found":0,"bugs_fixed":0},"findings":[],"context_checkpoint":{"summary":"qa"}}' \
   >/dev/null
 "$REPO/bin/save-artifact.sh" security \
-  '{"phase":"security","summary":{"status":"OK","critical":0,"high":0,"medium":0,"low":0,"total_findings":0},"context_checkpoint":{"summary":"clean"}}' \
+  '{"phase":"security","summary":{"status":"OK","critical":0,"high":0,"medium":0,"low":0,"total_findings":0},"findings":[],"context_checkpoint":{"summary":"clean"}}' \
   >/dev/null
 assert_true "review artifact saved with .integrity" \
   bash -c 'jq -e ".integrity != null" $(ls $NANOSTACK_STORE/review/*.json | head -1) >/dev/null'

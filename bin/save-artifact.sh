@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
 # save-artifact.sh — Save a skill artifact to .nanostack/<phase>/
 # Usage:
-#   save-artifact.sh <phase> <json-string>              (full mode)
-#   save-artifact.sh --from-session <phase> <summary>   (simplified mode)
+#   save-artifact.sh <phase> <json-string>              (structured mode, recommended)
+#   save-artifact.sh --from-session <phase> <summary>   (legacy mode, prose blob)
 #
-# Full mode: pass complete JSON with phase, summary, context_checkpoint.
-# Session mode: reads phase from session, builds JSON from git state + summary string.
-#   Auto-calls session.sh phase-complete after saving.
+# Structured mode is the normal-flow path. The JSON is validated
+# against the phase-specific contract in bin/lib/artifact-schemas.sh
+# before write, so downstream skills (resolve.sh, restore-context.sh,
+# sprint-journal.sh, release-readiness) can rely on named fields
+# being present.
+#
+# --from-session is retained for manual recovery and ad-hoc tooling.
+# It builds JSON from git state + a prose summary string and bypasses
+# the phase-specific validator (the prose blob would never satisfy
+# summary-as-object), so it writes a `schema_legacy: true` flag and
+# emits a deprecation warning to stderr. The core SKILL.md files
+# (plan/review/qa/security/ship) no longer document it.
 #
 # Validates JSON has required fields before saving. Fails on invalid input.
 set -e
@@ -16,11 +25,18 @@ source "$SCRIPT_DIR/lib/store-path.sh"
 source "$SCRIPT_DIR/lib/audit.sh"
 [ -f "$SCRIPT_DIR/lib/preflight.sh" ] && { source "$SCRIPT_DIR/lib/preflight.sh"; nanostack_require jq; }
 [ -f "$SCRIPT_DIR/lib/portable.sh" ] && source "$SCRIPT_DIR/lib/portable.sh"
+[ -f "$SCRIPT_DIR/lib/artifact-schemas.sh" ] && source "$SCRIPT_DIR/lib/artifact-schemas.sh"
+
+LEGACY_MODE=0
 
 # ─── Session mode: build JSON from git state + summary ──────
 if [ "${1:-}" = "--from-session" ]; then
   PHASE="${2:?Usage: save-artifact.sh --from-session <phase> <summary>}"
   SUMMARY_TEXT="${3:?Missing summary argument}"
+  LEGACY_MODE=1
+
+  echo "save-artifact.sh: --from-session is a legacy mode for manual recovery." >&2
+  echo "                  Normal-path skills must call the structured form (see reference/artifact-schema.md)." >&2
 
   PROJECT="$(pwd)"
   BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
@@ -41,6 +57,7 @@ if [ "${1:-}" = "--from-session" ]; then
     '{
       phase: $phase,
       summary: $summary,
+      schema_legacy: true,
       context_checkpoint: {
         summary: $summary,
         key_files: ($changed + $staged | unique),
@@ -92,6 +109,18 @@ ARTIFACT_PHASE=$(echo "$JSON" | jq -r '.phase')
 if [ "$ARTIFACT_PHASE" != "$PHASE" ]; then
   echo "error: phase argument '$PHASE' does not match artifact phase '$ARTIFACT_PHASE'" >&2
   exit 1
+fi
+
+# Phase-specific schema check (PR 3 of the 2026-05-10 architecture
+# audit). Structured artifacts must include phase-required fields
+# (summary as object, context_checkpoint, findings/scope_drift where
+# applicable). --from-session legacy mode skips this because the
+# prose-blob form cannot satisfy summary-as-object; those artifacts
+# carry schema_legacy: true so downstream consumers can distinguish.
+if [ "$LEGACY_MODE" = "0" ] && declare -F nano_validate_artifact >/dev/null 2>&1; then
+  if ! nano_validate_artifact "$PHASE" "$JSON"; then
+    exit 1
+  fi
 fi
 
 mkdir -p "$STORE"

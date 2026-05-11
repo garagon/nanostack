@@ -182,15 +182,27 @@ Then the full report:
 
 Report progress as you go. After each test group (happy path, error states, edge cases), output results immediately. Don't wait until the end to dump everything.
 
-After completing all tests, save the artifact. Run this command now — do not skip it:
+After completing all tests, save the artifact. Run this command now — do not skip it. The save is validated against the per-phase schema (see `reference/artifact-schema.md`); a qa artifact requires `summary` (object), `findings` (array), and `context_checkpoint`.
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh --from-session qa 'N tests passed, M failed. WTF likelihood: low/medium/high.'
-```
-
-Or pass full JSON for richer detail:
-```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh qa '<json with phase, mode, summary including wtf_likelihood, findings, context_checkpoint>'
+QA_JSON=$(jq -n \
+  --arg  mode             "$QA_MODE" \
+  --argjson summary       '{"tests_run":0,"tests_passed":0,"tests_failed":0,"wtf_likelihood":"low"}' \
+  --argjson findings      '[]' \
+  --arg  checkpoint_summary "QA found N bugs, M passed. WTF likelihood low/medium/high." \
+  '{
+     phase: "qa",
+     mode: $mode,
+     summary: $summary,
+     findings: $findings,
+     context_checkpoint: {
+       summary: $checkpoint_summary,
+       key_files: [],
+       decisions_made: [],
+       open_questions: []
+     }
+   }')
+~/.claude/skills/nanostack/bin/save-artifact.sh qa "$QA_JSON"
 ```
 
 ## Mode Summary

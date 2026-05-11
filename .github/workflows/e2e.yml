@@ -170,6 +170,24 @@ jobs:
           chmod +x ci/e2e-onboarding-flows.sh
           ci/e2e-onboarding-flows.sh
 
+  e2e-structured-artifacts:
+    name: E2E Structured Artifact Contract (9 cells)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # PR 3 of the 2026-05-10 architecture audit. Locks the per-phase
+    # validator contract end-to-end: bin/lib/artifact-schemas.sh,
+    # bin/save-artifact.sh (strict write + legacy --from-session
+    # bypass), and the lint acceptance regex for the five core
+    # SKILL.md files.
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq is present
+        run: jq --version
+      - name: Run structured artifact E2E
+        run: |
+          chmod +x ci/e2e-structured-artifacts.sh
+          ci/e2e-structured-artifacts.sh
+
   e2e-artifact-trust:
     name: E2E Artifact Trust v2 (9 cells)
     runs-on: ubuntu-latest
