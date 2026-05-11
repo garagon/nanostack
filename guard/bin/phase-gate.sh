@@ -46,20 +46,26 @@ PROJECT="$(pwd)"
 # drift on the eleventh review pass.
 REQUIRED_PHASES="review security qa"
 if [ -f "$SESSION_FILE" ] && command -v jq >/dev/null 2>&1; then
-  graph_required=$(jq -r '
-    (.phase_graph // []) as $g
-    | def ancestors($name):
-        ($g | map(select(.name == $name)) | first // {depends_on:[]}).depends_on as $deps
-        | $deps + ($deps | map(ancestors(.)) | add // []);
-      (ancestors("ship")) as $ancs
-      | [$g[].name
-          | select(. as $n | $ancs | any(. == $n))
-          | select(. != "think" and . != "plan" and . != "build")
-        ]
-      | join(" ")
-  ' "$SESSION_FILE" 2>/dev/null)
-  if [ -n "$graph_required" ]; then
-    REQUIRED_PHASES="$graph_required"
+  # The session-level phase_graph is the source of truth when it
+  # exists. We separate "graph absent" (legacy fallback) from "graph
+  # present but no post-build gates" (a legitimate custom workflow
+  # where nothing must run before ship) by checking the array length
+  # first. Codex flagged the symmetric collapse on the PR 4 twelfth
+  # review pass: an empty filter result used to drop back to the
+  # built-in trio, so a think-plan-build-ship graph could not commit.
+  if jq -e '(.phase_graph // []) | length > 0' "$SESSION_FILE" >/dev/null 2>&1; then
+    REQUIRED_PHASES=$(jq -r '
+      (.phase_graph // []) as $g
+      | def ancestors($name):
+          ($g | map(select(.name == $name)) | first // {depends_on:[]}).depends_on as $deps
+          | $deps + ($deps | map(ancestors(.)) | add // []);
+        (ancestors("ship")) as $ancs
+        | [$g[].name
+            | select(. as $n | $ancs | any(. == $n))
+            | select(. != "think" and . != "plan" and . != "build")
+          ]
+        | join(" ")
+    ' "$SESSION_FILE" 2>/dev/null)
   fi
 fi
 

@@ -625,6 +625,37 @@ rc=$?
 set -e
 assert_eq "phase-gate allows git commit after license-audit (rc 0)" "0" "$rc"
 
+# Cell 9k: a graph with no post-build gates (think -> plan -> build
+# -> ship) must let phase-gate allow the commit. Codex caught the
+# symmetric collapse on the PR 4 twelfth review pass: an empty
+# graph-derived REQUIRED_PHASES used to fall back to the built-in
+# trio, blocking valid no-gate workflows.
+echo "[9k] phase-gate honors an empty post-build gate set"
+new_project "cell9k-nogate"
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "phase_graph": [
+    {"name":"think","depends_on":[]},
+    {"name":"plan","depends_on":["think"]},
+    {"name":"build","depends_on":["plan"]},
+    {"name":"ship","depends_on":["build"]}
+  ]
+}
+EOF
+"$SESSION_SH" init development >/dev/null
+for ph in think plan; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+echo "scratch" > scratch.txt
+git add scratch.txt && git commit -q -m "scratch" >/dev/null 2>&1 || true
+echo "more" >> scratch.txt
+set +e
+"$REPO/guard/bin/phase-gate.sh" "git commit -m wip" >/dev/null 2>&1
+rc=$?
+set -e
+assert_eq "no-gate graph: phase-gate allows commit (rc 0)" "0" "$rc"
+
 # Cell 10: default sprint user_message remains exactly the historical
 # wording. No regression for built-in flows.
 echo "[10] default sprint user_message is unchanged"
