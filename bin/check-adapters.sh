@@ -130,7 +130,10 @@ check_adapter() {
   write_guard=$(jq -r '.write_guard // ""' "$file")
   phase_gate=$(jq -r '.phase_gate // ""' "$file")
   discovery=$(jq -r '.skill_discovery // ""' "$file")
-  method=$(jq -r '.verification.method // ""' "$file")
+  # `.verification.method` is read inside the type-guarded block below
+  # so a non-object verification (e.g. a string) does not crash jq
+  # before record_result lands. Codex flagged the unguarded access on
+  # the PR 6 fifth review pass.
 
   local errors=""
   # Full required-field list from reference/host-adapter-schema.md.
@@ -158,10 +161,14 @@ check_adapter() {
     errors="${errors:+$errors; }schema_version=$schema_v not in supported set ($SCHEMA_VERSION_ENUM)"
   fi
 
-  # verification must be an object with method + evidence.
+  # verification must be an object with method + evidence. The method
+  # read is wrapped with `?` and a type guard so a malformed
+  # verification (e.g. a string) under set -e cannot make this stage
+  # exit before record_result lands. Codex caught the malformed-input
+  # crash on the PR 6 fifth review pass.
   if jq -e '.verification | type == "object"' "$file" >/dev/null 2>&1; then
     local v_method
-    v_method=$(jq -r '.verification.method // ""' "$file")
+    v_method=$(jq -r '.verification.method? // ""' "$file" 2>/dev/null)
     if [ -z "$v_method" ]; then
       errors="${errors:+$errors; }verification.method is empty"
     elif ! in_enum "$v_method" "$VERIFICATION_METHOD_ENUM"; then
@@ -171,7 +178,8 @@ check_adapter() {
       errors="${errors:+$errors; }verification.evidence is empty or wrong type"
     fi
   elif jq -e 'has("verification")' "$file" >/dev/null 2>&1; then
-    # Field exists but is not an object.
+    # Field exists but is not an object — recorded as a typed failure
+    # rather than letting the script exit with a jq error.
     errors="${errors:+$errors; }verification is not an object"
   fi
 
@@ -236,6 +244,12 @@ check_adapter() {
     set -e
     if [ -z "$then_epoch" ]; then
       errors="${errors:+$errors; }last_verified=$last_verified does not parse as a date"
+    elif [ "$then_epoch" -gt "$NOW_EPOCH" ]; then
+      # A future date silently suppressed every freshness warning
+      # because (now - future) is negative. Codex caught this on the
+      # PR 6 fifth review pass: a typo like 2099-01-01 used to make
+      # an adapter look perpetually fresh.
+      errors="${errors:+$errors; }last_verified=$last_verified is in the future"
     else
       age_days=$(( (NOW_EPOCH - then_epoch) / 86400 ))
     fi

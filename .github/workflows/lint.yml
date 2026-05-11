@@ -3420,7 +3420,12 @@ jobs:
               *" $candidate "*) ;;
               *)
                 for f in AGENTS.md llms.txt; do
-                  if grep -qiE "(\`${candidate}\`|verified adapter[^.]*${candidate})" "$f"; then
+                  # Match three shapes:
+                  #   - inline backticked  -> `cursor`
+                  #   - "verified adapter" copy -> "verified adapter cursor"
+                  #   - bullet entry under a "Verified adapters" header -> "- Cursor"
+                  # Codex flagged the bare-bullet miss on the PR 6 fifth review pass.
+                  if grep -qiE "(\`${candidate}\`|verified adapter[^.]*${candidate}|^[[:space:]]*[-*][[:space:]]+${candidate}\b)" "$f"; then
                     echo "FAIL: $f advertises adapter '$candidate' but adapters/${candidate}.json is missing."
                     fail=1
                   fi

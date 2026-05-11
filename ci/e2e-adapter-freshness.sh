@@ -344,6 +344,39 @@ echo "$out" | grep -q "schema_version=2 not in supported set" && \
   assert_eq "schema-version message present" "yes" "yes" || \
   assert_eq "schema-version message present" "yes" "no"
 
+# Cell 7j: future last_verified must fail, not silently suppress
+# freshness warnings. A typo like 2099-01-01 used to make an
+# adapter look perpetually fresh; Codex caught the negative-age
+# bypass on the PR 6 fifth review pass.
+echo "[7j] future last_verified fails (does not bypass freshness)"
+root=$(new_repo "cell7j-future")
+cat > "$root/README.md" <<'EOF'
+README mentions `claude`.
+EOF
+write_adapter "$root" claude "2099-01-01"
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "future last_verified exits 1" "1" "$rc"
+echo "$out" | grep -q "is in the future" && \
+  assert_eq "future-date message present" "yes" "yes" || \
+  assert_eq "future-date message present" "yes" "no"
+
+# Cell 7k: a malformed verification block (string instead of object)
+# must be reported as a typed failure, not crash jq under set -e.
+# Codex caught the unguarded read on the PR 6 fifth review pass.
+echo "[7k] verification as a non-object reports a typed failure"
+root=$(new_repo "cell7k-verification-shape")
+cat > "$root/README.md" <<'EOF'
+README mentions `claude`.
+EOF
+write_adapter "$root" claude "$NOW_ISO" '.verification = "should be an object"'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "non-object verification exits 1" "1" "$rc"
+echo "$out" | grep -q "verification is not an object" && \
+  assert_eq "verification-shape message present" "yes" "yes" || \
+  assert_eq "verification-shape message present" "yes" "no"
+
 # Cell 8: --json output emits a parseable summary object.
 echo "[8] --json output is parseable"
 root=$(new_repo "cell8")
