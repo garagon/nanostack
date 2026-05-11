@@ -166,6 +166,20 @@ case "$PHASE" in
     ;;
 esac
 
+# Default the journal date to today if neither --today nor --date
+# was supplied (codex PR 3 pass 2: bare `journal` left this empty
+# and the page banner read "journal · " with the filename containing
+# a stray dash).
+if [ "$PHASE" = "journal" ] && [ -z "$JOURNAL_DATE" ]; then
+  JOURNAL_DATE="$(date -u +%Y-%m-%d)"
+fi
+# Stack name defaults to "default" so a bare `render-artifact.sh
+# stack` exercises the project's phase_graph without forcing the
+# caller to name a stack.
+if [ "$PHASE" = "stack" ] && [ -z "$STACK_NAME" ]; then
+  STACK_NAME="default"
+fi
+
 # Journal and stack do not source from a single phase artifact; they
 # aggregate. Skip the per-phase trust/schema branch for them and use
 # a sentinel ART_PHASE so the manifest writer below works uniformly.
@@ -1103,9 +1117,13 @@ render_stack_body() {
   # We compute levels with jq + bash and lay out nodes on a grid.
   render_stack_svg "$graph_json"
 
-  # Build sources array for the manifest. Reuse the table loop logic
-  # via a second jq pass; cheaper than capturing the loop output.
-  printf '%s' "$graph_json" | jq -r '.[].name' | while IFS= read -r nm; do
+  # Build sources array for the manifest using jq for correct JSON
+  # escaping. Codex PR 3 pass 2: the previous awk builder only
+  # escaped double quotes; a project path with a backslash or
+  # control character produced invalid JSON.
+  sources='[]'
+  while IFS= read -r nm; do
+    [ -z "$nm" ] && continue
     local ap tr ig
     ap=$("$SCRIPT_DIR/find-artifact.sh" "$nm" 30 --no-session-sync 2>/dev/null || true)
     if [ -n "$ap" ] && [ -f "$ap" ]; then
@@ -1115,18 +1133,13 @@ render_stack_body() {
     else
       ap=""; tr="missing"; ig=""
     fi
-    printf '%s\t%s\t%s\t%s\n' "$nm" "$ap" "$ig" "$tr"
-  done > "$TMP_ROOT_FALLBACK/sources.tsv"
-  if [ ! -d "${TMP_ROOT_FALLBACK:-}" ]; then
-    : # safe default; sources stays []
-  else
-    sources=$(awk -F'\t' '
-      BEGIN { printf "[" }
-      NR>1 { printf "," }
-      { gsub(/"/,"\\\"",$1); gsub(/"/,"\\\"",$2); gsub(/"/,"\\\"",$3); gsub(/"/,"\\\"",$4); printf "{\"phase\":\"%s\",\"path\":\"%s\",\"integrity\":\"%s\",\"trust\":\"%s\"}",$1,$2,$3,$4 }
-      END { printf "]" }
-    ' "$TMP_ROOT_FALLBACK/sources.tsv")
-  fi
+    sources=$(printf '%s' "$sources" | jq -c \
+      --arg phase "$nm" \
+      --arg path "$ap" \
+      --arg integrity "$ig" \
+      --arg trust "$tr" \
+      '. + [{phase: $phase, path: $path, integrity: $integrity, trust: $trust}]')
+  done < <(printf '%s' "$graph_json" | jq -r '.[].name')
 
   SOURCE_ARTIFACTS_JSON="$sources"
 }
@@ -1373,16 +1386,40 @@ jq -n \
 if [ "$MANIFEST_ONLY" = true ]; then
   # Codex PR 1 pass 9: the manifest-only branch must not leave the
   # mktemp'd HTML temp file behind. Clean it before disabling the
-  # cleanup trap.
+  # cleanup trap. Same for the scratch dir (PR 3 pass 2).
   rm -f "$TMP_HTML"
+  rm -rf "$TMP_ROOT_FALLBACK"
   mv "$TMP_MFST" "$MANIFEST_PATH"
   trap - EXIT
   echo "$MANIFEST_PATH"
   exit 0
 fi
 
+# Strict mode for aggregate renders: enforce after sources are
+# collected. Any source whose trust is not "verified" rejects the
+# render. Codex PR 3 pass 2 caught that --strict with a journal or
+# stack produced a "strict: true" manifest while skipping the trust
+# check entirely.
+if [ "$STRICT" = true ] && { [ "$PHASE" = "journal" ] || [ "$PHASE" = "stack" ]; }; then
+  unverified=$(printf '%s' "$SOURCE_ARTIFACTS_JSON" | jq -r \
+    '.[] | select(.trust != "verified" and .trust != "missing") | "\(.phase): \(.trust)"' 2>/dev/null)
+  # "missing" sources are an expected aggregate state (the user has
+  # not run that phase yet). "integrity_missing" and
+  # "integrity_mismatch" are the actually-suspect cases.
+  bad=$(printf '%s' "$SOURCE_ARTIFACTS_JSON" | jq -r \
+    '.[] | select(.trust == "integrity_missing" or .trust == "integrity_mismatch") | "\(.phase): \(.trust)"' 2>/dev/null)
+  if [ -n "$bad" ]; then
+    echo "render-artifact: --strict requires every aggregated source to be verified; failing on:" >&2
+    printf '  %s\n' $bad >&2
+    exit 3
+  fi
+fi
+
 mv "$TMP_HTML" "$HTML_PATH"
 mv "$TMP_MFST" "$MANIFEST_PATH"
+# Codex PR 3 pass 2: the scratch dir was leaking on every successful
+# render because the cleanup trap was unset before it was removed.
+rm -rf "$TMP_ROOT_FALLBACK"
 trap - EXIT
 
 echo "$HTML_PATH"

@@ -824,6 +824,82 @@ HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
 assert_contains "journal lists custom license-audit row" "$HTML" 'data-phase="license-audit"'
 assert_contains "journal lists custom privacy-check row" "$HTML" 'data-phase="privacy-check"'
 
+# ─── Cell 22d: bare `journal` defaults to today (PR 3 pass 2) ───
+printf "\n  ${DIM}Cell 22d: bare journal defaults to today (PR 3 pass 2)${NC}\n"
+PROJ="$TMP_ROOT/cell22d"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal)
+TODAY=$(date -u +%Y-%m-%d)
+assert_contains "bare journal renders today's date" "$HTML" "$TODAY"
+# Filename must not contain a trailing dash.
+case "$HTML" in
+  *journal-.html|*journal-*.html) ;;
+  *)
+    PASS=$((PASS+1))
+    printf "    ${GREEN}OK${NC}    bare journal filename has no stray dash\n"
+    ;;
+esac
+case "$HTML" in
+  *journal-.html)
+    FAIL=$((FAIL+1))
+    printf "    ${RED}FAIL${NC}  bare journal filename has stray dash: %s\n" "$HTML"
+    ;;
+esac
+
+# ─── Cell 22e: --strict on aggregate fails for missing integrity (PR 3 pass 2) ─
+printf "\n  ${DIM}Cell 22e: --strict on aggregate (PR 3 pass 2)${NC}\n"
+PROJ="$TMP_ROOT/cell22e"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+# Strip integrity on plan, then journal --strict must reject.
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+jq 'del(.integrity)' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
+assert_exit "journal --strict fails on integrity_missing" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today --strict"
+# Tamper plan; --strict must also fail.
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+PLAN_PATH=$(ls "$NANOSTACK_STORE/plan/"*.json | head -1)
+jq '.summary.goal = "Tampered"' "$PLAN_PATH" > "$PLAN_PATH.tmp" && mv "$PLAN_PATH.tmp" "$PLAN_PATH"
+assert_exit "journal --strict fails on integrity_mismatch" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' journal --today --strict"
+# Stack --strict: same.
+assert_exit "stack --strict fails when any artifact tampered" 3 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack compliance-release --strict"
+
+# ─── Cell 22f: scratch dir does not leak (PR 3 pass 2) ──────
+printf "\n  ${DIM}Cell 22f: scratch dir cleanup (PR 3 pass 2)${NC}\n"
+PROJ="$TMP_ROOT/cell22f"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+SCRATCH_BEFORE=$(find /tmp -maxdepth 1 -name "render-artifact.*" -type d 2>/dev/null | wc -l | tr -d ' ')
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest)
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+SCRATCH_AFTER=$(find /tmp -maxdepth 1 -name "render-artifact.*" -type d 2>/dev/null | wc -l | tr -d ' ')
+assert_true "no scratch dir leak across renders" sh -c "[ '$SCRATCH_AFTER' = '$SCRATCH_BEFORE' ]"
+
+# ─── Cell 22g: stack manifest with backslash path (PR 3 pass 2) ─
+printf "\n  ${DIM}Cell 22g: stack manifest JSON escape (PR 3 pass 2)${NC}\n"
+PROJ="$TMP_ROOT/cell22g"
+setup_project "$PROJ"
+# A project path containing a backslash is rare but the renderer
+# should never produce invalid JSON. Validate by rendering with the
+# normal path and confirming the manifest parses cleanly.
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-release)
+MFST=$(ls "$NANOSTACK_STORE/visual/manifests/"*stack*.manifest.json | head -1)
+assert_true "stack manifest is parseable JSON" jq -e '.' "$MFST"
+assert_true "stack manifest has source_artifacts array" \
+  sh -c "[ \"\$(jq -r 'type' '$MFST')\" = 'object' ] && [ \"\$(jq -r '.source_artifacts | type' '$MFST')\" = 'array' ]"
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"
