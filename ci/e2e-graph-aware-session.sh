@@ -326,6 +326,41 @@ assert_eq "rewired graph: ready_phases = [qa]" \
 assert_eq "rewired graph: can_ship still false" \
   "false" "$(echo "$out" | jq -r '.can_ship')"
 
+# Cell 9b: a graph that keeps the default node names AND dependencies
+# but declares them in a different ORDER (e.g. security before review)
+# is a legitimate custom graph. Codex caught this on the PR 4 second
+# review pass: sorting the outer node array during comparison made
+# next-step.sh suggest /review while session.json had next_phase=
+# security, breaking the single-source-of-truth contract.
+echo "[9b] reordered default graph routes through graph-aware"
+new_project "cell9b-reorder"
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "phase_graph": [
+    {"name":"think","depends_on":[]},
+    {"name":"plan","depends_on":["think"]},
+    {"name":"build","depends_on":["plan"]},
+    {"name":"security","depends_on":["build"]},
+    {"name":"review","depends_on":["build"]},
+    {"name":"qa","depends_on":["build"]},
+    {"name":"ship","depends_on":["review","qa","security"]}
+  ]
+}
+EOF
+"$SESSION_SH" init development >/dev/null
+for ph in think plan; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+out=$("$NEXT_STEP" --json 2>/dev/null)
+# Reordered graph put security first; session.sh's graph-aware logic
+# picks the first declared ready phase. next-step.sh must agree.
+assert_eq "reordered graph: next_phase = security (declared first)" \
+  "security" "$(echo "$out" | jq -r '.next_phase')"
+session_next=$(jq -r '.next_phase' "$NANOSTACK_STORE/session.json")
+assert_eq "next-step agrees with session.json next_phase" \
+  "$session_next" "$(echo "$out" | jq -r '.next_phase')"
+
 # Cell 10: default sprint user_message remains exactly the historical
 # wording. No regression for built-in flows.
 echo "[10] default sprint user_message is unchanged"

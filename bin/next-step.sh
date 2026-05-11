@@ -95,18 +95,23 @@ GRAPH_AWARE_NEXT=""
 GRAPH_AWARE_READY="[]"
 IS_CUSTOM_GRAPH=0
 if [ -f "$SESSION_FILE" ]; then
-  # Compare the full graph (sorted, normalized) rather than just the
-  # set of node names. A project can keep the default names but rewire
-  # the dependencies; Codex caught the name-only false-negative on the
-  # PR 4 first review pass.
+  # Preserve the graph's declared node order during comparison. The
+  # depends_on array inside each node is a set (so it sorts for
+  # equality), but the array of nodes itself is order-sensitive
+  # because nano_phase_ready_from_graph returns ready phases in the
+  # graph's declared order and session.sh writes next_phase from
+  # that order. A project that keeps the default names and deps but
+  # reorders the nodes (for example security before review) is a
+  # legitimate custom graph; sorting the outer array would have
+  # collapsed it to the default and the script would have suggested
+  # review while session.json said security. Codex caught the
+  # declared-order regression on the PR 4 second review pass.
   session_graph=$(jq -c '
     (.phase_graph // [])
     | map({name: .name, depends_on: (.depends_on // [] | sort)})
-    | sort_by(.name)
   ' "$SESSION_FILE" 2>/dev/null || echo "[]")
   default_normalized=$(echo "$DEFAULT_GRAPH_JSON" | jq -c '
     map({name: .name, depends_on: (.depends_on // [] | sort)})
-    | sort_by(.name)
   ')
   if [ -n "$session_graph" ] && [ "$session_graph" != "[]" ] && [ "$session_graph" != "$default_normalized" ]; then
     IS_CUSTOM_GRAPH=1
