@@ -413,6 +413,37 @@ case "$SRC_OUT" in
 esac
 unset NANOSTACK_STORE
 
+# ─── Cell 9e: symlinked visual subdirectory rejected ───────
+# PR 1 pass 4 regression: a pre-existing symlink under visual/
+# (e.g. visual/plan -> /tmp/outside) must be rejected so mv cannot
+# write through it.
+printf "\n  ${DIM}Cell 9e: symlinked visual subdir (PR 1 pass 4 regression)${NC}\n"
+PROJ="$TMP_ROOT/cell9e"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/visual"
+mkdir -p "$TMP_ROOT/cell9e-outside"
+ln -s "$TMP_ROOT/cell9e-outside" "$NANOSTACK_STORE/visual/plan"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+assert_exit "symlinked visual/plan exits 4" 4 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan --latest"
+# Confirm nothing was written through the symlink.
+HTML_COUNT=$(find "$TMP_ROOT/cell9e-outside" -maxdepth 1 -name "*.html" 2>/dev/null | wc -l | tr -d ' ')
+assert_true "no file written through symlinked subdir" sh -c "[ '$HTML_COUNT' = '0' ]"
+
+# Same check for visual/manifests symlink.
+PROJ="$TMP_ROOT/cell9f"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/visual"
+mkdir -p "$TMP_ROOT/cell9f-outside"
+ln -s "$TMP_ROOT/cell9f-outside" "$NANOSTACK_STORE/visual/manifests"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+assert_exit "symlinked visual/manifests exits 4" 4 \
+  sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan --latest"
+MFST_COUNT=$(find "$TMP_ROOT/cell9f-outside" -maxdepth 1 -name "*.manifest.json" 2>/dev/null | wc -l | tr -d ' ')
+assert_true "no manifest written through symlinked subdir" sh -c "[ '$MFST_COUNT' = '0' ]"
+
 # ─── Cell 9: symlinked visual root rejected ─────────────────
 printf "\n  ${DIM}Cell 9: symlinked visual root rejected${NC}\n"
 PROJ="$TMP_ROOT/cell9"

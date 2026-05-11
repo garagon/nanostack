@@ -99,6 +99,58 @@ nano_visual_assert_safe_root() {
   return 0
 }
 
+# Refuse to write into any subdirectory under visual/ that is a
+# symlink. Codex PR 1 pass 4 caught this: if visual/plan was already
+# a symlink to /tmp/outside, mkdir -p accepted it and the later
+# atomic mv wrote into the target, escaping the visual root despite
+# the lexical path-safety check on --out. Walk from the visual root
+# down to (but not including) the leaf file, asserting -L is false at
+# every existing intermediate.
+#
+# Called after nano_visual_normalize_path has rewritten the candidate
+# path, so the input is already absolute and ".." is resolved.
+nano_visual_assert_safe_descend() {
+  local path="$1"  # absolute, normalized
+  local root
+  root="$(nano_visual_normalize_path "$(nano_visual_root)")"
+  # Require the path to live under the canonical root. The caller
+  # already verified this via nano_visual_assert_safe_output for --out;
+  # we re-check for safety in case this helper is reused later.
+  case "$path" in
+    "$root"|"$root"/*) ;;
+    *)
+      echo "render-artifact: refusing to write outside $root: $path" >&2
+      return 4
+      ;;
+  esac
+  local rel="${path#"$root"}"
+  rel="${rel#/}"
+  local current="$root"
+  if [ -L "$current" ]; then
+    echo "render-artifact: visual root is a symlink: $current" >&2
+    return 4
+  fi
+  local IFS=/
+  # shellcheck disable=SC2086
+  set -- $rel
+  local part
+  # The last component is the leaf file. Drop it so we only check
+  # directory components (intermediate dirs can be symlinks; the
+  # file itself is created by the renderer's atomic move).
+  local count=$#
+  local i=0
+  for part in "$@"; do
+    i=$((i+1))
+    [ "$i" = "$count" ] && break
+    current="$current/$part"
+    if [ -L "$current" ]; then
+      echo "render-artifact: refusing to descend into symlinked subdirectory: $current" >&2
+      return 4
+    fi
+  done
+  return 0
+}
+
 # Lexically normalize an absolute path: resolve "." and ".." components
 # without touching the filesystem. This defeats --out escapes through
 # missing directory segments followed by ".." (codex caught the gap

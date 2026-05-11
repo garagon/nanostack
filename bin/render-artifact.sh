@@ -195,6 +195,13 @@ else
 fi
 MANIFEST_PATH=$(nano_visual_manifest_path "phase" "$PHASE" "$TS")
 
+# Refuse any symlink under visual/ on the path to HTML or manifest.
+# Codex PR 1 pass 4 caught that mkdir -p / mv would happily write
+# through a pre-existing visual/plan symlink to an outside target;
+# nano_visual_assert_safe_root only guards the root itself.
+nano_visual_assert_safe_descend "$(nano_visual_normalize_path "$HTML_PATH")"
+nano_visual_assert_safe_descend "$(nano_visual_normalize_path "$MANIFEST_PATH")"
+
 mkdir -p "$(dirname "$HTML_PATH")"
 mkdir -p "$(dirname "$MANIFEST_PATH")"
 
