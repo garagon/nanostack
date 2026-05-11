@@ -40,6 +40,10 @@ Custom stacks declare their own phases in `.nanostack/config.json` (`custom_phas
 
 Skills automatically save artifacts to `.nanostack/`. Downstream skills read upstream artifacts through `bin/resolve.sh`, which honors the artifact-trust contract (PR 2) and the routing contract for custom skills (PR 5). `/ship` generates a sprint journal. `bin/discard-sprint.sh` cleans up bad sessions.
 
+## Visual artifacts
+
+`bin/render-artifact.sh` produces local HTML views of any phase artifact, sprint journal, or custom stack DAG under `.nanostack/visual/`. JSON stays canonical; the HTML is a derived, deletable inspection layer. The renderer is offline (no external scripts, no fetch, no storage) and supports `--strict` for integrity-verified rendering plus `--interactive` for copy-only clipboard buttons on `/plan` and `/review`. Contract: `reference/visual-artifact-contract.md`.
+
 ## Usage
 
 Each skill's `SKILL.md` contains the full instructions. Read it and follow the process described. Supporting files (templates, references, checklists, scripts) live in subdirectories and are referenced from the SKILL.md when needed.
