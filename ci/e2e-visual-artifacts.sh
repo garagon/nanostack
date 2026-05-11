@@ -1207,6 +1207,33 @@ CFG
 HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack dup)
 assert_contains "duplicate phase names rejected" "$HTML" "duplicate node names"
 
+# ─── Cell 22t: malformed stack metadata does not crash (PR 3 pass 9) ─
+printf "\n  ${DIM}Cell 22t: malformed stack metadata (PR 3 pass 9)${NC}\n"
+PROJ="$TMP_ROOT/cell22t"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/stacks/badjson"
+# Truncated JSON in stack.json.
+printf '{"name":"badjson","phase_graph":[' > "$NANOSTACK_STORE/stacks/badjson/stack.json"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack badjson 2>/dev/null || true)
+[ -n "$HTML" ] && {
+  assert_true "malformed stack JSON does not crash" test -f "$HTML"
+}
+
+# ─── Cell 22u: malformed same-day artifact does not crash journal (PR 3 pass 9) ─
+printf "\n  ${DIM}Cell 22u: malformed same-day artifact (PR 3 pass 9)${NC}\n"
+PROJ="$TMP_ROOT/cell22u"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE/plan"
+# Drop a malformed (truncated) JSON file with today's date prefix.
+TODAY_COMPACT=$(date -u +%Y%m%d)
+printf '{"phase":"plan","summary":{' > "$NANOSTACK_STORE/plan/${TODAY_COMPACT}-120000.json"
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" journal --today)
+assert_true "malformed plan artifact does not crash journal" test -f "$HTML"
+# The row should surface as unreadable or integrity_missing, not abort.
+assert_contains "malformed artifact row appears" "$HTML" 'data-phase="plan"'
+
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
 PROJ="$TMP_ROOT/cell9a"

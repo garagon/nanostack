@@ -1031,24 +1031,27 @@ EOF
       integrity_mismatch)  status_label="tampered"; sev_class="sev-bad" ;;
       *)                   status_label="unreadable"; sev_class="sev-warn" ;;
     esac
-    # Phase-specific summary line.
+    # Phase-specific summary line. Each jq call appends `|| echo
+    # "(unreadable)"` so a malformed artifact (which already surfaced
+    # as integrity_missing above) does not abort the whole journal
+    # render. Codex PR 3 pass 9 caught the unguarded reads.
     case "$ph" in
-      think)   summary=$(jq -r '.summary.narrowest_wedge // .summary.value_proposition // "(no summary)"' "$art_path" 2>/dev/null) ;;
-      plan)    summary=$(jq -r '.summary.goal // "(no summary)"' "$art_path" 2>/dev/null) ;;
-      review)  summary=$(jq -r '"\(.summary.blocking // 0) blocking / \(.summary.should_fix // 0) should-fix / \(.summary.nitpicks // 0) nitpicks"' "$art_path" 2>/dev/null) ;;
-      security) summary=$(jq -r '"\(.summary.critical // 0) critical / \(.summary.high // 0) high / \(.summary.total_findings // 0) total"' "$art_path" 2>/dev/null) ;;
-      qa)      summary=$(jq -r '"\(.summary.tests_passed // 0)/\(.summary.tests_run // 0) tests / \(.summary.bugs_found // 0) bugs"' "$art_path" 2>/dev/null) ;;
+      think)   summary=$(jq -r '.summary.narrowest_wedge // .summary.value_proposition // "(no summary)"' "$art_path" 2>/dev/null || echo "(unreadable)") ;;
+      plan)    summary=$(jq -r '.summary.goal // "(no summary)"' "$art_path" 2>/dev/null || echo "(unreadable)") ;;
+      review)  summary=$(jq -r '"\(.summary.blocking // 0) blocking / \(.summary.should_fix // 0) should-fix / \(.summary.nitpicks // 0) nitpicks"' "$art_path" 2>/dev/null || echo "(unreadable)") ;;
+      security) summary=$(jq -r '"\(.summary.critical // 0) critical / \(.summary.high // 0) high / \(.summary.total_findings // 0) total"' "$art_path" 2>/dev/null || echo "(unreadable)") ;;
+      qa)      summary=$(jq -r '"\(.summary.tests_passed // 0)/\(.summary.tests_run // 0) tests / \(.summary.bugs_found // 0) bugs"' "$art_path" 2>/dev/null || echo "(unreadable)") ;;
       ship)
-        if [ "$(jq -r '.run_mode // ""' "$art_path" 2>/dev/null)" = "report_only" ]; then
+        if [ "$(jq -r '.run_mode // ""' "$art_path" 2>/dev/null || echo "")" = "report_only" ]; then
           summary="report_only"
         else
-          summary=$(jq -r '"PR #\(.summary.pr_number // "?") · \(.summary.status // "unknown")"' "$art_path" 2>/dev/null)
+          summary=$(jq -r '"PR #\(.summary.pr_number // "?") · \(.summary.status // "unknown")"' "$art_path" 2>/dev/null || echo "(unreadable)")
         fi
         ;;
-      *)       summary=$(jq -r '.summary | (if type == "object" then (.summary // (. | tostring)) else . end)' "$art_path" 2>/dev/null) ;;
+      *)       summary=$(jq -r '.summary | (if type == "object" then (.summary // (. | tostring)) else . end)' "$art_path" 2>/dev/null || echo "(unreadable)") ;;
     esac
     local integrity
-    integrity=$(jq -r '.integrity // ""' "$art_path" 2>/dev/null)
+    integrity=$(jq -r '.integrity // ""' "$art_path" 2>/dev/null || echo "")
     printf '        <li class="timeline-item %s" data-phase="%s" data-trust="%s">' \
       "$sev_class" \
       "$(printf '%s' "$ph" | nano_attr_escape)" \
@@ -1102,9 +1105,17 @@ render_stack_body() {
   local description=""
 
   if [ -n "$stack_file" ]; then
+    # Codex PR 3 pass 9: the metadata reads ran without `|| true`,
+    # so a malformed stack.json aborted the render before the
+    # documented "Stack invalid" notice could be emitted. Guard
+    # every jq read on the user-controlled file.
     graph_json=$(jq -c '.phase_graph' "$stack_file" 2>/dev/null || echo "")
-    display_name=$(jq -r '.display_name // .name' "$stack_file" 2>/dev/null)
-    description=$(jq -r '.description // ""' "$stack_file" 2>/dev/null)
+    display_name=$(jq -r '.display_name // .name // ""' "$stack_file" 2>/dev/null || echo "")
+    description=$(jq -r '.description // ""' "$stack_file" 2>/dev/null || echo "")
+    # If even the metadata reads return empty AND the graph is also
+    # empty, fall through to the registry path below; if metadata
+    # came back but graph did not, the "Stack invalid" notice fires.
+    [ -z "$display_name" ] && display_name="$name"
   fi
 
   if [ -z "$graph_json" ] || [ "$graph_json" = "null" ]; then
