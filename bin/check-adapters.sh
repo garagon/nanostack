@@ -164,6 +164,15 @@ check_adapter() {
   if ! in_enum "$host" "$KNOWN_HOSTS"; then
     errors="${errors:+$errors; }host=$host not in known set ($KNOWN_HOSTS)"
   fi
+  # The schema (reference/host-adapter-schema.md) says
+  # `adapters/<host>.json` must match the .host field. A mislabeled
+  # file (codex.json with host=claude) used to pass and would also
+  # satisfy the README missing-file cross-check, so CI could ship a
+  # duplicated adapter while claiming the wrong host was verified.
+  # Codex flagged this on the PR 6 second review pass.
+  if [ "$host" != "$name" ]; then
+    errors="${errors:+$errors; }host=$host does not match filename basename=$name"
+  fi
 
   # Empty-string capability values are NOT valid even though the key
   # exists. Codex caught the empty-passes-through hole on the PR 6

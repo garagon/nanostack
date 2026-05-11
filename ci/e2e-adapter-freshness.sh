@@ -257,6 +257,24 @@ echo "$out" | grep -q "does not parse as a date" && \
   assert_eq "unparseable-date message present" "yes" "yes" || \
   assert_eq "unparseable-date message present" "yes" "no"
 
+# Cell 7e: host field must match the filename basename. A
+# mislabeled file (cursor.json with host=claude) used to pass and
+# would also satisfy the README missing-file check. Codex flagged
+# the duplicated-adapter hole on the PR 6 second review pass.
+echo "[7e] host field must match filename"
+root=$(new_repo "cell7e-mislabel")
+cat > "$root/README.md" <<'EOF'
+README mentions `cursor`.
+EOF
+# Filename is cursor.json but host is "claude" — a mislabel.
+write_adapter "$root" cursor "$NOW_ISO" '.host = "claude"'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "mislabeled host exits 1" "1" "$rc"
+echo "$out" | grep -q "does not match filename" && \
+  assert_eq "mislabel message present" "yes" "yes" || \
+  assert_eq "mislabel message present" "yes" "no"
+
 # Cell 8: --json output emits a parseable summary object.
 echo "[8] --json output is parseable"
 root=$(new_repo "cell8")

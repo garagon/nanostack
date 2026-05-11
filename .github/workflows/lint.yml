@@ -3398,15 +3398,35 @@ jobs:
           fail=0
           # Source of truth: filenames under adapters/.
           adapters_truth=$(find adapters -maxdepth 1 -name "*.json" -type f \
-            | sed 's|.*/||; s|\.json$||' | sort | paste -sd ',' -)
+            | sed 's|.*/||; s|\.json$||' | sort | tr '\n' ' ')
           # AGENTS.md and llms.txt should mention every adapter name (case-insensitive).
-          for name in $(echo "$adapters_truth" | tr ',' ' '); do
+          for name in $adapters_truth; do
+            [ -z "$name" ] && continue
             for f in AGENTS.md llms.txt; do
               if ! grep -qi -- "$name" "$f"; then
                 echo "FAIL: $f does not mention adapter '$name'"
                 fail=1
               fi
             done
+          done
+          # Reverse direction: AGENTS.md and llms.txt must NOT
+          # advertise a verified adapter that adapters/ no longer
+          # ships. Codex flagged the one-directional check on the
+          # PR 6 second review pass: a removed adapter could stay
+          # advertised in the agent-facing docs forever.
+          known_adapters="claude cursor codex opencode gemini"
+          for candidate in $known_adapters; do
+            case " $adapters_truth " in
+              *" $candidate "*) ;;
+              *)
+                for f in AGENTS.md llms.txt; do
+                  if grep -qiE "(\`${candidate}\`|verified adapter[^.]*${candidate})" "$f"; then
+                    echo "FAIL: $f advertises adapter '$candidate' but adapters/${candidate}.json is missing."
+                    fail=1
+                  fi
+                done
+                ;;
+            esac
           done
           exit $fail
       - name: Default sprint order matches across surfaces
