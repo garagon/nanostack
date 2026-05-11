@@ -301,6 +301,61 @@ jq '.phase = "review"' "$PLAN_PATH" > "$TMPPLAN"
 assert_exit "explicit path with mismatched .phase exits 1" 1 \
   sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' plan '$TMPPLAN'"
 
+# ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
+printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"
+PROJ="$TMP_ROOT/cell9a"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && save_valid_plan "$NANOSTACK_STORE")
+# Visual root does not yet exist; --out under it must still succeed.
+[ ! -d "$NANOSTACK_STORE/visual" ] && PASS=$((PASS+1)) || PASS=$PASS
+TARGET="$NANOSTACK_STORE/visual/plan/custom.html"
+set +e
+(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest --out "$TARGET" >/dev/null 2>&1)
+RC=$?
+set -e
+assert_exit "--out on fresh store succeeds" 0 test "$RC" = 0
+assert_true "custom output file exists" test -f "$TARGET"
+
+# ─── Cell 9b: legacy --from-session plan still renders ──────
+# (PR 1 pass 1 regression)
+printf "\n  ${DIM}Cell 9b: legacy plan renders without crashing${NC}\n"
+PROJ="$TMP_ROOT/cell9b"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+(cd "$PROJ" && NANOSTACK_STORE="$NANOSTACK_STORE" "$REPO/bin/save-artifact.sh" --from-session plan "legacy summary" >/dev/null 2>&1)
+set +e
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest 2>/dev/null)
+RC=$?
+set -e
+assert_exit "legacy plan renders (exit 0)" 0 test "$RC" = 0
+assert_true "legacy plan html exists" test -f "$HTML"
+assert_contains "legacy plan shows schema warning" "$HTML" 'data-testid="schema-warning"'
+assert_contains "legacy plan still renders trust badge" "$HTML" 'data-trust="integrity_missing"'
+assert_contains "legacy plan still emits summary card" "$HTML" "Goal"
+
+# Same path, but the renderer must coerce a string .summary safely.
+PROJ2="$TMP_ROOT/cell9c"
+setup_project "$PROJ2"
+export NANOSTACK_STORE="$PROJ2/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+# Write an artifact with .summary = "string" via save-artifact's
+# structured form but with shape that the validator will reject. The
+# renderer must still produce HTML.
+BAD="$NANOSTACK_STORE/plan/bad.json"
+mkdir -p "$(dirname "$BAD")"
+cat > "$BAD" <<'JSON'
+{"phase":"plan","summary":"all-as-string-summary","context_checkpoint":"also-a-string","timestamp":"2026-05-11T00:00:00Z","project":"x","branch":"y"}
+JSON
+set +e
+HTML=$(cd "$PROJ2" && "$REPO/bin/render-artifact.sh" plan "$BAD" 2>/dev/null)
+RC=$?
+set -e
+assert_exit "string-summary artifact still renders" 0 test "$RC" = 0
+assert_contains "string-summary html has schema warning" "$HTML" 'data-testid="schema-warning"'
+
 # ─── Cell 9: symlinked visual root rejected ─────────────────
 printf "\n  ${DIM}Cell 9: symlinked visual root rejected${NC}\n"
 PROJ="$TMP_ROOT/cell9"

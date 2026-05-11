@@ -180,6 +180,13 @@ esac
 TS=$(nano_visual_timestamp)
 nano_visual_assert_safe_root
 
+# Materialize the visual root before any path-safety check. Codex
+# caught (PR 1 pass 1) that on a fresh store the visual root does not
+# yet exist, so the canonical walk-up in nano_visual_assert_safe_output
+# stops at $NANOSTACK_STORE, which is outside the canonical visual
+# root path. Pre-creating visual/ keeps the realpath comparison stable.
+mkdir -p "$(nano_visual_root)"
+
 if [ -n "$OUT_PATH" ]; then
   nano_visual_assert_safe_output "$OUT_PATH"
   HTML_PATH="$OUT_PATH"
@@ -216,11 +223,29 @@ fi
 
 render_plan_body() {
   local artifact="$1"
+  # Normalize: legacy --from-session plan artifacts store .summary as
+  # a string and may omit .context_checkpoint entirely. Schema
+  # validation already surfaces a warning above; here we coerce the
+  # shape so the body still renders ("Not recorded" / "None recorded")
+  # instead of jq crashing under set -e. Codex caught this on PR 1
+  # pass 1: without the coercion, `render-artifact.sh plan --latest`
+  # aborted on legacy artifacts the renderer was meant to inspect.
+  local norm
+  norm=$(jq -c '
+    .summary           = (if (.summary | type)           == "object" then .summary           else {} end)
+    | .context_checkpoint = (if (.context_checkpoint | type) == "object" then .context_checkpoint else {} end)
+    | .summary.planned_files            = (if (.summary.planned_files            | type) == "array" then .summary.planned_files            else [] end)
+    | .summary.risks                    = (if (.summary.risks                    | type) == "array" then .summary.risks                    else [] end)
+    | .summary.out_of_scope             = (if (.summary.out_of_scope             | type) == "array" then .summary.out_of_scope             else [] end)
+    | .context_checkpoint.key_files     = (if (.context_checkpoint.key_files     | type) == "array" then .context_checkpoint.key_files     else [] end)
+    | .context_checkpoint.decisions_made= (if (.context_checkpoint.decisions_made| type) == "array" then .context_checkpoint.decisions_made else [] end)
+    | .context_checkpoint.open_questions= (if (.context_checkpoint.open_questions| type) == "array" then .context_checkpoint.open_questions else [] end)
+  ' "$artifact")
 
   local goal scope approval
-  goal=$(jq -r '.summary.goal // "Not recorded"' "$artifact" | nano_html_escape)
-  scope=$(jq -r '.summary.scope // "Not recorded"' "$artifact" | nano_html_escape)
-  approval=$(jq -r '.summary.plan_approval // "Not recorded"' "$artifact" | nano_html_escape)
+  goal=$(printf '%s' "$norm" | jq -r '.summary.goal // "Not recorded"' | nano_html_escape)
+  scope=$(printf '%s' "$norm" | jq -r '.summary.scope // "Not recorded"' | nano_html_escape)
+  approval=$(printf '%s' "$norm" | jq -r '.summary.plan_approval // "Not recorded"' | nano_html_escape)
 
   cat <<HTML
     <section class="card">
@@ -233,24 +258,18 @@ render_plan_body() {
     </section>
 HTML
 
-  # Planned files. Grouped by top-level directory for readability on
-  # plans that touch many files.
+  # Planned files. Reads from the normalized JSON so a legacy
+  # artifact with .summary as a string still renders an empty list
+  # instead of crashing.
   local files_count
-  files_count=$(jq -r '(.summary.planned_files // []) | length' "$artifact")
+  files_count=$(printf '%s' "$norm" | jq -r '.summary.planned_files | length')
   printf '    <section class="card">\n      <h2>Planned files (%s)</h2>\n' \
     "$(printf '%s' "$files_count" | nano_html_escape)"
   if [ "$files_count" = "0" ]; then
     printf '      <p class="muted">None recorded</p>\n'
   else
-    # Group: jq emits "dir<TAB>file" pairs sorted by dir.
     printf '      <ul>\n'
-    # shellcheck disable=SC2016
-    jq -r '
-      (.summary.planned_files // [])
-      | map(tostring)
-      | sort
-      | .[]
-    ' "$artifact" | while IFS= read -r f; do
+    printf '%s' "$norm" | jq -r '.summary.planned_files | map(tostring) | sort | .[]' | while IFS= read -r f; do
       printf '        <li><code>%s</code></li>\n' "$(printf '%s' "$f" | nano_html_escape)"
     done
     printf '      </ul>\n'
@@ -259,14 +278,14 @@ HTML
 
   # Risks
   local risks_count
-  risks_count=$(jq -r '(.summary.risks // []) | length' "$artifact")
+  risks_count=$(printf '%s' "$norm" | jq -r '.summary.risks | length')
   printf '    <section class="card">\n      <h2>Risks (%s)</h2>\n' \
     "$(printf '%s' "$risks_count" | nano_html_escape)"
   if [ "$risks_count" = "0" ]; then
     printf '      <p class="muted">None recorded</p>\n'
   else
     printf '      <ul>\n'
-    jq -r '(.summary.risks // []) | .[] | tostring' "$artifact" | while IFS= read -r r; do
+    printf '%s' "$norm" | jq -r '.summary.risks | .[] | tostring' | while IFS= read -r r; do
       printf '        <li>%s</li>\n' "$(printf '%s' "$r" | nano_html_escape)"
     done
     printf '      </ul>\n'
@@ -275,14 +294,14 @@ HTML
 
   # Out-of-scope
   local oos_count
-  oos_count=$(jq -r '(.summary.out_of_scope // []) | length' "$artifact")
+  oos_count=$(printf '%s' "$norm" | jq -r '.summary.out_of_scope | length')
   printf '    <section class="card">\n      <h2>Out of scope (%s)</h2>\n' \
     "$(printf '%s' "$oos_count" | nano_html_escape)"
   if [ "$oos_count" = "0" ]; then
     printf '      <p class="muted">None recorded</p>\n'
   else
     printf '      <ul>\n'
-    jq -r '(.summary.out_of_scope // []) | .[] | tostring' "$artifact" | while IFS= read -r item; do
+    printf '%s' "$norm" | jq -r '.summary.out_of_scope | .[] | tostring' | while IFS= read -r item; do
       printf '        <li>%s</li>\n' "$(printf '%s' "$item" | nano_html_escape)"
     done
     printf '      </ul>\n'
@@ -291,32 +310,32 @@ HTML
 
   # Context checkpoint
   local ck_summary
-  ck_summary=$(jq -r '.context_checkpoint.summary // "Not recorded"' "$artifact" | nano_html_escape)
+  ck_summary=$(printf '%s' "$norm" | jq -r '.context_checkpoint.summary // "Not recorded"' | nano_html_escape)
   printf '    <section class="card">\n      <h2>Context checkpoint</h2>\n'
   printf '      <p>%s</p>\n' "$ck_summary"
   local kf_count
-  kf_count=$(jq -r '(.context_checkpoint.key_files // []) | length' "$artifact")
+  kf_count=$(printf '%s' "$norm" | jq -r '.context_checkpoint.key_files | length')
   if [ "$kf_count" != "0" ]; then
     printf '      <h3>Key files</h3>\n      <ul>\n'
-    jq -r '(.context_checkpoint.key_files // []) | .[] | tostring' "$artifact" | while IFS= read -r kf; do
+    printf '%s' "$norm" | jq -r '.context_checkpoint.key_files | .[] | tostring' | while IFS= read -r kf; do
       printf '        <li><code>%s</code></li>\n' "$(printf '%s' "$kf" | nano_html_escape)"
     done
     printf '      </ul>\n'
   fi
   local dec_count
-  dec_count=$(jq -r '(.context_checkpoint.decisions_made // []) | length' "$artifact")
+  dec_count=$(printf '%s' "$norm" | jq -r '.context_checkpoint.decisions_made | length')
   if [ "$dec_count" != "0" ]; then
     printf '      <h3>Decisions made</h3>\n      <ul>\n'
-    jq -r '(.context_checkpoint.decisions_made // []) | .[] | tostring' "$artifact" | while IFS= read -r d; do
+    printf '%s' "$norm" | jq -r '.context_checkpoint.decisions_made | .[] | tostring' | while IFS= read -r d; do
       printf '        <li>%s</li>\n' "$(printf '%s' "$d" | nano_html_escape)"
     done
     printf '      </ul>\n'
   fi
   local oq_count
-  oq_count=$(jq -r '(.context_checkpoint.open_questions // []) | length' "$artifact")
+  oq_count=$(printf '%s' "$norm" | jq -r '.context_checkpoint.open_questions | length')
   if [ "$oq_count" != "0" ]; then
     printf '      <h3>Open questions</h3>\n      <ul>\n'
-    jq -r '(.context_checkpoint.open_questions // []) | .[] | tostring' "$artifact" | while IFS= read -r q; do
+    printf '%s' "$norm" | jq -r '.context_checkpoint.open_questions | .[] | tostring' | while IFS= read -r q; do
       printf '        <li>%s</li>\n' "$(printf '%s' "$q" | nano_html_escape)"
     done
     printf '      </ul>\n'
