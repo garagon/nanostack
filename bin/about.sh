@@ -81,7 +81,7 @@ All data in \`.nanostack/\`:
 - Briefs: \`.nanostack/know-how/briefs/\`
 - Audit log: \`.nanostack/audit.log\`
 
-There is no Nanostack cloud. Telemetry is opt-in and documented in \`reference/telemetry.md\`.
+There is no Nanostack cloud. Telemetry is opt-in and documented in \`TELEMETRY.md\`.
 
 ## This Project
 

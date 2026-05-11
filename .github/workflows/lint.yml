@@ -3437,6 +3437,89 @@ jobs:
           fi
           echo "OK: guard concurrency tier uses the phase registry."
 
+  architecture-vnext-doc-locks:
+    name: Architecture vNext doc locks (telemetry path, AGENTS inventory, README accuracy)
+    runs-on: ubuntu-latest
+    # Three contracts the 2026-05-11 architecture retest asked for as
+    # a follow-up after Architecture vNext closed:
+    #   1. AI-facing surfaces must point at TELEMETRY.md, not the
+    #      non-existent reference/telemetry.md path.
+    #   2. AGENTS.md must list every built-in skill the README sells
+    #      so adapters using AGENTS.md as the inventory do not
+    #      under-discover the product (Option A: complete inventory).
+    #   3. README.md must mention the Architecture vNext guarantees
+    #      that were just proven: --require-integrity, phase_context
+    #      + upstream_status, credential JSON write parity, and the
+    #      safe-template exception.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Telemetry doc path is TELEMETRY.md, not reference/telemetry.md
+        run: |
+          set -e
+          if grep -nF 'reference/telemetry.md' \
+              llms.txt bin/about.sh AGENTS.md README.md README.es.md 2>/dev/null; then
+            echo "FAIL: an AI-facing surface still points at the non-existent reference/telemetry.md."
+            echo "      The canonical path is TELEMETRY.md."
+            exit 1
+          fi
+          for f in llms.txt bin/about.sh; do
+            if ! grep -qF 'TELEMETRY.md' "$f"; then
+              echo "FAIL: $f does not mention TELEMETRY.md after the path correction."
+              exit 1
+            fi
+          done
+          echo "OK: telemetry doc path is correct across AI-facing surfaces."
+      - name: AGENTS.md is a complete built-in skill inventory
+        run: |
+          set -e
+          fail=0
+          # Required tokens for the complete-inventory contract
+          # (Option A from the retest spec). nano-doctor is accepted
+          # in either of the two trigger spellings; the lock checks
+          # whichever shape lands.
+          for token in compound feature nano-run nano-help; do
+            if ! grep -qi -- "$token" AGENTS.md; then
+              echo "FAIL: AGENTS.md does not mention skill '$token'."
+              fail=1
+            fi
+          done
+          if ! grep -qiE 'nano-doctor|/doctor|doctor/SKILL' AGENTS.md; then
+            echo "FAIL: AGENTS.md does not mention the doctor skill."
+            fail=1
+          fi
+          exit $fail
+      - name: README reflects Architecture vNext guarantees
+        run: |
+          set -e
+          fail=0
+          # Strict trust + structured artifact contract
+          if ! grep -qF -- '--require-integrity' README.md; then
+            echo "FAIL: README.md does not mention --require-integrity (strict artifact trust)."
+            fail=1
+          fi
+          # Custom routing contract
+          if ! grep -qF 'phase_context' README.md; then
+            echo "FAIL: README.md does not mention phase_context (custom routing contract)."
+            fail=1
+          fi
+          if ! grep -qF 'upstream_status' README.md; then
+            echo "FAIL: README.md does not mention upstream_status (resolver trust output)."
+            fail=1
+          fi
+          # Secret-write parity: at least one credential JSON name
+          if ! grep -qiE 'credentials\.json|service-account|firebase-adminsdk' README.md; then
+            echo "FAIL: README.md does not mention credential JSON write protection."
+            fail=1
+          fi
+          # Safe-template exception: at least one template shape
+          if ! grep -qiE '\.env\.example|credentials\.example\.json' README.md; then
+            echo "FAIL: README.md does not mention the safe-template exception (.env.example / credentials.example.json)."
+            fail=1
+          fi
+          exit $fail
+
   ai-facing-docs-consistency:
     name: AI-facing docs agree on adapters, sprint, guard, privacy
     runs-on: ubuntu-latest
