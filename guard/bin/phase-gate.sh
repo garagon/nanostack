@@ -37,7 +37,31 @@ FIND_ARTIFACT="$NANOSTACK_ROOT/bin/find-artifact.sh"
 SESSION_SH="$NANOSTACK_ROOT/bin/session.sh"
 SESSION_FILE="$NANOSTACK_STORE/session.json"
 PROJECT="$(pwd)"
+
+# Default required phases for the built-in sprint. The session's
+# phase_graph (when present) overrides this with the actual ancestors
+# of ship so a custom workflow stack gates on its own phases instead
+# of the built-in trio. PR 4 of the 2026-05-10 architecture audit
+# made the phase-gate graph-aware; Codex caught the gate-vs-can_ship
+# drift on the eleventh review pass.
 REQUIRED_PHASES="review security qa"
+if [ -f "$SESSION_FILE" ] && command -v jq >/dev/null 2>&1; then
+  graph_required=$(jq -r '
+    (.phase_graph // []) as $g
+    | def ancestors($name):
+        ($g | map(select(.name == $name)) | first // {depends_on:[]}).depends_on as $deps
+        | $deps + ($deps | map(ancestors(.)) | add // []);
+      (ancestors("ship")) as $ancs
+      | [$g[].name
+          | select(. as $n | $ancs | any(. == $n))
+          | select(. != "think" and . != "plan" and . != "build")
+        ]
+      | join(" ")
+  ' "$SESSION_FILE" 2>/dev/null)
+  if [ -n "$graph_required" ]; then
+    REQUIRED_PHASES="$graph_required"
+  fi
+fi
 
 # ─── Reference timestamp: latest code change ────────────────
 last_code_timestamp() {

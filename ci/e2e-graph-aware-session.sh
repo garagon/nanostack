@@ -546,6 +546,85 @@ next_after_plan=$(jq -r '.next_phase' "$NANOSTACK_STORE/session.json")
 assert_eq "after plan in a conductor sprint: next_phase = license-audit" \
   "license-audit" "$next_after_plan"
 
+# Cell 9i: /feature sessions skip /think by contract. The graph-aware
+# lifecycle must NOT advertise think as ready after /plan completes;
+# session.sh init must pre-seed think as completed so the dep graph
+# treats it as satisfied. Codex caught the regression on the PR 4
+# eleventh review pass.
+echo "[9i] /feature session pre-seeds think as completed"
+new_project "cell9i-feature"
+"$SESSION_SH" init feature --autopilot --plan-approval auto >/dev/null
+think_status=$(jq -r '.phase_log[] | select(.phase == "think") | .status' "$NANOSTACK_STORE/session.json")
+assert_eq "/feature init seeds think as completed" "completed" "$think_status"
+assert_eq "/feature init next_phase = plan (not think)" "plan" \
+  "$(jq -r '.next_phase' "$NANOSTACK_STORE/session.json")"
+# Walk plan + review and confirm next_phase never falls back to think
+for ph in plan review; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+next_after_review=$(jq -r '.next_phase' "$NANOSTACK_STORE/session.json")
+assert_eq "/feature after review: next_phase != think" "security" "$next_after_review"
+
+# Cell 9j: the guard's phase-gate reads required phases from the
+# session's phase_graph too. A custom workflow stack whose ship
+# depends on license-audit must gate git commit on license-audit
+# being completed, not on the hardcoded review/security/qa trio.
+# Codex caught the gate-vs-can_ship drift on the PR 4 eleventh
+# review pass.
+echo "[9j] phase-gate gates on the graph's ship ancestors"
+new_project "cell9j-gate"
+cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{
+  "custom_phases": ["license-audit"],
+  "phase_graph": [
+    {"name":"think","depends_on":[]},
+    {"name":"plan","depends_on":["think"]},
+    {"name":"build","depends_on":["plan"]},
+    {"name":"license-audit","depends_on":["build"]},
+    {"name":"ship","depends_on":["license-audit"]}
+  ]
+}
+EOF
+mkdir -p "$NANOSTACK_STORE/skills/license-audit"
+cat > "$NANOSTACK_STORE/skills/license-audit/SKILL.md" <<'EOF'
+---
+name: license-audit
+description: custom
+concurrency: read
+---
+EOF
+"$SESSION_SH" init development >/dev/null
+# Walk think + plan first so the gate is in "active sprint" mode.
+# The gate skips when no phases have started (a freshly-initialized
+# session is not yet a sprint to enforce).
+for ph in think plan; do
+  "$SESSION_SH" phase-start "$ph" >/dev/null
+  "$SESSION_SH" phase-complete "$ph" >/dev/null
+done
+# Touch a tracked file so last_code_timestamp gives the gate something
+# fresher than any artifact (otherwise the missing-phase check is
+# bypassed because nothing changed since the last commit).
+echo "scratch" > scratch.txt
+git add scratch.txt && git commit -q -m "scratch" >/dev/null 2>&1 || true
+echo "more" >> scratch.txt
+# Before license-audit completes, phase-gate must block git commit.
+set +e
+"$REPO/guard/bin/phase-gate.sh" "git commit -m wip" >/dev/null 2>&1
+rc=$?
+set -e
+assert_eq "phase-gate blocks git commit before license-audit (rc 1)" "1" "$rc"
+# Complete license-audit via real save-artifact so the gate finds
+# a fresh artifact for the only graph-required ancestor of ship.
+"$SESSION_SH" phase-start license-audit >/dev/null
+"$REPO/bin/save-artifact.sh" license-audit \
+  '{"phase":"license-audit","summary":{"status":"OK"},"context_checkpoint":{"summary":"clean"}}' >/dev/null
+set +e
+"$REPO/guard/bin/phase-gate.sh" "git commit -m ship" >/dev/null 2>&1
+rc=$?
+set -e
+assert_eq "phase-gate allows git commit after license-audit (rc 0)" "0" "$rc"
+
 # Cell 10: default sprint user_message remains exactly the historical
 # wording. No regression for built-in flows.
 echo "[10] default sprint user_message is unchanged"

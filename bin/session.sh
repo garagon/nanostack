@@ -215,6 +215,17 @@ cmd_init() {
   # graph-aware path.
   local phase_graph_json="[]"
   local initial_ready_json="[]"
+  local initial_phase_log_json="[]"
+  # /feature sessions skip /think by contract (feature/SKILL.md goes
+  # straight to /plan). Pre-seed think as completed in the phase_log
+  # so the graph-aware lifecycle does not advertise it as ready after
+  # /plan completes. Codex caught the regression on the PR 4 eleventh
+  # review pass: after a /feature plan ran, next-step.sh reported
+  # next_phase = think.
+  if [ "$type" = "feature" ]; then
+    initial_phase_log_json=$(jq -nc --arg date "$NOW" \
+      '[{phase:"think", status:"completed", started_at:$date, started_epoch:0, completed_at:$date, duration_seconds:0, artifact:null, source:"feature-skip"}]')
+  fi
   if declare -F nano_phase_graph_json >/dev/null 2>&1; then
     phase_graph_json=$(nano_phase_graph_json 2>/dev/null || echo "[]")
     # Compute the initial ready set so a caller that asks for
@@ -222,10 +233,13 @@ cmd_init() {
     # of the graph (e.g. think for the default sprint) rather than an
     # empty array. Without this, bin/next-step.sh used to fall back to
     # "ship" for a freshly-initialized session, which Codex caught
-    # on the PR 4 first review pass.
+    # on the PR 4 first review pass. /feature pre-seeds think above
+    # so its initial ready set starts from plan onward.
     if declare -F nano_phase_ready_from_graph >/dev/null 2>&1 && [ "$phase_graph_json" != "[]" ]; then
+      local completed_seed_init
+      completed_seed_init=$(echo "$initial_phase_log_json" | jq -c '[.[] | select(.status == "completed") | .phase]')
       local initial_ready
-      initial_ready=$(nano_phase_ready_from_graph "$phase_graph_json" "[]" "[]" 2>/dev/null || true)
+      initial_ready=$(nano_phase_ready_from_graph "$phase_graph_json" "$completed_seed_init" "[]" 2>/dev/null || true)
       if [ -n "$initial_ready" ]; then
         initial_ready_json=$(echo "$initial_ready" | jq -R . | jq -sc 'map(select(length > 0))')
       fi
@@ -255,6 +269,7 @@ cmd_init() {
     --argjson phase_graph "$phase_graph_json" \
     --argjson initial_ready "$initial_ready_json" \
     --argjson initial_next "$initial_next_phase" \
+    --argjson initial_phase_log "$initial_phase_log_json" \
     '{
       schema_version: "2",
       session_id: $id,
@@ -275,7 +290,7 @@ cmd_init() {
       ready_phases: $initial_ready,
       phase_graph: $phase_graph,
       stop_conditions_met: [],
-      phase_log: [],
+      phase_log: $initial_phase_log,
       evidence: {review:null, security:null, qa:null, ship:null},
       budget: {
         max_usd: null,
