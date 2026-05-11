@@ -802,8 +802,9 @@ cat > "$NANOSTACK_STORE/config.json" <<'CFG'
 }
 CFG
 # No stack file under examples or stacks/; the fallback to the
-# registry's phase_graph must kick in.
-HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack project)
+# project's phase_graph (registry) only kicks in for `stack default`
+# (PR 3 pass 12).
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack default)
 assert_true "stack from project graph renders" test -f "$HTML"
 assert_contains "stack shows the custom phase license-audit" "$HTML" 'data-phase="license-audit"'
 assert_contains "stack shows SVG" "$HTML" "<svg"
@@ -1251,6 +1252,22 @@ assert_contains "stack table shows plan as integrity_missing" "$HTML" 'data-phas
 # --strict catches it.
 assert_exit "stack --strict catches truncated artifact" 3 \
   sh -c "cd '$PROJ' && '$REPO/bin/render-artifact.sh' stack compliance-release --strict"
+
+# ─── Cell 22w: typo stack name -> Stack not found (PR 3 pass 12) ─
+printf "\n  ${DIM}Cell 22w: typo stack name (PR 3 pass 12)${NC}\n"
+PROJ="$TMP_ROOT/cell22w"
+setup_project "$PROJ"
+export NANOSTACK_STORE="$PROJ/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+# No stack file for "compliance-relase" (typo of "compliance-release").
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack compliance-relase)
+assert_true "typo stack still produces HTML" test -f "$HTML"
+assert_contains "typo stack shows Stack not found" "$HTML" "Stack not found"
+assert_not_contains "typo stack does NOT render default phases" "$HTML" 'data-phase="think"'
+
+# Bare `stack default` still falls back to the project graph.
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack default)
+assert_contains "stack default falls back to project graph" "$HTML" 'data-phase="think"'
 
 # ─── Cell 9a: --out works on fresh store (PR 1 pass 1 regression) ─
 printf "\n  ${DIM}Cell 9a: --out on fresh store (PR 1 pass 1 regression)${NC}\n"

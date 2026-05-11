@@ -1131,9 +1131,12 @@ render_stack_body() {
   fi
 
   if [ -z "$graph_json" ] || [ "$graph_json" = "null" ]; then
-    # Fall back to project's phase_graph via the registry. This
-    # branch only fires when no named stack file was found.
-    if declare -F nano_phase_graph_json >/dev/null 2>&1; then
+    # Fall back to project's phase_graph via the registry, but ONLY
+    # for the bare `stack` / `stack default` form. A named stack
+    # that does not exist (e.g. typo `compliance-relase`) must not
+    # render the default DAG under the wrong name. Codex PR 3
+    # pass 12 caught the misleading fallback.
+    if [ "$name" = "default" ] && declare -F nano_phase_graph_json >/dev/null 2>&1; then
       graph_json=$(nano_phase_graph_json 2>/dev/null || echo "")
     fi
   fi
