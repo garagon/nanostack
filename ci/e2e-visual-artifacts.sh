@@ -1207,18 +1207,20 @@ CFG
 HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack dup)
 assert_contains "duplicate phase names rejected" "$HTML" "duplicate node names"
 
-# ─── Cell 22t: malformed stack metadata does not crash (PR 3 pass 9) ─
-printf "\n  ${DIM}Cell 22t: malformed stack metadata (PR 3 pass 9)${NC}\n"
+# ─── Cell 22t: malformed stack metadata does not crash and does not fall back (PR 3 pass 9+10) ─
+printf "\n  ${DIM}Cell 22t: malformed stack metadata (PR 3 pass 9+10)${NC}\n"
 PROJ="$TMP_ROOT/cell22t"
 setup_project "$PROJ"
 export NANOSTACK_STORE="$PROJ/.nanostack"
 mkdir -p "$NANOSTACK_STORE/stacks/badjson"
 # Truncated JSON in stack.json.
 printf '{"name":"badjson","phase_graph":[' > "$NANOSTACK_STORE/stacks/badjson/stack.json"
-HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack badjson 2>/dev/null || true)
-[ -n "$HTML" ] && {
-  assert_true "malformed stack JSON does not crash" test -f "$HTML"
-}
+HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" stack badjson)
+assert_true "malformed stack JSON renders an HTML page" test -f "$HTML"
+# PR 3 pass 10: do not silently fall back to the project graph; emit
+# a Stack invalid notice instead so the broken definition is visible.
+assert_contains "named-but-malformed stack -> Stack invalid notice" "$HTML" "Stack invalid"
+assert_not_contains "named-but-malformed stack does NOT render default phases" "$HTML" 'data-phase="think"'
 
 # ─── Cell 22u: malformed same-day artifact does not crash journal (PR 3 pass 9) ─
 printf "\n  ${DIM}Cell 22u: malformed same-day artifact (PR 3 pass 9)${NC}\n"

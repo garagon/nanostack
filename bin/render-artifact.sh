@@ -1104,7 +1104,9 @@ render_stack_body() {
   local display_name="$name"
   local description=""
 
+  local named_stack_file_present=false
   if [ -n "$stack_file" ]; then
+    named_stack_file_present=true
     # Codex PR 3 pass 9: the metadata reads ran without `|| true`,
     # so a malformed stack.json aborted the render before the
     # documented "Stack invalid" notice could be emitted. Guard
@@ -1112,14 +1114,25 @@ render_stack_body() {
     graph_json=$(jq -c '.phase_graph' "$stack_file" 2>/dev/null || echo "")
     display_name=$(jq -r '.display_name // .name // ""' "$stack_file" 2>/dev/null || echo "")
     description=$(jq -r '.description // ""' "$stack_file" 2>/dev/null || echo "")
-    # If even the metadata reads return empty AND the graph is also
-    # empty, fall through to the registry path below; if metadata
-    # came back but graph did not, the "Stack invalid" notice fires.
     [ -z "$display_name" ] && display_name="$name"
   fi
 
+  # Codex PR 3 pass 10: when a NAMED stack file exists but is
+  # malformed (missing .phase_graph), do NOT fall back to the
+  # project/default graph. That fallback would render an unrelated
+  # graph under the requested stack's name and hide the broken
+  # definition. The fallback is only for the bare `stack` / `stack
+  # default` form when no stack file was found at all.
+  if [ "$named_stack_file_present" = true ] && { [ -z "$graph_json" ] || [ "$graph_json" = "null" ]; }; then
+    printf '    <section class="card">\n      <h2>Stack invalid</h2>\n      <p>The stack file <code>%s</code> exists but its <code>phase_graph</code> is missing or unreadable.</p>\n    </section>\n' \
+      "$(printf '%s' "$stack_file" | nano_html_escape)"
+    SOURCE_ARTIFACTS_JSON='[]'
+    return 0
+  fi
+
   if [ -z "$graph_json" ] || [ "$graph_json" = "null" ]; then
-    # Fall back to project's phase_graph via the registry.
+    # Fall back to project's phase_graph via the registry. This
+    # branch only fires when no named stack file was found.
     if declare -F nano_phase_graph_json >/dev/null 2>&1; then
       graph_json=$(nano_phase_graph_json 2>/dev/null || echo "")
     fi
