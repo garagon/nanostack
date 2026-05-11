@@ -125,13 +125,21 @@ fi
 # reports can_ship=true. Codex flagged the dependency-vs-display
 # mix-up on the PR 4 fifth review pass.
 compute_can_ship_from_session() {
+  # The `unique` on the completed-set is fine (set comparison) but the
+  # required-set is built by walking the graph in declared order to
+  # match required_before_ship's external contract. Both filters
+  # produce sets; the resulting boolean is order-insensitive.
   jq -r '
     (.phase_graph // []) as $g
     | def ancestors($name):
         ($g | map(select(.name == $name)) | first // {depends_on:[]}).depends_on as $deps
         | $deps + ($deps | map(ancestors(.)) | add // []);
       ([.phase_log[]? | select(.status == "completed") | .phase] | unique) as $done
-      | (ancestors("ship") | unique | map(select(. != "think" and . != "plan" and . != "build"))) as $required
+      | (ancestors("ship")) as $ancs
+      | ([$g[].name
+            | select(. as $n | $ancs | any(. == $n))
+            | select(. != "think" and . != "plan" and . != "build")
+         ]) as $required
       | ($required - $done | length == 0)
   ' "$SESSION_FILE" 2>/dev/null || echo "false"
 }
@@ -214,16 +222,25 @@ fi
 REQUIRED_BEFORE_SHIP_JSON='["review","security","qa"]'
 if [ "$HAS_GRAPH_AWARE_SESSION" = "1" ]; then
   # The graph snapshot inside session.json is authoritative. For the
-  # default sprint that yields ["review","qa","security"] (same set
-  # as the legacy default); for a custom graph it returns the actual
-  # transitive chain ship depends on. Falls back to the legacy default
-  # if the jq filter fails.
+  # default sprint that yields ["review","security","qa"] (the legacy
+  # order, preserved by walking the graph in declared order); for a
+  # custom graph it returns the actual transitive chain ship depends
+  # on. Falls back to the legacy default if the jq filter fails.
+  #
+  # The previous form used `unique`, which sorts in jq and produced
+  # ["qa","review","security"]. Consumers that compared the array
+  # exactly broke on that ordering. Codex caught the regression on
+  # the PR 4 seventh review pass.
   REQUIRED_BEFORE_SHIP_JSON=$(jq -c '
     (.phase_graph // []) as $g
     | def ancestors($name):
         ($g | map(select(.name == $name)) | first // {depends_on:[]}).depends_on as $deps
         | $deps + ($deps | map(ancestors(.)) | add // []);
-      ancestors("ship") | unique | map(select(. != "think" and . != "plan" and . != "build"))
+      (ancestors("ship")) as $ancs
+      | [$g[].name
+          | select(. as $n | $ancs | any(. == $n))
+          | select(. != "think" and . != "plan" and . != "build")
+        ]
   ' "$SESSION_FILE" 2>/dev/null || echo '["review","security","qa"]')
   # Empty filter result (e.g. session has no phase_graph) keeps the
   # legacy default so existing consumers do not see an empty array.

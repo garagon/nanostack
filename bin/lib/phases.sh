@@ -213,7 +213,14 @@ _nano_phase_graph_is_valid() {
 nano_phase_graph_json() {
   local config
   config=$(_nano_phases_resolve_config "${1:-}") || true
-  local default_graph='[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"review","depends_on":["build"]},{"name":"qa","depends_on":["build"]},{"name":"security","depends_on":["build"]},{"name":"ship","depends_on":["review","qa","security"]}]'
+  # Node order under `review`/`qa`/`security` matches the legacy
+  # PEERS list in bin/next-step.sh (review, security, qa). Downstream
+  # consumers (next-step's required_before_ship, sprint-journal,
+  # docs) expect that ordering, so the graph is the single source
+  # of truth and they read from it. PR 4 of the 2026-05-10 audit
+  # made the order load-bearing; Codex caught a sort-induced drift
+  # on the seventh review pass.
+  local default_graph='[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"review","depends_on":["build"]},{"name":"security","depends_on":["build"]},{"name":"qa","depends_on":["build"]},{"name":"ship","depends_on":["review","security","qa"]}]'
   if [ -n "$config" ] && command -v jq >/dev/null 2>&1; then
     local graph
     graph=$(jq -c '.phase_graph // empty' "$config" 2>/dev/null)

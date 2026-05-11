@@ -94,7 +94,7 @@ echo "[1] session init snapshots the active phase_graph"
 new_project "cell1-default"
 "$SESSION_SH" init development >/dev/null
 nodes=$(jq -r '.phase_graph // [] | map(.name) | join(",")' "$NANOSTACK_STORE/session.json")
-assert_eq "default graph nodes" "think,plan,build,review,qa,security,ship" "$nodes"
+assert_eq "default graph nodes" "think,plan,build,review,security,qa,ship" "$nodes"
 # At init, ready_phases is populated with the graph roots (every node
 # with empty depends_on). For the default sprint that is just `think`.
 # A previous form populated this with []; that was the regression
@@ -112,8 +112,8 @@ assert_eq "next_phase at init = think" "think" "$next_init"
 echo "[2] default sprint walk preserves the historical next_phase order"
 new_project "cell2-default-walk"
 "$SESSION_SH" init development >/dev/null
-declare -a expected_next=("plan" "review" "qa" "security" "ship" "compound")
-declare -a phases_to_complete=("think" "plan" "review" "qa" "security" "ship")
+declare -a expected_next=("plan" "review" "security" "qa" "ship" "compound")
+declare -a phases_to_complete=("think" "plan" "review" "security" "qa" "ship")
 for i in 0 1 2 3 4 5; do
   ph="${phases_to_complete[$i]}"
   "$SESSION_SH" phase-start "$ph" >/dev/null
