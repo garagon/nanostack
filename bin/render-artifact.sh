@@ -39,30 +39,33 @@ Usage: render-artifact.sh <phase> [artifact-path|--latest] [--strict]
                                   [--interactive] [--out <path>]
                                   [--manifest-only]
 
-PR 1+2+3 scope:
+Supported phases:
   phase = plan|think|review|security|qa|ship
-                             render the latest or explicit artifact
+                             render the latest or explicit core phase artifact
+  phase = <registered custom phase>
+                             render a custom phase artifact registered in
+                             .nanostack/config.json:custom_phases; output
+                             lands under \$NANOSTACK_STORE/visual/custom/<phase>/
   phase = journal            render today's sprint journal view
                              (positional arg ignored; use --today or
                              --date YYYY-MM-DD)
-  phase = stack [name]       render a custom stack DAG view; the
-                             positional arg names the stack and is
-                             looked up in .nanostack/config.json
+  phase = stack [name]       render a custom stack DAG view. Named stacks
+                             resolve from \$NANOSTACK_STORE/stacks/<name>/stack.json
+                             (user-installed) and then examples/custom-stack-template/<name>/stack.json
+                             (bundled fallback). Use "stack default" to render
+                             the current project's .nanostack/config.json phase_graph.
 
 Flags:
   --strict                   require nano_artifact_trust == verified
-  --interactive              enable copy-only interactive controls (PR 4 scope:
-                             /plan and /review get "copy as prompt", "copy as Markdown",
-                             and "copy as JSON patch" buttons; no filesystem writes,
-                             no network calls, no form submission)
+  --interactive              enable copy-only interactive controls. Supported only
+                             for /plan and /review; rejected with exit 1 elsewhere.
   --out <path>               write HTML to explicit path under \$NANOSTACK_STORE/visual
   --manifest-only            write manifest only, skip HTML
   --latest                   resolve via find-artifact.sh (default if no path)
 
 Exit codes:
   0  success
-  1  input error
-  2  feature reserved for a later PR
+  1  input error or unsupported phase
   3  trust failure
   4  unsafe output path
 USAGE
@@ -163,14 +166,26 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-# Validate phase. Core phases: plan/think/review/security/qa/ship.
-# Derived kinds: journal (PR 3), stack (PR 3).
+# Validate phase. Core phases dispatch through their phase-specific
+# body renderers. Derived kinds (journal, stack) aggregate. Registered
+# custom phases (declared in .nanostack/config.json:custom_phases)
+# use the generic custom phase renderer added by VA-CUSTOM-001.
+# Anything else exits 1.
+IS_CUSTOM_PHASE=false
 case "$PHASE" in
   plan|think|review|security|qa|ship) ;;
   journal|stack) ;;
   *)
-    echo "render-artifact: unsupported phase: $PHASE" >&2
-    exit 1
+    # Consult the phase registry. If $PHASE is a registered custom
+    # phase, mark it and fall through to the generic renderer. The
+    # registry is sourced near the top of the script.
+    if declare -F nano_phase_kind >/dev/null 2>&1 \
+       && [ "$(nano_phase_kind "$PHASE" 2>/dev/null)" = "custom" ]; then
+      IS_CUSTOM_PHASE=true
+    else
+      echo "render-artifact: unsupported phase: $PHASE" >&2
+      exit 1
+    fi
     ;;
 esac
 
@@ -298,7 +313,11 @@ else
   case "$PHASE" in
     journal) HTML_PATH="$(nano_visual_root)/journal/${TS}-journal-${JOURNAL_DATE}.html" ;;
     stack)   HTML_PATH="$(nano_visual_root)/stack/$STACK_NAME/${TS}-stack-${STACK_NAME}.html" ;;
-    *)       HTML_PATH=$(nano_visual_html_path "$PHASE" "$TS") ;;
+    *)
+      # Registered custom phases route to visual/custom/<phase>/ via
+      # the existing nano_visual_html_path helper (VA-CUSTOM-001).
+      HTML_PATH=$(nano_visual_html_path "$PHASE" "$TS" "$IS_CUSTOM_PHASE")
+      ;;
   esac
 fi
 case "$PHASE" in
@@ -312,7 +331,7 @@ case "$PHASE" in
     ;;
   *)
     MANIFEST_KIND="phase"
-    MANIFEST_PATH=$(nano_visual_manifest_path "phase" "$PHASE" "$TS")
+    MANIFEST_PATH=$(nano_visual_manifest_path "phase" "$PHASE" "$TS" "$IS_CUSTOM_PHASE")
     ;;
 esac
 
@@ -1133,6 +1152,133 @@ render_context_checkpoint() {
   printf '    </section>\n'
 }
 
+# ─── Custom phase renderer (VA-CUSTOM-001) ──────────────────
+#
+# Generic renderer for any phase registered in
+# .nanostack/config.json:custom_phases. Schema-light: shows summary
+# keys, optional findings, optional routing/upstream evidence, and a
+# collapsed raw-JSON fallback. Used when render_<phase>_body does
+# not exist for a registered custom phase.
+#
+# Safety:
+# - Every JSON-derived scalar passes through nano_html_escape.
+# - Complex values (objects, arrays) serialize via jq -c and render
+#   inside <pre>; the <pre> body is then HTML-escaped.
+# - --interactive is rejected for custom phases at the arg parser,
+#   so no inline script is emitted from this path.
+# - No external resources; the shared page shell and CSS cover the
+#   render.
+render_custom_phase_body() {
+  local artifact="$1"
+  local norm
+  norm=$(nano_visual_normalize_artifact "$artifact")
+
+  # Header card with the most useful single-line signals if present.
+  local status headline
+  status=$(printf '%s' "$norm" | jq -r '
+    if (.summary | type) == "object" and (.summary.status // null) != null
+      then (.summary.status | tostring) else "" end' 2>/dev/null || echo "")
+  headline=$(printf '%s' "$norm" | jq -r '
+    if (.summary | type) == "object"
+      then (.summary.headline // .summary.next // "" | tostring) else "" end' 2>/dev/null || echo "")
+  status=$(printf '%s' "$status" | nano_html_escape)
+  headline=$(printf '%s' "$headline" | nano_html_escape)
+
+  printf '    <section class="card">\n      <h2>Custom phase summary</h2>\n      <dl class="kvgrid">\n'
+  if [ -n "$status" ]; then
+    printf '        <dt>Status</dt><dd><span class="chip">%s</span></dd>\n' "$status"
+  fi
+  if [ -n "$headline" ]; then
+    printf '        <dt>Headline</dt><dd>%s</dd>\n' "$headline"
+  fi
+  # Render every other summary scalar key as a row. Object/array
+  # values get a <pre> block beneath the dl for readability.
+  local scalar_keys
+  scalar_keys=$(printf '%s' "$norm" | jq -r '
+    if (.summary | type) == "object" then
+      .summary
+      | to_entries
+      | map(select(.key != "status" and .key != "headline" and .key != "next"))
+      | map(select(.value | type | IN("string","number","boolean","null")))
+      | .[]
+      | "\(.key)\t\(.value | tostring)"
+    else empty end' 2>/dev/null || true)
+  if [ -n "$scalar_keys" ]; then
+    while IFS=$'\t' read -r k v; do
+      [ -z "$k" ] && continue
+      printf '        <dt>%s</dt><dd>%s</dd>\n' \
+        "$(printf '%s' "$k" | nano_html_escape)" \
+        "$(printf '%s' "$v" | nano_html_escape)"
+    done <<EOF
+$scalar_keys
+EOF
+  fi
+  printf '      </dl>\n'
+
+  # Complex summary fields rendered as escaped compact JSON in <pre>.
+  local complex_keys
+  complex_keys=$(printf '%s' "$norm" | jq -r '
+    if (.summary | type) == "object" then
+      .summary
+      | to_entries
+      | map(select(.value | type | IN("object","array")))
+      | .[].key
+    else empty end' 2>/dev/null || true)
+  if [ -n "$complex_keys" ]; then
+    printf '      <h3>Summary detail</h3>\n'
+    while IFS= read -r k; do
+      [ -z "$k" ] && continue
+      local val_json
+      val_json=$(printf '%s' "$norm" | jq -c --arg k "$k" '.summary[$k]')
+      printf '      <details><summary>%s</summary><pre>%s</pre></details>\n' \
+        "$(printf '%s' "$k" | nano_html_escape)" \
+        "$(printf '%s' "$val_json" | nano_html_escape)"
+    done <<EOF
+$complex_keys
+EOF
+  fi
+  printf '    </section>\n'
+
+  # Findings (optional, reuse the shared renderer).
+  local findings_len
+  findings_len=$(printf '%s' "$norm" | jq -r '.findings | length' 2>/dev/null || echo "0")
+  if [ "$findings_len" != "0" ]; then
+    render_findings_section "$norm" "Findings"
+  fi
+
+  # Routing / upstream evidence (when the resolver injected it).
+  local has_routing
+  has_routing=$(printf '%s' "$norm" | jq -r '
+    if (.routing? // null) != null
+       or (.upstream_artifacts? // null) != null
+       or (.upstream_status? // null) != null
+    then "yes" else "no" end' 2>/dev/null || echo "no")
+  if [ "$has_routing" = "yes" ]; then
+    printf '    <section class="card">\n      <h2>Routing &amp; upstream</h2>\n'
+    local routing_json
+    routing_json=$(printf '%s' "$norm" | jq -c '{
+      routing: (.routing? // null),
+      upstream_artifacts: (.upstream_artifacts? // null),
+      upstream_status: (.upstream_status? // null)
+    }')
+    printf '      <details><summary>Resolver inputs (escaped JSON)</summary><pre>%s</pre></details>\n' \
+      "$(printf '%s' "$routing_json" | nano_html_escape)"
+    printf '    </section>\n'
+  fi
+
+  # Context checkpoint (optional; shared helper handles a missing
+  # one by rendering "Not recorded").
+  render_context_checkpoint "$norm"
+
+  # Always-on raw JSON fallback for debugging. Collapsed by default.
+  local raw_json
+  raw_json=$(jq -c '.' "$artifact" 2>/dev/null || cat "$artifact")
+  printf '    <section class="card">\n      <h2>Raw artifact JSON</h2>\n'
+  printf '      <details><summary>Show JSON</summary><pre data-testid="custom-raw-json">%s</pre></details>\n' \
+    "$(printf '%s' "$raw_json" | nano_html_escape)"
+  printf '    </section>\n'
+}
+
 # ─── Journal renderer ───────────────────────────────────────
 #
 # Aggregates every core + custom phase artifact for the current
@@ -1782,6 +1928,11 @@ if [ "$MANIFEST_ONLY" != true ]; then
       ship)     render_ship_body "$ART_PATH" ;;
       journal)  render_journal_body "$JOURNAL_DATE" ;;
       stack)    render_stack_body "$STACK_NAME" ;;
+      *)
+        # Registered custom phase (VA-CUSTOM-001). The earlier guard
+        # already set IS_CUSTOM_PHASE=true; everything else exited 1.
+        render_custom_phase_body "$ART_PATH"
+        ;;
     esac
 
     # Journal and stack do not have a single source artifact path or
@@ -1819,7 +1970,7 @@ jq -n \
   --arg schema_version "1" \
   --arg kind "$MANIFEST_KIND" \
   --arg phase "$PHASE" \
-  --argjson custom_phase false \
+  --argjson custom_phase "$($IS_CUSTOM_PHASE && echo true || echo false)" \
   --arg format "html" \
   --argjson interactive "$($INTERACTIVE && echo true || echo false)" \
   --argjson strict "$($STRICT && echo true || echo false)" \

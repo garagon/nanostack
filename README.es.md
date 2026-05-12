@@ -280,13 +280,14 @@ Walkthrough completo: [`EXTENDING.md`](EXTENDING.md).
 
 Cada artefacto de fase es JSON. El JSON es lo que leen los skills, lo que firma el hash de integridad y lo que agrega el sprint journal. Esa capa es la canónica.
 
-Encima de eso, `bin/render-artifact.sh` produce una vista HTML local de cualquier artefacto para que un humano pueda inspeccionar la misma evidencia en el navegador:
+Encima de eso, `bin/render-artifact.sh` renderiza artefactos de fases core y custom registradas, sprint journals y DAGs de workflow stacks como vistas HTML locales para que un humano pueda inspeccionar la misma evidencia en el navegador:
 
 ```bash
-bin/render-artifact.sh plan --latest         # último /nano
-bin/render-artifact.sh review --latest       # /review con contadores de severidad
-bin/render-artifact.sh security --latest     # OWASP / STRIDE
-bin/render-artifact.sh journal --today       # timeline del sprint
+bin/render-artifact.sh plan --latest             # último /nano
+bin/render-artifact.sh review --latest           # /review con contadores de severidad
+bin/render-artifact.sh security --latest         # OWASP / STRIDE
+bin/render-artifact.sh license-audit --latest    # fase custom registrada
+bin/render-artifact.sh journal --today           # timeline del sprint
 bin/render-artifact.sh stack compliance-release  # DAG del workflow custom
 ```
 

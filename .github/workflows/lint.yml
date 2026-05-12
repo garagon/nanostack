@@ -3840,3 +3840,74 @@ jobs:
             fi
           done
           echo "OK: every public surface mentions render-artifact."
+
+      - name: Custom phase wording is precise, not 'any artifact'
+        run: |
+          set -e
+          # VA-CUSTOM-001: public surfaces previously said "any
+          # artifact" / "any phase artifact". With registered custom
+          # phases now first-class, the wording must be specific so
+          # users understand what the renderer accepts and what it
+          # rejects.
+          EN_FILES=(README.md AGENTS.md llms.txt bin/about.sh)
+          ES_FILES=(README.es.md)
+          fail=0
+          # Forbid the vague wording in any visual-artifact paragraph.
+          FORBIDDEN='any artifact|any phase artifact'
+          for f in "${EN_FILES[@]}" "${ES_FILES[@]}"; do
+            [ -f "$f" ] || continue
+            window=$(grep -niE -A10 -B2 'render-artifact|visual artifact|\.nanostack/visual' "$f" 2>/dev/null || true)
+            [ -z "$window" ] && continue
+            if printf '%s\n' "$window" | grep -niE -- "$FORBIDDEN" >/dev/null 2>&1; then
+              echo "FAIL: $f still uses vague 'any artifact' wording near a renderer mention."
+              printf '%s\n' "$window" | grep -niE -- "$FORBIDDEN"
+              fail=1
+            fi
+          done
+          # Require the precise wording on EN surfaces.
+          for f in "${EN_FILES[@]}"; do
+            [ -f "$f" ] || continue
+            if ! grep -qE -i 'core and registered custom phase' "$f"; then
+              echo "FAIL: $f does not include the precise EN wording 'core and registered custom phase'."
+              fail=1
+            fi
+          done
+          # Require the precise wording on ES surfaces.
+          for f in "${ES_FILES[@]}"; do
+            [ -f "$f" ] || continue
+            if ! grep -qE -i 'fases core y custom registradas' "$f"; then
+              echo "FAIL: $f does not include the precise ES wording 'fases core y custom registradas'."
+              fail=1
+            fi
+          done
+          [ "$fail" = "1" ] && exit 1
+          echo "OK: visual artifact custom-phase wording is precise across public surfaces."
+
+      - name: --help text matches store-first stack lookup
+        run: |
+          set -e
+          # VA-CUSTOM-001 P3: the CLI help previously said named
+          # stacks "looked up in .nanostack/config.json", which is
+          # the runtime contract for `stack default` only. Lock the
+          # current wording so the help text and the contract doc
+          # never drift apart.
+          fail=0
+          if ! grep -qF '$NANOSTACK_STORE/stacks/<name>/stack.json' bin/render-artifact.sh; then
+            echo "FAIL: bin/render-artifact.sh --help does not mention the store-first stack lookup path."
+            fail=1
+          fi
+          if ! grep -qF 'examples/custom-stack-template' bin/render-artifact.sh; then
+            echo "FAIL: bin/render-artifact.sh --help does not mention the bundled-example fallback."
+            fail=1
+          fi
+          if ! grep -qF 'stack default' bin/render-artifact.sh; then
+            echo "FAIL: bin/render-artifact.sh --help does not mention the 'stack default' form."
+            fail=1
+          fi
+          if grep -qE 'positional arg.*looked up in .nanostack/config.json' bin/render-artifact.sh; then
+            echo "FAIL: bin/render-artifact.sh --help still describes the old stack lookup model."
+            grep -nE 'positional arg.*looked up in .nanostack/config.json' bin/render-artifact.sh
+            fail=1
+          fi
+          [ "$fail" = "1" ] && exit 1
+          echo "OK: --help text matches the store-first stack lookup contract."

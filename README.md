@@ -672,13 +672,14 @@ The journal reads every phase artifact from the sprint and writes one file with 
 
 Every phase artifact is JSON. JSON is what every skill reads, what trust verification hashes, what the sprint journal aggregates. That layer stays canonical.
 
-On top of it, `bin/render-artifact.sh` produces a local HTML view of any artifact so a human can inspect the same evidence in a browser:
+On top of it, `bin/render-artifact.sh` renders core and registered custom phase artifacts, sprint journals, and custom stack DAGs as local HTML views so a human can inspect the same evidence in a browser:
 
 ```bash
-bin/render-artifact.sh plan --latest         # render the latest plan
-bin/render-artifact.sh review --latest       # review with severity counters
-bin/render-artifact.sh security --latest     # OWASP / STRIDE breakdown
-bin/render-artifact.sh journal --today       # whole sprint timeline
+bin/render-artifact.sh plan --latest             # render the latest plan
+bin/render-artifact.sh review --latest           # review with severity counters
+bin/render-artifact.sh security --latest         # OWASP / STRIDE breakdown
+bin/render-artifact.sh license-audit --latest    # registered custom phase
+bin/render-artifact.sh journal --today           # whole sprint timeline
 bin/render-artifact.sh stack compliance-release  # custom workflow DAG
 ```
 
