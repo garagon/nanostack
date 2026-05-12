@@ -42,7 +42,7 @@ Skills automatically save artifacts to `.nanostack/`. Downstream skills read ups
 
 ## Visual artifacts
 
-`bin/render-artifact.sh` produces local HTML views of any phase artifact, sprint journal, or custom stack DAG under `.nanostack/visual/`. JSON stays canonical; the HTML is a derived, deletable inspection layer. The renderer is offline (no external scripts, no fetch, no storage) and supports `--strict` for integrity-verified rendering plus `--interactive` for copy-only clipboard buttons on `/plan` and `/review`. Contract: `reference/visual-artifact-contract.md`.
+`bin/render-artifact.sh` renders core and registered custom phase artifacts, sprint journals, and custom stack DAGs as local HTML views under `.nanostack/visual/`. JSON stays canonical; the HTML is a derived, deletable inspection layer. The renderer is offline (no external scripts, no fetch, no storage) and supports `--strict` for integrity-verified rendering plus `--interactive` for copy-only clipboard buttons on `/plan` and `/review`. Contract: `reference/visual-artifact-contract.md`.
 
 ## Usage
 

@@ -68,7 +68,7 @@ Local workflow framework for AI coding agents. The built-in sprint plus a framew
 | bin/sprint-metrics.sh | Git stats + cycle time (used by /think --retro and /nano). |
 | bin/doctor.sh | Know-how health check. |
 | bin/capture-failure.sh | Log what went wrong (no /compound needed). |
-| bin/render-artifact.sh <phase> | Render a local HTML view of any artifact under \`.nanostack/visual/\`. Optional, JSON stays canonical. |
+| bin/render-artifact.sh <phase> | Render core and registered custom phase artifacts, sprint journals, and custom stack DAGs as local HTML under \`.nanostack/visual/\`. Optional, JSON stays canonical. |
 
 ## Custom workflow stacks
 
