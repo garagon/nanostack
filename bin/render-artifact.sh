@@ -1332,17 +1332,21 @@ EOF
 render_stack_body() {
   local name="$1"
 
-  # Locate the stack definition. Order:
-  #   1. examples/custom-stack-template/<name>/stack.json (repo-bundled)
-  #   2. $NANOSTACK_STORE/stacks/<name>/stack.json (user-installed)
-  #   3. .nanostack/config.json (.phase_graph) for "default" / current project
+  # Locate the stack definition. User-installed stacks win over
+  # repo-bundled examples so a customized `compliance-release` in
+  # the project store is not silently shadowed by the example with
+  # the same name (architect audit VA-STACK-001, 2026-05-11).
+  # Order:
+  #   1. $NANOSTACK_STORE/stacks/<name>/stack.json (user-installed)
+  #   2. examples/custom-stack-template/<name>/stack.json (bundled fallback)
+  #   3. .nanostack/config.json (.phase_graph) only for `stack default`.
   local stack_file=""
   local repo_root
   repo_root="$SCRIPT_DIR/.."
-  if [ -f "$repo_root/examples/custom-stack-template/$name/stack.json" ]; then
-    stack_file="$repo_root/examples/custom-stack-template/$name/stack.json"
-  elif [ -f "$NANOSTACK_STORE/stacks/$name/stack.json" ]; then
+  if [ -f "$NANOSTACK_STORE/stacks/$name/stack.json" ]; then
     stack_file="$NANOSTACK_STORE/stacks/$name/stack.json"
+  elif [ -f "$repo_root/examples/custom-stack-template/$name/stack.json" ]; then
+    stack_file="$repo_root/examples/custom-stack-template/$name/stack.json"
   fi
 
   local graph_json=""
