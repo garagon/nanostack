@@ -471,8 +471,15 @@ nano_visual_safe_pr_url() {
 # Decide whether a screenshot path is safe to render as an <img>.
 # Allowed: absolute paths under the project or the NANOSTACK_STORE,
 # and relative paths starting with a known prefix (no ".." segments).
-# Returns "safe" or "unsafe". Used by render_qa_body so a malicious
-# screenshot URL never reaches the page as an <img src>.
+# Returns "safe" or "unsafe".
+#
+# Reserved, not yet wired: Visual Artifacts v1 does NOT render screenshots,
+# so this helper has no caller today. It is kept so a future PR adding a
+# /qa screenshot gallery can reuse this allowlist instead of re-deriving
+# it; calling it from a render path is a contract change (see
+# reference/visual-artifact-contract.md). The earlier "Used by
+# render_qa_body" note was inaccurate (no such function exists); corrected
+# during the 2026-05-28 architecture follow-up backlog.
 nano_visual_safe_screenshot_path() {
   local p="${1:-}" project="${2:-$PWD}"
   case "$p" in

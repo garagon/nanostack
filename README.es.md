@@ -228,6 +228,8 @@ Honestidad por host: nanostack manda los mismos archivos de skills a todos los a
 
 Si querés enforcement duro, usá Claude Code. Si aceptás disciplina a nivel agente, los demás corren el mismo workflow guiado. Corré `/nano-doctor` después de instalar para ver el estado real de tu install.
 
+Esta brecha es la mayor salvedad conocida del framework. El plan es sumar la misma capa de enforcement por agente a medida que cada herramienta exponga los hooks adecuados. Cada adapter lleva una fecha `last_verified` y una fuente de verificación, así podés ver qué garantías están aseguradas por CI hoy y cuáles son manuales.
+
 ## Problemas comunes
 
 ¿Las skills no aparecen? Reiniciá tu agente (Cursor y Codex lo necesitan; Claude Code no).
