@@ -66,8 +66,11 @@ PROJECT="$(pwd)"
 [ -d "$STORE" ] || exit 1
 
 RESULT=$(find "$STORE" -name "*.json" -mtime -"$MAX_AGE" 2>/dev/null | while read -r f; do
-  # Pre-filter with grep before full jq parse (80% fewer jq calls on multi-project setups)
-  if grep -q "$PROJECT" "$f" 2>/dev/null; then
+  # Pre-filter with grep before full jq parse (80% fewer jq calls on multi-project setups).
+  # -F (fixed string): the project path can contain regex metacharacters (e.g. a
+  # dot or "+"), so a plain grep could match the wrong project or skip the right
+  # one. The authoritative check is the jq .project equality just below.
+  if grep -qF "$PROJECT" "$f" 2>/dev/null; then
     if jq -e --arg p "$PROJECT" '.project == $p' "$f" >/dev/null 2>&1; then
       echo "$f"
     fi
