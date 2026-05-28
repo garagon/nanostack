@@ -53,6 +53,58 @@ fi
 # with no file_path will fail later in the tool itself.
 [ -n "$FILE_PATH" ] || exit 0
 
+# ─── Read-only phase concurrency block ─────────────────────────────────
+# Parity with guard/bin/check-dangerous.sh Tier 2.4: a phase whose skill
+# declares `concurrency: read` (e.g. /review, /security, /qa, or a custom
+# read-only phase) must not mutate files. The Bash guard already blocks
+# write-like commands during such a phase; Write/Edit/MultiEdit are the
+# agent's primary mutation path and must be blocked identically, or the
+# read-only guarantee that lets /conductor run those phases in parallel
+# is only half-enforced.
+#
+# Both guards consume the SAME helper (nano_active_phase_concurrency in
+# bin/lib/phases.sh) so they cannot drift. The helper fails open
+# (non-zero, no output) for no-session / no-current-phase / build /
+# removed-skill / malformed-metadata, so this never bricks tool use.
+# A read-only phase forbids ALL file mutation, so the block does NOT
+# require the path to be in-project — unlike the secret/system denylist
+# below, which is path-scoped.
+CW_GUARD_DIR="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)"
+if [ -n "$CW_GUARD_DIR" ]; then
+  CW_ROOT="$(cd "$CW_GUARD_DIR/.." 2>/dev/null && pwd)"
+  CW_STORE_PATH_SH="$CW_ROOT/bin/lib/store-path.sh"
+  if [ -z "${NANOSTACK_STORE:-}" ] && [ -f "$CW_STORE_PATH_SH" ]; then
+    # shellcheck disable=SC1090
+    source "$CW_STORE_PATH_SH" 2>/dev/null || true
+  fi
+  CW_PHASES_LIB="$CW_ROOT/bin/lib/phases.sh"
+  if [ -n "${NANOSTACK_STORE:-}" ] && [ -f "$CW_PHASES_LIB" ]; then
+    # shellcheck disable=SC1090
+    source "$CW_PHASES_LIB" 2>/dev/null || true
+    if command -v nano_active_phase_concurrency >/dev/null 2>&1; then
+      CW_ACTIVE=$(nano_active_phase_concurrency 2>/dev/null) || CW_ACTIVE=""
+      if [ -n "$CW_ACTIVE" ]; then
+        CW_PHASE=$(printf '%s' "$CW_ACTIVE" | cut -f1)
+        CW_CONC=$(printf '%s' "$CW_ACTIVE" | cut -f2)
+        if [ "$CW_CONC" = "read" ]; then
+          cat >&2 <<EOF
+BLOCKED [PHASE] Write operation during read-only phase '$CW_PHASE'
+Category: concurrency-safety
+Path:     $FILE_PATH
+
+Action: report this as a finding instead of editing files. The current
+phase is read-only to prevent race conditions when multiple agents run
+in parallel (/conductor runs the read phases as one parallel batch).
+Bypass: complete the current phase first (\`bin/session.sh phase-complete $CW_PHASE\`),
+or end the session if you're not in a sprint.
+EOF
+          exit 1
+        fi
+      fi
+    fi
+  fi
+fi
+
 # Expand ~ to $HOME for path-prefix matching.
 case "$FILE_PATH" in
   "~"*) FILE_PATH="$HOME${FILE_PATH#~}" ;;

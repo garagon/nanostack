@@ -23,6 +23,25 @@ jobs:
           chmod +x ci/e2e-user-flows.sh
           ci/e2e-user-flows.sh
 
+  e2e-concurrency-parity:
+    name: E2E read-only phase write parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Locks that BOTH guard hooks (check-dangerous.sh for Bash,
+    # check-write.sh for Write/Edit/MultiEdit) enforce the read-only
+    # phase block through the shared nano_active_phase_concurrency
+    # helper. Includes custom-phase sabotage cells so the block stays
+    # registry-driven, not a hardcoded built-in list. Run after touching
+    # either guard hook or bin/lib/phases.sh concurrency helpers.
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq is present
+        run: jq --version
+      - name: Run concurrency parity matrix
+        run: |
+          chmod +x ci/e2e-concurrency-parity.sh
+          ci/e2e-concurrency-parity.sh
+
   e2e-delivery-matrix:
     name: E2E delivery matrix (9 cells)
     runs-on: ubuntu-latest

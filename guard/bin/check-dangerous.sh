@@ -130,31 +130,25 @@ fi
 # for any phase whose SKILL.md lived outside the repo (every custom
 # skill under $NANOSTACK_STORE/skills, ~/.claude/skills, etc.).
 if [ -n "${NANOSTACK_STORE:-}" ]; then
-  SESSION_CHECK="$NANOSTACK_STORE/session.json"
-
-  if [ -f "$SESSION_CHECK" ]; then
-    CURRENT_PHASE=$(jq -r '.current_phase // ""' "$SESSION_CHECK" 2>/dev/null)
-
-    if [ -n "$CURRENT_PHASE" ] && [ "$CURRENT_PHASE" != "build" ]; then
-      # Resolve the skill directory through the phase registry. Returns
-      # silently for unknown phases so the guard never blocks because of
-      # a stale session pointing at a removed skill.
-      SKILL_MD=""
-      PHASES_LIB="$NANOSTACK_ROOT/bin/lib/phases.sh"
-      if [ -f "$PHASES_LIB" ]; then
-        # shellcheck disable=SC1090
-        source "$PHASES_LIB" 2>/dev/null || true
-        if command -v nano_phase_skill_path >/dev/null 2>&1; then
-          SKILL_DIR=$(nano_phase_skill_path "$CURRENT_PHASE" 2>/dev/null || true)
-          if [ -n "$SKILL_DIR" ] && [ -f "$SKILL_DIR/SKILL.md" ]; then
-            SKILL_MD="$SKILL_DIR/SKILL.md"
-          fi
-        fi
-      fi
-
-      SKILL_CONC=""
-      if [ -n "$SKILL_MD" ]; then
-        SKILL_CONC=$(sed -n '/^---$/,/^---$/p' "$SKILL_MD" | grep '^concurrency:' | head -1 | sed 's/^concurrency: *//')
+  # Resolve the active phase's concurrency through the shared registry
+  # helper (bin/lib/phases.sh). The SAME helper backs the Write/Edit
+  # guard (guard/bin/check-write.sh) so the two hooks cannot drift on
+  # what "read-only phase" means. The helper fails open (non-zero, no
+  # output) for stale sessions, the conductor's "build" stage, removed
+  # skills, and malformed custom skill metadata — so the guard never
+  # blocks because of a bad session pointer.
+  PHASES_LIB="$NANOSTACK_ROOT/bin/lib/phases.sh"
+  if [ -f "$PHASES_LIB" ]; then
+    # shellcheck disable=SC1090
+    source "$PHASES_LIB" 2>/dev/null || true
+    if command -v nano_active_phase_concurrency >/dev/null 2>&1; then
+      ACTIVE_REC=$(nano_active_phase_concurrency 2>/dev/null) || ACTIVE_REC=""
+      if [ -n "$ACTIVE_REC" ]; then
+        CURRENT_PHASE=$(printf '%s' "$ACTIVE_REC" | cut -f1)
+        SKILL_CONC=$(printf '%s' "$ACTIVE_REC" | cut -f2)
+      else
+        CURRENT_PHASE=""
+        SKILL_CONC=""
       fi
 
       # Block writes during read-only phases

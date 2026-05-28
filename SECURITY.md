@@ -95,6 +95,8 @@ Coding agents need to write code, so `Write(*)` and `Edit(*)` stay broad in the 
 - System directories (`/etc`, `/var`, `/usr/bin`, `/usr/sbin`, `/usr/lib`, `/System`, `/private/etc`).
 - User secret directories (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.gcp`, `~/.config/gcloud`, `~/.kube`).
 
+The same hook also enforces phase concurrency: while a phase whose skill declares `concurrency: read` is active (e.g. `/review`, `/security`, `/qa`, or a custom read-only phase), every Write, Edit, and MultiEdit is blocked, not just the protected paths above. This is the same read-only rule the Bash guard applies (`check-dangerous.sh` Tier 2.4); both hooks resolve it through one shared helper (`nano_active_phase_concurrency` in `bin/lib/phases.sh`) so they cannot drift. It is what makes it safe for `/conductor` to run the read phases as one parallel batch: no mutation tool can write while a read phase is live. Complete the phase (`bin/session.sh phase-complete <phase>`) or end the session to lift the block.
+
 Fresh installs receive this hook wired automatically. Existing installs are not modified and need to wire it manually to gain the Write/Edit layer.
 
 ### Manual wire-up for existing installs

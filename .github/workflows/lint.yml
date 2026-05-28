@@ -3404,38 +3404,55 @@ jobs:
           exit $fail
 
   guard-uses-phase-registry:
-    name: Guard resolves current-phase SKILL.md via the phase registry
+    name: Both guards resolve read-only phase via the shared registry helper
     runs-on: ubuntu-latest
-    # Tier 2.5 concurrency enforcement must go through nano_phase_skill_path
-    # (bin/lib/phases.sh) so custom phases get the same write-block
-    # protection as built-in ones. The 2026-05-10 audit caught a raw
-    # $NANOSTACK_ROOT/$CURRENT_PHASE/SKILL.md lookup that silently no-oped
-    # for every custom skill (their SKILL.md lives under the store, not
-    # the repo). This lock blocks any reintroduction of the raw lookup.
+    # Read-only phase concurrency enforcement must go through the shared
+    # nano_active_phase_concurrency helper (bin/lib/phases.sh), which
+    # resolves SKILL.md via nano_phase_skill_path so custom phases get the
+    # same write-block protection as built-in ones. The 2026-05-10 audit
+    # caught a raw $NANOSTACK_ROOT/$CURRENT_PHASE/SKILL.md lookup that
+    # silently no-oped for custom skills (their SKILL.md lives under the
+    # store, not the repo). The 2026-05-28 follow-up extended the block to
+    # the Write/Edit guard, so BOTH hooks must consume the shared helper
+    # rather than re-implementing the lookup — otherwise Bash and
+    # Write/Edit drift on what "read-only phase" means.
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: No raw repo-root SKILL.md lookup in guard
+      - name: No raw repo-root SKILL.md lookup in either guard hook
         run: |
           set -e
-          script=guard/bin/check-dangerous.sh
-          # Strip comment lines so the explanatory header (which quotes
-          # the forbidden pattern as context) does not trigger the lock.
-          code_only=$(grep -vE '^[[:space:]]*#' "$script")
-          if echo "$code_only" | grep -E '\$NANOSTACK_ROOT/\$[A-Z_]*PHASE[A-Z_]*/SKILL\.md'; then
-            echo "FAIL: $script contains a raw \$NANOSTACK_ROOT/<phase>/SKILL.md lookup."
-            echo "Use nano_phase_skill_path from bin/lib/phases.sh so custom phases"
-            echo "get the same concurrency protection as built-in ones."
+          fail=0
+          for script in guard/bin/check-dangerous.sh guard/bin/check-write.sh; do
+            # Strip comment lines so explanatory headers that quote the
+            # forbidden pattern as context do not trigger the lock.
+            code_only=$(grep -vE '^[[:space:]]*#' "$script")
+            if echo "$code_only" | grep -E '\$NANOSTACK_ROOT/\$[A-Z_]*PHASE[A-Z_]*/SKILL\.md'; then
+              echo "FAIL: $script contains a raw \$NANOSTACK_ROOT/<phase>/SKILL.md lookup."
+              fail=1
+            fi
+          done
+          [ "$fail" = 0 ] || { echo "Use the shared registry helper, not a raw per-phase lookup."; exit 1; }
+          echo "OK: no raw repo-root SKILL.md lookup in either guard hook."
+      - name: Both guard hooks resolve read-only phase via the shared helper
+        run: |
+          set -e
+          for script in guard/bin/check-dangerous.sh guard/bin/check-write.sh; do
+            if ! grep -qF 'nano_active_phase_concurrency' "$script"; then
+              echo "FAIL: $script does not reference nano_active_phase_concurrency."
+              echo "Both guards must resolve the read-only phase block through the"
+              echo "shared helper so the Bash and Write/Edit hooks cannot drift."
+              exit 1
+            fi
+          done
+          # The shared helper itself must resolve SKILL.md through the
+          # registry so custom skills under <store>/skills/ are honored.
+          if ! grep -qF 'nano_phase_skill_path' bin/lib/phases.sh; then
+            echo "FAIL: nano_phase_concurrency must resolve via nano_phase_skill_path."
             exit 1
           fi
-          if ! grep -qF 'nano_phase_skill_path' "$script"; then
-            echo "FAIL: $script does not reference nano_phase_skill_path."
-            echo "The concurrency tier must resolve SKILL.md through the phase"
-            echo "registry so custom skills under <store>/skills/ are honored."
-            exit 1
-          fi
-          echo "OK: guard concurrency tier uses the phase registry."
+          echo "OK: both guards use the shared registry-backed concurrency helper."
 
   architecture-vnext-doc-locks:
     name: Architecture vNext doc locks (telemetry path, AGENTS inventory, README accuracy)
