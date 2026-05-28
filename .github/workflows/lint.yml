@@ -3644,14 +3644,17 @@ jobs:
     runs-on: ubuntu-latest
     # PR 6 of the 2026-05-10 architecture audit. Runs bin/check-adapters.sh
     # so a stale or malformed adapter cannot ship to main.
+    # PR 2 of the 2026-05-28 follow-up adds --require-readme-contracts so
+    # the README matrix/legend + schema locks fail closed: a missing table
+    # or schema file is a hard failure here, not a silent skip.
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Run check-adapters.sh
+      - name: Run check-adapters.sh (strict)
         run: |
           chmod +x bin/check-adapters.sh
-          bin/check-adapters.sh
+          bin/check-adapters.sh --require-readme-contracts
 
   custom-routing-contract:
     name: Custom routing contract wired into resolve.sh

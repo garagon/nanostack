@@ -61,7 +61,7 @@ write_adapter() {
   local body
   body=$(jq -n --arg host "$name" --arg lv "$last_verified" \
     '{host: $host, schema_version: "1", last_verified: $lv,
-      verification: {method: "ci", evidence: "test"},
+      verification: {method: "ci", evidence: "test", ci_jobs: ["guard-regression"]},
       skill_discovery: "native",
       bash_guard: "enforced",
       write_guard: "enforced",
@@ -471,6 +471,241 @@ else
   parsed="no"
 fi
 assert_eq "--json output parses with summary.fail = 0" "yes" "$parsed"
+
+# =====================================================================
+# PR 2 of the 2026-05-28 architecture follow-up: behavior-lock cells.
+# These exercise the three new contracts in check-adapters.sh against a
+# full repo fixture (real README matrix + legend, real schema, real
+# adapters, and a workflow stub declaring the jobs claude.json names):
+#   - README matrix cells must equal adapters/*.json capability values
+#   - enforced/hooked requires verification.method==ci + named ci_jobs
+#   - README legend vocabulary must match the schema
+# =====================================================================
+
+# Build a tmp root that mirrors the live repo closely enough for the
+# matrix/legend/evidence locks to run: copies the real README, schema,
+# and adapters, and writes a workflow stub declaring the job keys
+# claude.json's ci_jobs points at so the existence sub-check resolves.
+new_repo_full() {
+  local name="$1"
+  local root="$TMP_ROOT/$name"
+  mkdir -p "$root/bin" "$root/adapters" "$root/reference" "$root/.github/workflows"
+  cp "$REPO/bin/check-adapters.sh" "$root/bin/"
+  chmod +x "$root/bin/check-adapters.sh"
+  cp "$REPO/README.md" "$root/README.md"
+  cp "$REPO/reference/host-adapter-schema.md" "$root/reference/"
+  cp "$REPO"/adapters/*.json "$root/adapters/"
+  # Continuous workflow (runs on pull_request) declaring the jobs that the
+  # real claude.json names in ci_jobs, so the evidence gate's
+  # continuous-job membership check resolves against something real.
+  {
+    echo "on:"
+    echo "  pull_request:"
+    echo "jobs:"
+    for j in guard-regression write-guard-regression; do
+      echo "  $j:"
+      echo "    runs-on: ubuntu-latest"
+    done
+  } > "$root/.github/workflows/stub.yml"
+  echo "$root"
+}
+
+# Mutate one adapter file in place via jq.
+mutate_adapter() {
+  local root="$1" host="$2" filter="$3"
+  jq "$filter" "$root/adapters/${host}.json" > "$root/adapters/${host}.json.tmp"
+  mv "$root/adapters/${host}.json.tmp" "$root/adapters/${host}.json"
+}
+
+# Cell 9: the real, unmodified adapter set (matrix + legend + schema +
+# evidence) is internally consistent and passes. Positive control: if
+# this ever fails, the live repo itself drifted.
+echo "[9] full real adapter set (matrix + legend + evidence) passes"
+root=$(new_repo_full "cell9-full")
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "full real set exits 0 (lenient)" "0" "$rc"
+out=$(run_check_in "$root" --require-readme-contracts)
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "full real set exits 0 (strict)" "0" "$rc"
+
+# Cell 10: a README matrix cell that disagrees with the adapter JSON
+# fails (drift direction: README overstates/understates a host).
+echo "[10] README matrix cell drift fails"
+root=$(new_repo_full "cell10-matrix-drift")
+sed -i.bak 's/| Claude Code | enforced (L3) |/| Claude Code | guided (L0) |/' "$root/README.md"
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "matrix cell drift exits 1" "1" "$rc"
+echo "$out" | grep -q "README matrix bash_guard cell" && \
+  assert_eq "matrix drift reported" "yes" "yes" || \
+  assert_eq "matrix drift reported" "yes" "no"
+
+# Cell 11: a non-Claude adapter set to enforced without CI evidence
+# fails (overclaim direction). cursor has verification.method=manual.
+echo "[11] non-Claude write_guard=enforced without CI evidence fails"
+root=$(new_repo_full "cell11-overclaim-enforced")
+mutate_adapter "$root" cursor '.write_guard = "enforced"'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "enforced overclaim exits 1" "1" "$rc"
+echo "$out" | grep -q "must be ci" && \
+  assert_eq "evidence gate reported (method)" "yes" "yes" || \
+  assert_eq "evidence gate reported (method)" "yes" "no"
+
+# Cell 12: same overclaim via hooked.
+echo "[12] non-Claude write_guard=hooked without CI evidence fails"
+root=$(new_repo_full "cell12-overclaim-hooked")
+mutate_adapter "$root" cursor '.write_guard = "hooked"'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "hooked overclaim exits 1" "1" "$rc"
+echo "$out" | grep -q "ci_jobs is missing or empty" && \
+  assert_eq "evidence gate reported (ci_jobs)" "yes" "yes" || \
+  assert_eq "evidence gate reported (ci_jobs)" "yes" "no"
+
+# Cell 13: removing ci_jobs from a legitimately enforced adapter fails.
+echo "[13] removing ci_jobs from an enforced adapter fails"
+root=$(new_repo_full "cell13-remove-cijobs")
+mutate_adapter "$root" claude 'del(.verification.ci_jobs)'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "missing ci_jobs exits 1" "1" "$rc"
+echo "$out" | grep -q "ci_jobs is missing or empty" && \
+  assert_eq "missing ci_jobs reported" "yes" "yes" || \
+  assert_eq "missing ci_jobs reported" "yes" "no"
+
+# Cell 14: ci_jobs naming a job that does not exist in any workflow
+# file fails (you cannot satisfy the gate with a fake job name).
+echo "[14] ci_jobs naming a non-existent job fails"
+root=$(new_repo_full "cell14-fake-job")
+mutate_adapter "$root" claude '.verification.ci_jobs = ["not-a-real-job"]'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "fake ci_job exits 1" "1" "$rc"
+echo "$out" | grep -q "not satisfied: not-a-real-job" && \
+  assert_eq "fake-job reported" "yes" "yes" || \
+  assert_eq "fake-job reported" "yes" "no"
+
+# Cell 15: a README legend label that disagrees with the schema fails.
+echo "[15] README legend drift from the schema fails"
+root=$(new_repo_full "cell15-legend-drift")
+sed -i.bak 's/\*\*L0 Guided\*\*/**L0 Unsupported**/' "$root/README.md"
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "legend drift exits 1" "1" "$rc"
+echo "$out" | grep -q "README-legend" && \
+  assert_eq "legend drift reported" "yes" "yes" || \
+  assert_eq "legend drift reported" "yes" "no"
+
+# Cell 16: strict mode fails when the README matrix is deleted (a lock
+# cannot be turned off by removing the table). Lenient mode skips it.
+echo "[16] strict mode fails on a missing README matrix"
+root=$(new_repo_full "cell16-no-matrix")
+# Drop the matrix header line so readme_has_matrix is false.
+grep -v '| Agent | Bash guard |' "$root/README.md" > "$root/README.md.tmp"
+mv "$root/README.md.tmp" "$root/README.md"
+out=$(run_check_in "$root" --require-readme-contracts)
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "strict + missing matrix exits 1" "1" "$rc"
+echo "$out" | grep -q "per-host capability matrix is missing" && \
+  assert_eq "strict missing-matrix reported" "yes" "yes" || \
+  assert_eq "strict missing-matrix reported" "yes" "no"
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "lenient + missing matrix still exits 0" "0" "$rc"
+
+# Cell 17: strict mode fails when the schema file is deleted.
+echo "[17] strict mode fails on a missing schema file"
+root=$(new_repo_full "cell17-no-schema")
+rm -f "$root/reference/host-adapter-schema.md"
+out=$(run_check_in "$root" --require-readme-contracts)
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "strict + missing schema exits 1" "1" "$rc"
+echo "$out" | grep -q "schema file reference/host-adapter-schema.md is missing" && \
+  assert_eq "strict missing-schema reported" "yes" "yes" || \
+  assert_eq "strict missing-schema reported" "yes" "no"
+
+# Cell 18: strict mode fails when the README legend is deleted.
+echo "[18] strict mode fails on a missing README legend"
+root=$(new_repo_full "cell18-no-legend")
+grep -v '| Level | Meaning |' "$root/README.md" > "$root/README.md.tmp"
+mv "$root/README.md.tmp" "$root/README.md"
+out=$(run_check_in "$root" --require-readme-contracts)
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "strict + missing legend exits 1" "1" "$rc"
+echo "$out" | grep -q "L-level legend is missing" && \
+  assert_eq "strict missing-legend reported" "yes" "yes" || \
+  assert_eq "strict missing-legend reported" "yes" "no"
+
+# Cell 19: a schema present but unparseable fails regardless of strict
+# mode, so a schema restructure cannot silently disable the locks.
+echo "[19] unparseable schema fails (lock cannot self-disable)"
+root=$(new_repo_full "cell19-bad-schema")
+echo "this schema has no L-level vocabulary bullets" > "$root/reference/host-adapter-schema.md"
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "unparseable schema exits 1" "1" "$rc"
+echo "$out" | grep -q "could not parse" && \
+  assert_eq "unparseable-schema reported" "yes" "yes" || \
+  assert_eq "unparseable-schema reported" "yes" "no"
+
+# Cell 20: a ci_jobs entry with regex metacharacters must not satisfy the
+# evidence gate by matching an unrelated job. '.*' is a valid JSON string
+# but not a valid job id, so it is rejected, not treated as a pattern.
+echo "[20] ci_jobs with regex metacharacters does not bypass the gate"
+root=$(new_repo_full "cell20-regex-job")
+mutate_adapter "$root" claude '.verification.ci_jobs = [".*"]'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "regex ci_job exits 1" "1" "$rc"
+echo "$out" | grep -q "not a valid job id" && \
+  assert_eq "regex ci_job reported as invalid" "yes" "yes" || \
+  assert_eq "regex ci_job reported as invalid" "yes" "no"
+
+# Cell 21: a schema that drops only the L4 bullet is incomplete and must
+# fail the parse rather than silently dropping the L4 legend lock.
+echo "[21] schema missing the L4 bullet fails the parse"
+root=$(new_repo_full "cell21-no-l4")
+grep -v '^- L4 ("' "$root/reference/host-adapter-schema.md" > "$root/reference/host-adapter-schema.md.tmp"
+mv "$root/reference/host-adapter-schema.md.tmp" "$root/reference/host-adapter-schema.md"
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "missing L4 bullet exits 1" "1" "$rc"
+echo "$out" | grep -q "could not parse" && \
+  assert_eq "missing-L4 reported as parse failure" "yes" "yes" || \
+  assert_eq "missing-L4 reported as parse failure" "yes" "no"
+
+# Cell 22: a job that exists only in a workflow_dispatch-only workflow is
+# not continuous evidence and must not satisfy the gate.
+echo "[22] ci_jobs in a workflow_dispatch-only workflow does not satisfy the gate"
+root=$(new_repo_full "cell22-manual-job")
+{
+  echo "on:"
+  echo "  workflow_dispatch:"
+  echo "jobs:"
+  echo "  manual-only-job:"
+  echo "    runs-on: ubuntu-latest"
+} > "$root/.github/workflows/manual.yml"
+mutate_adapter "$root" claude '.verification.ci_jobs = ["manual-only-job"]'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "manual-only ci_job exits 1" "1" "$rc"
+echo "$out" | grep -q "not satisfied: manual-only-job" && \
+  assert_eq "manual-only job reported" "yes" "yes" || \
+  assert_eq "manual-only job reported" "yes" "no"
+
+# Cell 23: an `on:` trigger key (pull_request) is not a job, so naming it
+# in ci_jobs must fail rather than matching the trigger block.
+echo "[23] ci_jobs naming an on: trigger key (pull_request) does not satisfy the gate"
+root=$(new_repo_full "cell23-trigger-key")
+mutate_adapter "$root" claude '.verification.ci_jobs = ["pull_request"]'
+out=$(run_check_in "$root")
+rc=$(echo "$out" | sed -n 's/^RC=\(.*\)/\1/p' | tail -1)
+assert_eq "trigger-key ci_job exits 1" "1" "$rc"
+echo "$out" | grep -q "not satisfied: pull_request" && \
+  assert_eq "trigger-key reported" "yes" "yes" || \
+  assert_eq "trigger-key reported" "yes" "no"
 
 cd "$TMP_ROOT"
 

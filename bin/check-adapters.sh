@@ -8,9 +8,17 @@
 # freshness and surfaces drift before it reaches a release.
 #
 # Usage:
-#   bin/check-adapters.sh                Validate every adapters/*.json.
-#   bin/check-adapters.sh <host>         Validate one adapter.
-#   bin/check-adapters.sh --json         Machine-readable summary.
+#   bin/check-adapters.sh                       Validate every adapters/*.json.
+#   bin/check-adapters.sh <host>                Validate one adapter.
+#   bin/check-adapters.sh --json                Machine-readable summary.
+#   bin/check-adapters.sh --require-readme-contracts
+#                                               Strict mode (for CI): also
+#       require that the schema file, the README per-host matrix, and the
+#       README L-level legend are PRESENT, not just consistent when present.
+#       Without this flag the README/schema-derived locks skip when a file
+#       or table is absent, so an isolated partial checkout still validates
+#       adapter JSON shape. The live lint/e2e jobs pass this flag so the
+#       contracts cannot be silently disabled by deleting a table.
 #
 # Freshness policy:
 #   - warn after 30 days
@@ -35,10 +43,12 @@ WARN_DAYS=30
 FAIL_DAYS=60
 
 JSON_OUT=false
+REQUIRE_CONTRACTS=false
 FILTER=""
 for arg in "$@"; do
   case "$arg" in
     --json) JSON_OUT=true ;;
+    --require-readme-contracts) REQUIRE_CONTRACTS=true ;;
     -h|--help)
       sed -n '/^# /,/^$/p' "$0" | sed 's/^# //'
       exit 0
@@ -81,6 +91,141 @@ SCHEMA_VERSION_ENUM="1"
 # warns).
 README_LISTED=$(grep -oE '`(claude|cursor|codex|opencode|gemini)`' "$NANOSTACK_ROOT/README.md" 2>/dev/null \
   | tr -d '`' | sort -u | tr '\n' ' ')
+
+README_FILE="$NANOSTACK_ROOT/README.md"
+SCHEMA_FILE="$NANOSTACK_ROOT/reference/host-adapter-schema.md"
+WORKFLOW_DIR="$NANOSTACK_ROOT/.github/workflows"
+BT='`'
+
+# ---- L-level vocabulary, parsed from the host adapter schema ----
+# PR 2 of the 2026-05-28 architecture follow-up. reference/host-adapter-schema.md
+# is the single source of truth for the capability -> L-level -> label
+# mapping. Parse it once here so the README legend and per-host matrix can
+# be validated against it instead of a second hardcoded copy that could
+# drift. The bullet lines look like:
+#   - `unsupported` and `instructions_only` are L0 ("Guided")
+#   - `enforced` is L3 ("Enforced")
+#   - L4 ("Continuously verified") is not a capability value ...
+# When the schema is absent (partial checkout, or a test fixture that does
+# not ship it) the README-derived checks that need it are skipped: they
+# cannot run without the source of truth, and the live repo always ships
+# the schema so the real lock still fires.
+SCHEMA_PRESENT=false
+SCHEMA_PARSE_OK=false
+CAP_LEVEL_MAP=""    # newline list of "cap<TAB>level"
+LEVEL_LABEL_MAP=""  # newline list of "level<TAB>label"
+
+# Normalize a cell/label for comparison: lowercase, strip backticks,
+# trim and collapse internal whitespace.
+norm_label() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '`' \
+    | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/[[:space:]]+/ /g'
+}
+
+if [ -f "$SCHEMA_FILE" ]; then
+  SCHEMA_PRESENT=true
+  SCHEMA_PARSE_OK=true
+  for _cap in unsupported instructions_only detectable hooked enforced; do
+    _bullet=$(grep -E '^- ' "$SCHEMA_FILE" | grep -F "${BT}${_cap}${BT}" | grep -E 'L[0-9] \("' | head -1)
+    _lvl=$(printf '%s\n' "$_bullet" | sed -nE 's/.* L([0-9]) \(".*/\1/p' | head -1)
+    _lbl=$(printf '%s\n' "$_bullet" | sed -nE 's/.*\("([^"]+)"\).*/\1/p' | head -1)
+    if [ -z "$_lvl" ] || [ -z "$_lbl" ]; then
+      SCHEMA_PARSE_OK=false
+      continue
+    fi
+    CAP_LEVEL_MAP="${CAP_LEVEL_MAP}${_cap}	${_lvl}
+"
+    case "
+$LEVEL_LABEL_MAP" in
+      *"
+${_lvl}	"*) : ;;
+      *) LEVEL_LABEL_MAP="${LEVEL_LABEL_MAP}${_lvl}	${_lbl}
+" ;;
+    esac
+  done
+  _l4=$(grep -E '^- L4 \("' "$SCHEMA_FILE" | head -1)
+  _l4lbl=$(printf '%s\n' "$_l4" | sed -nE 's/.*\("([^"]+)"\).*/\1/p' | head -1)
+  if [ -n "$_l4lbl" ]; then
+    LEVEL_LABEL_MAP="${LEVEL_LABEL_MAP}4	${_l4lbl}
+"
+  else
+    # A schema that ships but loses the L4 bullet is incomplete: the
+    # legend check would skip L4 and strict mode would still pass with a
+    # truncated vocabulary. Treat it as a parse failure so the integrity
+    # guard fires instead of silently dropping the L4 lock.
+    SCHEMA_PARSE_OK=false
+  fi
+fi
+
+cap_level()   { printf '%s' "$CAP_LEVEL_MAP"   | awk -F'\t' -v k="$1" '$1==k{print $2; exit}'; }
+level_label() { printf '%s' "$LEVEL_LABEL_MAP" | awk -F'\t' -v k="$1" '$1==k{print $2; exit}'; }
+
+# ---- Continuously-triggered CI job names ----
+# The evidence gate only counts a ci_jobs entry as proof if it names a
+# real job (a key under `jobs:`) in a workflow that runs on every change
+# (its `on:` block includes pull_request or push). A job that only exists
+# under `on:` (e.g. pull_request), or one that lives in a
+# workflow_dispatch-only workflow, is NOT continuous evidence: a hook that
+# is only exercised when a maintainer manually runs a workflow is not
+# "CI-asserted on every change". The awk tracks which top-level section
+# (on/jobs/other) each line belongs to so an `on:` trigger key is never
+# mistaken for a job key.
+WORKFLOW_JOBS=""
+if [ -d "$WORKFLOW_DIR" ]; then
+  for _wf in "$WORKFLOW_DIR"/*.yml "$WORKFLOW_DIR"/*.yaml; do
+    [ -f "$_wf" ] || continue
+    _wf_jobs=$(awk '
+      /^[A-Za-z_][A-Za-z0-9_-]*:/ {
+        if ($0 ~ /^jobs:[[:space:]]*$/)      sect="jobs"
+        else if ($0 ~ /^on:/)                sect="on"
+        else                                  sect="other"
+        next
+      }
+      sect=="on" && /^  (pull_request|push):/ { cont=1 }
+      sect=="jobs" && /^  [A-Za-z0-9_-]+:/ { l=$0; sub(/^  /,"",l); sub(/:.*/,"",l); jobs=jobs l "\n" }
+      END { if (cont) printf "%s", jobs }
+    ' "$_wf")
+    WORKFLOW_JOBS="${WORKFLOW_JOBS}${_wf_jobs}"
+  done
+fi
+
+# Exact (non-regex) membership test against the continuous job set.
+job_is_continuous() {
+  printf '%s\n' "$WORKFLOW_JOBS" | grep -Fxq "$1"
+}
+
+# Expected README matrix cell (normalized) for an adapter capability
+# value, e.g. enforced -> "enforced (l3)", instructions_only ->
+# "guided (l0)". host_dependent varies and is skipped.
+expected_cell() {
+  local cap="$1" lvl lbl
+  [ "$cap" = "host_dependent" ] && { printf '__SKIP__'; return; }
+  lvl=$(cap_level "$cap"); [ -z "$lvl" ] && { printf '__UNKNOWN__'; return; }
+  lbl=$(level_label "$lvl"); [ -z "$lbl" ] && { printf '__UNKNOWN__'; return; }
+  norm_label "$lbl (l$lvl)"
+}
+
+# Map an adapter host key to its display name in the README matrix.
+host_display_name() {
+  case "$1" in
+    claude)   printf 'Claude Code' ;;
+    cursor)   printf 'Cursor' ;;
+    codex)    printf 'OpenAI Codex' ;;
+    opencode) printf 'OpenCode' ;;
+    gemini)   printf 'Gemini CLI' ;;
+    *)        printf '' ;;
+  esac
+}
+
+readme_has_matrix() {
+  [ -f "$README_FILE" ] && grep -qE '^\| *Agent *\| *Bash guard *\|' "$README_FILE"
+}
+readme_has_legend() {
+  [ -f "$README_FILE" ] && grep -qE '^\| *Level *\| *Meaning *\|' "$README_FILE"
+}
+matrix_row_for() {
+  grep -E "^\| *$1 *\|" "$README_FILE" 2>/dev/null | grep -E '\(L[0-9]\)' | head -1
+}
 
 NOW_EPOCH=$(date -u +%s)
 
@@ -251,6 +396,84 @@ check_adapter() {
     fi
   done
 
+  # ---- Evidence gate: enforced/hooked is a behavioral claim ----
+  # PR 2 of the 2026-05-28 architecture follow-up. enforced/hooked says a
+  # hook actually runs (and, for enforced, blocks). The enum value alone
+  # does not prove it, so require CI evidence: verification.method == ci
+  # plus a non-empty verification.ci_jobs naming jobs that exist under
+  # .github/workflows/. Rule documented in reference/host-adapter-schema.md
+  # ("Evidence gate"). Job existence is only checked when a workflow dir is
+  # present (the live repo always has one); a fixture without workflows
+  # still has its method+ci_jobs shape validated.
+  local needs_evidence=""
+  for field in bash_guard write_guard phase_gate; do
+    val=$(eval echo "\$$field")
+    case "$val" in
+      enforced|hooked) needs_evidence="${needs_evidence:+$needs_evidence }$field" ;;
+    esac
+  done
+  if [ -n "$needs_evidence" ]; then
+    local ev_method
+    ev_method=$(jq -r '.verification.method? // ""' "$file" 2>/dev/null)
+    if [ "$ev_method" != "ci" ]; then
+      errors="${errors:+$errors; }$needs_evidence claim enforced/hooked but verification.method='$ev_method' (must be ci)"
+    fi
+    if ! jq -e '.verification.ci_jobs | type == "array" and length > 0 and all(type == "string" and length > 0)' "$file" >/dev/null 2>&1; then
+      errors="${errors:+$errors; }$needs_evidence claim enforced/hooked but verification.ci_jobs is missing or empty"
+    elif [ -d "$WORKFLOW_DIR" ]; then
+      local job bad_jobs=""
+      while IFS= read -r job; do
+        [ -z "$job" ] && continue
+        # Reject anything that is not a plain job identifier first, so a
+        # value with ERE metacharacters (e.g. ".*") can never be treated
+        # as a pattern. Then require exact membership in the set of jobs
+        # that exist under `jobs:` in a continuously-triggered workflow.
+        if ! printf '%s' "$job" | grep -qE '^[A-Za-z0-9_-]+$'; then
+          bad_jobs="${bad_jobs:+$bad_jobs,}'$job' (not a valid job id)"
+        elif ! job_is_continuous "$job"; then
+          bad_jobs="${bad_jobs:+$bad_jobs,}$job"
+        fi
+      done <<< "$(jq -r '.verification.ci_jobs[]?' "$file" 2>/dev/null)"
+      if [ -n "$bad_jobs" ]; then
+        errors="${errors:+$errors; }verification.ci_jobs must name jobs in a pull_request/push-triggered workflow; not satisfied: $bad_jobs"
+      fi
+    fi
+  fi
+
+  # ---- README matrix equality ----
+  # The per-host matrix in README.md must show the same capability level
+  # as this adapter. Source of truth: the adapter JSON value mapped to the
+  # schema's L-level vocabulary. Runs only when the README ships the matrix
+  # and the schema parsed (the live repo has both, so the lock fires).
+  if $SCHEMA_PARSE_OK && readme_has_matrix; then
+    local display
+    display=$(host_display_name "$name")
+    if [ -n "$display" ]; then
+      local row
+      row=$(matrix_row_for "$display")
+      if [ -z "$row" ]; then
+        errors="${errors:+$errors; }README matrix has no row for '$display' but adapter $name exists"
+      else
+        local idx exp act
+        idx=3
+        for field in bash_guard write_guard phase_gate; do
+          val=$(eval echo "\$$field")
+          exp=$(expected_cell "$val")
+          if [ "$exp" = "__SKIP__" ]; then idx=$((idx+1)); continue; fi
+          if [ "$exp" = "__UNKNOWN__" ]; then
+            errors="${errors:+$errors; }cannot map $field=$val to an L-level from the schema"
+            idx=$((idx+1)); continue
+          fi
+          act=$(norm_label "$(printf '%s\n' "$row" | awk -F'|' -v n="$idx" '{print $n}')")
+          if [ "$act" != "$exp" ]; then
+            errors="${errors:+$errors; }README matrix $field cell for $display is '$act' but $name says '$val' (expected '$exp')"
+          fi
+          idx=$((idx+1))
+        done
+      fi
+    fi
+  fi
+
   if [ -z "$discovery" ]; then
     # Already reported as missing above when the key was absent. Only
     # flag here if the key exists but the value is empty.
@@ -374,6 +597,75 @@ for host in $README_LISTED; do
       '. + [{adapter: $name, status: "fail", age_days: 0, message: "listed in README but no JSON file"}]')
   fi
 done
+
+# ---- Strict mode: the README/schema contracts must be PRESENT ----
+# Without --require-readme-contracts the matrix/legend/evidence locks are
+# skip-if-absent so an isolated partial checkout can still validate adapter
+# JSON shape. The live CI jobs pass the flag, which makes a missing schema,
+# missing README matrix, or missing README legend a hard failure: deleting
+# a table can no longer turn the contract off. Runs in full mode only; a
+# single-host diagnostic (--filter) is not the place to demand the whole
+# README.
+if $REQUIRE_CONTRACTS && [ -z "$FILTER" ]; then
+  contract_fail=""
+  if ! $SCHEMA_PRESENT; then
+    contract_fail="${contract_fail:+$contract_fail; }schema file reference/host-adapter-schema.md is missing"
+  fi
+  if [ ! -f "$README_FILE" ]; then
+    contract_fail="${contract_fail:+$contract_fail; }README.md is missing"
+  else
+    readme_has_matrix || contract_fail="${contract_fail:+$contract_fail; }README per-host capability matrix is missing"
+    readme_has_legend || contract_fail="${contract_fail:+$contract_fail; }README L-level legend is missing"
+  fi
+  if [ -n "$contract_fail" ]; then
+    FAIL=$((FAIL + 1))
+    RESULTS_TEXT="${RESULTS_TEXT}FAIL  readme-contracts: $contract_fail
+"
+    RESULTS_JSON=$(echo "$RESULTS_JSON" | jq --arg m "$contract_fail" \
+      '. + [{adapter: "readme-contracts", status: "fail", age_days: 0, message: $m}]')
+  fi
+fi
+
+# ---- Schema parse integrity ----
+# If the schema ships but its L-level vocabulary could not be parsed, the
+# matrix/legend locks silently disable themselves. Fail loudly instead so
+# a schema restructure cannot turn the lock off without anyone noticing.
+if $SCHEMA_PRESENT && ! $SCHEMA_PARSE_OK; then
+  FAIL=$((FAIL + 1))
+  RESULTS_TEXT="${RESULTS_TEXT}FAIL  host-adapter-schema: could not parse the capability/L-level vocabulary from reference/host-adapter-schema.md
+"
+  RESULTS_JSON=$(echo "$RESULTS_JSON" | jq \
+    '. + [{adapter: "host-adapter-schema", status: "fail", age_days: 0, message: "could not parse L-level vocabulary"}]')
+fi
+
+# ---- README legend vs schema vocabulary ----
+# The README L-level legend must use the same level->label words the
+# schema defines. Runs once in full mode (no filter) when both the legend
+# and the parsed schema are present. Sabotaging either the level numbers
+# or the labels in the README legend fails here.
+if [ -z "$FILTER" ] && $SCHEMA_PARSE_OK && readme_has_legend; then
+  legend_fail=""
+  for lvl in 0 1 2 3 4; do
+    lbl=$(level_label "$lvl")
+    [ -z "$lbl" ] && continue
+    legend_row=$(grep -iE "^\| *\*\*L${lvl} " "$README_FILE" | head -1)
+    if [ -z "$legend_row" ]; then
+      legend_fail="${legend_fail:+$legend_fail; }legend missing row for L$lvl"
+      continue
+    fi
+    got=$(printf '%s\n' "$legend_row" | sed -nE 's/^\| *\*\*L'"$lvl"' ([^*]+)\*\*.*/\1/p' | head -1)
+    if [ "$(norm_label "$got")" != "$(norm_label "$lbl")" ]; then
+      legend_fail="${legend_fail:+$legend_fail; }legend L$lvl label is '$(norm_label "$got")' but schema says '$(norm_label "$lbl")'"
+    fi
+  done
+  if [ -n "$legend_fail" ]; then
+    FAIL=$((FAIL + 1))
+    RESULTS_TEXT="${RESULTS_TEXT}FAIL  README-legend: $legend_fail
+"
+    RESULTS_JSON=$(echo "$RESULTS_JSON" | jq --arg m "$legend_fail" \
+      '. + [{adapter: "README-legend", status: "fail", age_days: 0, message: $m}]')
+  fi
+fi
 
 if $JSON_OUT; then
   jq -n --argjson results "$RESULTS_JSON" --argjson fail "$FAIL" --argjson warn "$WARN" \

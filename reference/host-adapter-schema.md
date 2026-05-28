@@ -52,7 +52,8 @@ One file per host. Filename matches the `host` field. Existing host names: `clau
 ```json
 {
   "method": "ci",
-  "evidence": ".github/workflows/lint.yml:guard-regression"
+  "evidence": ".github/workflows/lint.yml:guard-regression",
+  "ci_jobs": ["guard-regression", "write-guard-regression"]
 }
 ```
 
@@ -61,6 +62,16 @@ One file per host. Filename matches the `host` field. Existing host names: `clau
   - `manual` means a human ran a check and signed off; the evidence string should name the check or the commit.
   - `unknown` means nobody has confirmed; the host's claims must be conservative.
 - `evidence`: short pointer to where the proof lives. A file path with optional anchor, a command, or a URL.
+- `ci_jobs`: array of CI job names (the `jobs:` keys under `.github/workflows/`) that exercise the host's hooks. Required when any capability is `enforced` or `hooked` (see the evidence gate below). Each name must be a real job in a workflow that runs on every change, i.e. whose `on:` block includes `pull_request` or `push`. `bin/check-adapters.sh` rejects a name that is not such a job: a key that only appears under `on:` (e.g. `pull_request`), a job in a `workflow_dispatch`-only workflow, or a value with regex metacharacters. A hook that is only exercised when a maintainer manually runs a workflow is not continuous evidence and must not be listed here (mention it in `evidence` instead).
+
+### Evidence gate for `enforced` and `hooked`
+
+A capability value of `enforced` or `hooked` is a behavioral claim: it says a hook actually runs (and, for `enforced`, blocks). An enum value alone does not prove that. So `bin/check-adapters.sh` requires evidence:
+
+- If `bash_guard`, `write_guard`, or `phase_gate` is `enforced` or `hooked`, the adapter must set `verification.method == "ci"` and a non-empty `verification.ci_jobs` array naming jobs that exist under `.github/workflows/`.
+- An adapter cannot claim `enforced`/`hooked` on `verification.method == "manual"` or `unknown`, and cannot name a CI job that does not exist.
+
+Today only Claude Code has hook CI, so only `adapters/claude.json` may claim `enforced`/`hooked` on those surfaces. Every other host stays at `instructions_only` (or whatever its real evidence supports) until a CI job proves otherwise.
 
 ### Capability values
 
@@ -78,8 +89,10 @@ The capability hierarchy maps directly to the L0..L4 levels in the V1 SPEC:
 - `unsupported` and `instructions_only` are L0 ("Guided")
 - `detectable` is L1 ("Checked")
 - `hooked` is L2 ("Guarded")
-- `enforced` is L3 ("Blocked when unsafe")
+- `enforced` is L3 ("Enforced")
 - L4 ("Continuously verified") is not a capability value but a property of the `verification` block: when `method == "ci"`, the declared capability is L4-asserted.
+
+This level-to-label vocabulary (L0 Guided, L1 Checked, L2 Guarded, L3 Enforced, L4 Continuously verified) is the single source of truth. The README L-level legend and the per-host matrix must use the same words; `bin/check-adapters.sh` parses this list and fails if they drift.
 
 ## Observation overrides declaration
 

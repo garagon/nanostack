@@ -1,10 +1,11 @@
 {
   "host": "claude",
   "schema_version": "1",
-  "last_verified": "2026-04-25",
+  "last_verified": "2026-05-28",
   "verification": {
     "method": "ci",
-    "evidence": ".github/workflows/lint.yml: guard-regression and write-guard-regression jobs exercise check-dangerous.sh and check-write.sh on every PR"
+    "evidence": ".github/workflows/lint.yml: guard-regression and write-guard-regression jobs exercise check-dangerous.sh and check-write.sh on every pull_request and push. The phase gate is additionally exercised by e2e-user-flows and e2e-concurrency-parity in .github/workflows/e2e.yml, which is workflow_dispatch-only (run before release), so those are not listed as continuous ci_jobs.",
+    "ci_jobs": ["guard-regression", "write-guard-regression"]
   },
   "skill_discovery": "native",
   "bash_guard": "enforced",
