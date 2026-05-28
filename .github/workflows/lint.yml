@@ -358,6 +358,26 @@ jobs:
           chmod +x ci/e2e-harness-selftest.sh
           ci/e2e-harness-selftest.sh
 
+  harness-manifest:
+    name: Harness manifest consistency
+    runs-on: ubuntu-latest
+    # Harness Architecture vNext PR 3. Static consistency check: ci/harnesses.json
+    # must not drift from the real ci/ scripts and workflows. Never runs a heavy
+    # suite. The sabotage self-test proves the check fails closed on each drift
+    # direction (unregistered suite, dead path, missing metadata, stale job ref).
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate ci/harnesses.json
+        run: |
+          chmod +x ci/check-harness-manifest.sh
+          ci/check-harness-manifest.sh
+      - name: Manifest check sabotage self-test
+        run: |
+          chmod +x ci/e2e-harness-manifest-selftest.sh
+          ci/e2e-harness-manifest-selftest.sh
+
   skill-frontmatter:
     name: SKILL.md frontmatter
     runs-on: ubuntu-latest
