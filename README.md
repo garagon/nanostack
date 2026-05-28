@@ -77,10 +77,11 @@ Nanostack is agent-agnostic, but agent hosts do not expose the same control poin
 
 | Level | Meaning |
 |-------|---------|
-| **L0 Unsupported** | Nanostack cannot provide this capability on that host. |
-| **L1 Instructions only** | The skill tells the agent what to do, but cannot block it. |
-| **L2 Reported** | Nanostack can detect and report the issue. |
-| **L3 Enforced** | Nanostack can block the action through host hooks or guard scripts. |
+| **L0 Guided** | The skill tells the agent what to do but cannot block it. Also covers a capability the host cannot provide at all. |
+| **L1 Checked** | Nanostack can detect and report the issue, but cannot block it. |
+| **L2 Guarded** | The host runs a nanostack hook before the action. |
+| **L3 Enforced** | The hook can block the action and the host honors the block. |
+| **L4 Continuously verified** | A CI job exercises the capability on every change. |
 
 A detailed per-host matrix (Bash guard, Write/Edit guard, phase gate) lives further down in [What enforces on which agent](#what-enforces-on-which-agent).
 
@@ -491,7 +492,7 @@ All rules live in [`guard/rules.json`](guard/rules.json). Each rule has an ID, r
 
 ### What enforces on which agent
 
-Honest scope. Nanostack ships skill files that work the same in every supported agent, but the **enforcement layer** (hooks that block commands before they run) depends on what each agent supports today. The capability that ships for each host lives in [`adapters/`](adapters/) as a small JSON file; setup, doctor, and this table all read from those files. Levels follow the L0-L3 vocabulary documented in [`reference/host-adapter-schema.md`](reference/host-adapter-schema.md).
+Honest scope. Nanostack ships skill files that work the same in every supported agent, but the **enforcement layer** (hooks that block commands before they run) depends on what each agent supports today. The capability that ships for each host lives in [`adapters/`](adapters/) as a small JSON file; setup, doctor, and this table all read from those files. Levels follow the L0-L4 vocabulary documented in [`reference/host-adapter-schema.md`](reference/host-adapter-schema.md).
 
 | Agent | Bash guard | Write/Edit guard | Phase gate | What this means |
 |---|---|---|---|---|
