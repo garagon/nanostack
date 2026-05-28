@@ -108,7 +108,12 @@ check_phases() {
 
   for phase in $REQUIRED_PHASES; do
     local artifact
-    artifact=$("$FIND_ARTIFACT" "$phase" 1 2>/dev/null) || {
+    # PR 3 of the 2026-05-28 architecture follow-up: the gate consumes
+    # TRUSTED artifacts. --require-integrity makes find-artifact.sh exit
+    # non-zero when the phase artifact is absent, has no .integrity, or
+    # whose recomputed hash does not match, so integrity_missing and
+    # integrity_mismatch are treated exactly like missing evidence here.
+    artifact=$("$FIND_ARTIFACT" "$phase" 1 --require-integrity 2>/dev/null) || {
       missing="${missing:+$missing }$phase"
       continue
     }
@@ -117,9 +122,17 @@ check_phases() {
       missing="${missing:+$missing }$phase"
       continue
     fi
-    # Verify artifact is newer than last code change
-    local artifact_time
-    artifact_time=$(stat -f %m "$artifact" 2>/dev/null || stat -c %Y "$artifact" 2>/dev/null || echo 0)
+    # Freshness by FILENAME timestamp, not mtime. save-artifact.sh names
+    # artifacts $(date -u +%Y%m%d-%H%M%S).json, so the timestamp travels
+    # with the filename. A copied or `touch`-ed stale artifact keeps its
+    # old filename timestamp even when its mtime is fresh, so it cannot
+    # pass the freshness check by touching the file. nano_artifact_filename_epoch
+    # returns 0 for an unparseable name, which reads as "older than the
+    # last code change" and fails the phase closed.
+    local artifact_time=0
+    if declare -F nano_artifact_filename_epoch >/dev/null 2>&1; then
+      artifact_time=$(nano_artifact_filename_epoch "$artifact")
+    fi
     if [ "$artifact_time" -lt "$last_change" ]; then
       missing="${missing:+$missing }$phase"
     fi

@@ -290,6 +290,125 @@ assert_eq "custom phase_kind = custom"                 "custom"          "$phase
 assert_eq "custom upstream_status.review = verified"   "verified"        "$status_review"
 assert_eq "custom upstream_status.build = not_applicable" "not_applicable" "$status_build"
 
+# =====================================================================
+# PR 3 of the 2026-05-28 architecture follow-up: the commit/push phase
+# gate must consume TRUSTED artifacts. It rejects missing-integrity and
+# tampered artifacts (via find-artifact --require-integrity) and judges
+# freshness by the filename timestamp, not mtime, so a touched stale
+# artifact cannot satisfy it. NANOSTACK_SKIP_GATE=1 still bypasses.
+# =====================================================================
+GATE="$REPO/guard/bin/phase-gate.sh"
+
+# A project with an active session whose review/security/qa phases have
+# started (so the gate enforces) and one initial commit (so the
+# last-code-change reference resolves through git log).
+setup_gate_project() {
+  local name="$1"
+  local proj="$TMP_ROOT/$name"
+  local store="$proj/.nanostack"
+  mkdir -p "$proj" "$store"
+  ( cd "$proj" \
+    && git init -q \
+    && git config user.email t@t.test \
+    && git config user.name tester \
+    && echo code > file.txt \
+    && git add -A \
+    && git commit -qm init ) >/dev/null 2>&1
+  printf '{"workspace":"%s","phase_log":[{"phase":"review","status":"in_progress"},{"phase":"security","status":"in_progress"},{"phase":"qa","status":"in_progress"}]}' \
+    "$proj" > "$store/session.json"
+  printf '%s' "$proj"
+}
+
+# Run the gate on a "git commit" from inside the project. Extra args are
+# env assignments prepended before the call (e.g. NANOSTACK_SKIP_GATE=1).
+run_gate() {
+  local proj="$1"; shift
+  local store="$proj/.nanostack"
+  ( cd "$proj" && env "$@" NANOSTACK_STORE="$store" "$GATE" "git commit -m x" >/dev/null 2>&1; echo "RC=$?" )
+}
+
+# Cell 7: every required phase present with valid integrity and a fresh
+# filename timestamp -> the gate allows the commit.
+echo "[7] valid trusted artifacts satisfy the phase gate"
+proj=$(setup_gate_project gate-valid)
+FRESH=$(date -u +%Y%m%d-%H%M%S)
+mk_artifact "$proj/.nanostack" review   verified "$FRESH" "$proj"
+mk_artifact "$proj/.nanostack" security verified "$FRESH" "$proj"
+mk_artifact "$proj/.nanostack" qa       verified "$FRESH" "$proj"
+rc=$(run_gate "$proj" | sed -n 's/^RC=//p')
+assert_eq "valid + integrity allows commit (rc 0)" "0" "$rc"
+
+# Cell 8: a tampered (integrity_mismatch) phase artifact does not satisfy
+# the gate -> commit blocked.
+echo "[8] integrity_mismatch artifact does not satisfy the gate"
+proj=$(setup_gate_project gate-mismatch)
+FRESH=$(date -u +%Y%m%d-%H%M%S)
+mk_artifact "$proj/.nanostack" review   verified "$FRESH" "$proj"
+mk_artifact "$proj/.nanostack" security verified "$FRESH" "$proj"
+mk_artifact "$proj/.nanostack" qa       mismatch "$FRESH" "$proj"
+rc=$(run_gate "$proj" | sed -n 's/^RC=//p')
+assert_eq "tampered qa artifact blocks commit (rc 1)" "1" "$rc"
+
+# Cell 9: a phase artifact with no .integrity does not satisfy the gate.
+echo "[9] missing-integrity artifact does not satisfy the gate"
+proj=$(setup_gate_project gate-missing)
+FRESH=$(date -u +%Y%m%d-%H%M%S)
+mk_artifact "$proj/.nanostack" review   verified "$FRESH" "$proj"
+mk_artifact "$proj/.nanostack" security missing  "$FRESH" "$proj"
+mk_artifact "$proj/.nanostack" qa       verified "$FRESH" "$proj"
+rc=$(run_gate "$proj" | sed -n 's/^RC=//p')
+assert_eq "missing-integrity security artifact blocks commit (rc 1)" "1" "$rc"
+
+# Cell 10: an OLD artifact whose mtime is freshened by `touch` does not
+# satisfy freshness, because freshness reads the filename timestamp. Under
+# the previous mtime-based check this would have passed; now it blocks.
+echo "[10] touching an old artifact to freshen mtime does not satisfy freshness"
+proj=$(setup_gate_project gate-touch-old)
+OLD=20200101-000000
+mk_artifact "$proj/.nanostack" review   verified "$OLD" "$proj"
+mk_artifact "$proj/.nanostack" security verified "$OLD" "$proj"
+mk_artifact "$proj/.nanostack" qa       verified "$OLD" "$proj"
+# Freshen mtimes so find-artifact's discovery window still sees them and
+# an mtime-based freshness check would (wrongly) accept them.
+touch "$proj/.nanostack/review/$OLD.json" "$proj/.nanostack/security/$OLD.json" "$proj/.nanostack/qa/$OLD.json"
+rc=$(run_gate "$proj" | sed -n 's/^RC=//p')
+assert_eq "touched old artifacts still block commit (rc 1)" "1" "$rc"
+
+# Cell 11: NANOSTACK_SKIP_GATE=1 bypasses the gate even when artifacts are
+# absent. The control (no skip) confirms the same setup blocks.
+echo "[11] NANOSTACK_SKIP_GATE=1 still bypasses the gate"
+proj=$(setup_gate_project gate-skip)
+# No artifacts at all -> would block without the bypass.
+rc=$(run_gate "$proj" | sed -n 's/^RC=//p')
+assert_eq "control: no artifacts blocks commit (rc 1)" "1" "$rc"
+rc=$(run_gate "$proj" NANOSTACK_SKIP_GATE=1 | sed -n 's/^RC=//p')
+assert_eq "NANOSTACK_SKIP_GATE=1 allows commit (rc 0)" "0" "$rc"
+
+# Cell 12: an impossible calendar date in the filename must fail freshness
+# closed. nano_artifact_filename_epoch's round-trip guard returns 0 for a
+# digit-shaped but invalid stamp that BSD `date -j` would otherwise
+# normalize to a real date. The direct helper assertions are
+# date-independent; the gate integration uses a stamp that normalizes to a
+# FUTURE date (Feb 31 2099 -> Mar 3 2099) so that, without the guard, the
+# normalized time would read as fresh and the gate would wrongly allow the
+# commit. That makes the cell a real regression lock regardless of when CI
+# runs.
+echo "[12] impossible calendar date in the filename fails freshness closed"
+helper_epoch() { bash -c "source '$REPO/bin/lib/portable.sh'; nano_artifact_filename_epoch '$1'"; }
+assert_eq "helper: valid stamp parses to non-zero" "ok" \
+  "$([ "$(helper_epoch /x/20260528-143012.json)" -gt 0 ] 2>/dev/null && echo ok || echo no)"
+assert_eq "helper: Feb 31 returns 0"      "0" "$(helper_epoch /x/20260231-120000.json)"
+assert_eq "helper: month 13 returns 0"    "0" "$(helper_epoch /x/20261301-120000.json)"
+assert_eq "helper: hour 25 returns 0"     "0" "$(helper_epoch /x/20260528-250000.json)"
+assert_eq "helper: non-canonical name 0"  "0" "$(helper_epoch /x/2026-05-10T01-00-00.json)"
+proj=$(setup_gate_project gate-bad-date)
+BAD=20990231-120000   # Feb 31 2099 -> BSD normalizes to a FUTURE date
+mk_artifact "$proj/.nanostack" review   verified "$BAD" "$proj"
+mk_artifact "$proj/.nanostack" security verified "$BAD" "$proj"
+mk_artifact "$proj/.nanostack" qa       verified "$BAD" "$proj"
+rc=$(run_gate "$proj" | sed -n 's/^RC=//p')
+assert_eq "impossible-date artifact blocks commit (rc 1)" "1" "$rc"
+
 cd "$TMP_ROOT"
 
 echo
