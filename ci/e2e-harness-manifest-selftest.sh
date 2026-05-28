@@ -407,6 +407,29 @@ EOF
   nh_assert_contains "data reference is not a run" "$CK_OUT" "does not run ci/e2e-foo.sh"
 }
 
+cell_local_missing_path_ok() {
+  local r; r=$(build_fake_root local-missing)
+  # A local-tier suite (e.g. gitignored tests/) need not exist in this
+  # checkout: registered for the runner, existence not required.
+  jq '.suites[0].tier="local" | del(.suites[0].workflow) | del(.suites[0].job)' \
+    "$r/ci/harnesses.json" > "$r/ci/harnesses.json.tmp"
+  mv "$r/ci/harnesses.json.tmp" "$r/ci/harnesses.json"
+  rm -f "$r/ci/e2e-foo.sh"
+  # The workflow still must not reference the now-absent path.
+  cat > "$r/.github/workflows/e2e.yml" <<'EOF'
+name: e2e
+on:
+  workflow_dispatch:
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+EOF
+  run_check "$r"
+  nh_assert_eq "local-tier suite with absent path passes (rc 0)" "0" "$RC"
+}
+
 cell_duplicate_id() {
   local r; r=$(build_fake_root dup-id)
   jq '.suites += [.suites[0]]' "$r/ci/harnesses.json" > "$r/ci/harnesses.json.tmp"
@@ -449,6 +472,7 @@ nh_cell optin-schedule           cell_optin_schedule_trigger
 nh_cell optin-workflow-call      cell_optin_workflow_call
 nh_cell local-with-wiring        cell_local_with_wiring
 nh_cell path-as-data             cell_path_as_data_not_run
+nh_cell local-missing-path-ok    cell_local_missing_path_ok
 nh_cell duplicate-id             cell_duplicate_id
 nh_cell tests-run-unregistered   cell_tests_run_unregistered
 

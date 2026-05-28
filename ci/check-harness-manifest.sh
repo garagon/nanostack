@@ -146,7 +146,12 @@ while [ "$i" -lt "$COUNT" ]; do
 
   if [ -n "$path" ]; then
     SEEN_PATHS="$SEEN_PATHS $path"
-    [ -f "$ROOT/$path" ] || fail "suite $label path does not exist: $path"
+    # local-tier suites (e.g. tests/, which is gitignored) are developer-
+    # local and need not exist in a CI checkout; their path is registered
+    # so the runner knows about them, but existence is not required.
+    if [ ! -f "$ROOT/$path" ] && [ "$tier" != "local" ]; then
+      fail "suite $label path does not exist: $path"
+    fi
   fi
 
   # Workflow/job consistency. pr/opt-in suites MUST be CI-wired (declare a
