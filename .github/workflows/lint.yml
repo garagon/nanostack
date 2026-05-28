@@ -341,6 +341,23 @@ jobs:
                      ! -path './node_modules/*' 2>/dev/null)
           exit $fail
 
+  harness-selftest:
+    name: Harness library self-test
+    runs-on: ubuntu-latest
+    # Harness Architecture vNext PR 1. ci/lib/harness.sh is the shared
+    # primitive every migrated suite sources, so a bug in it can corrupt
+    # many suites at once. This fast self-test runs on every PR and proves
+    # the counters, errexit-safe capture, assert_exit, --filter skip
+    # accounting, NANOSTACK_KEEP_TMP, and /tmp temp-root policy still hold.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ci/e2e-harness-selftest.sh
+        run: |
+          chmod +x ci/e2e-harness-selftest.sh
+          ci/e2e-harness-selftest.sh
+
   skill-frontmatter:
     name: SKILL.md frontmatter
     runs-on: ubuntu-latest
