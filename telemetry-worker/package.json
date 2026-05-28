@@ -13,5 +13,9 @@
     "@cloudflare/workers-types": "^4.20260101.0",
     "typescript": "^5.4.0",
     "wrangler": "^4.85.0"
+  },
+  "//overrides": "ws < 8.20.1 has a moderate advisory (GHSA-58qx-3vcg-4xpx, uninitialized memory disclosure). It reaches us transitively via wrangler > miniflare. Pin to the patched line here rather than bumping wrangler, because wrangler 4.95 adds a third-party native-binary dependency we do not want in a privacy-strict Worker. Revisit when miniflare ships ws >= 8.20.1 upstream.",
+  "overrides": {
+    "ws": "^8.20.1"
   }
 }
