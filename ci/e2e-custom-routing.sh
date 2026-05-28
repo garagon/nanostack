@@ -5,66 +5,47 @@
 #
 #   - A custom phase with no phase_context block keeps the existing
 #     dependency-only behavior (routing.declared = false).
-#   - phase_context.trust = strict drops integrity_missing artifacts
-#     so a custom skill that asked for strict evidence never sees a
-#     path it cannot verify.
-#   - phase_context.upstream_required / upstream_optional surface in
-#     routing so consumers can read declared intent.
+#   - phase_context.trust = strict drops integrity_missing artifacts.
+#   - phase_context.upstream_required / upstream_optional surface in routing.
 #   - phase_context.max_age_days overrides the per-phase default.
-#   - phase_context.solutions.tags loads matching solutions filtered
-#     by content match, limited to solutions.limit.
-#   - phase_context.diarizations.paths / keywords loads matching
-#     diarizations without depending on git diff.
+#   - phase_context.solutions.tags loads matching solutions (literal match).
+#   - phase_context.diarizations.paths / keywords loads matching diarizations.
 #
-# Spec acceptance, verbatim:
-#   "A custom skill can ask for strict upstream artifacts without
-#    local helper code."
-#   "A custom skill can request solution search tags."
-#   "A custom skill can request diarizations by path or keyword."
-#   "Missing required upstreams are explicit in upstream_status, not
-#    silently null."
-#   "Backward compatibility: custom skills with no context: block
-#    keep current behavior."
+# Migrated onto ci/lib/harness.sh + ci/lib/fixtures.sh (Harness vNext
+# PR 2). Same cells, same check count (35). Supports --filter <pattern>.
 set -e
 set -u
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-TMP_ROOT=$(mktemp -d /tmp/nanostack-custom-routing.XXXXXX)
-trap 'rm -rf "$TMP_ROOT"' EXIT
+. "$REPO/ci/lib/harness.sh"
+. "$REPO/ci/lib/fixtures.sh"
 
-PASS=0
-FAIL=0
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-DIM='\033[0;90m'
-NC='\033[0m'
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --filter) nh_set_filter "${2:-}"; shift 2 ;;
+    --filter=*) nh_set_filter "${1#*=}"; shift ;;
+    *) shift ;;
+  esac
+done
 
-assert_eq() {
-  local name="$1" expected="$2" actual="$3"
-  if [ "$expected" = "$actual" ]; then
-    PASS=$((PASS+1))
-    printf "    ${GREEN}OK${NC}    %s\n" "$name"
-  else
-    FAIL=$((FAIL+1))
-    printf "    ${RED}FAIL${NC}  %s\n" "$name"
-    printf "          ${DIM}expected: %s${NC}\n" "$expected"
-    printf "          ${DIM}actual:   %s${NC}\n" "$actual"
-  fi
-}
+nh_init custom-routing nanostack-custom-routing
+nh_require_cmd git jq
 
-new_project() {
-  local name="$1"
-  local proj="$TMP_ROOT/$name"
-  mkdir -p "$proj/.nanostack/skills/license-audit" \
-           "$proj/.nanostack/know-how/solutions" \
-           "$proj/.nanostack/know-how/diarizations" \
-           "$proj/.nanostack/review"
+RESOLVE="$REPO/bin/resolve.sh"
+
+# A routing project: git repo + exported store + the license-audit custom
+# skill (depends_on review) + know-how dirs. Uses the shared git/store
+# fixtures; the skill frontmatter and know-how layout are suite-specific.
+routing_project() {
+  local name="$1" proj
+  proj=$(nf_new_git_project "$name")
+  # Call nf_export_store directly (not in $()) so the NANOSTACK_STORE export
+  # lands in this shell, not a command-substitution subshell.
+  nf_export_store "$proj" >/dev/null
   cd "$proj"
-  git init -q
-  git config user.email "ci@routing.test"
-  git config user.name  "ci"
-  export NANOSTACK_STORE="$proj/.nanostack"
-  cat > "$proj/.nanostack/skills/license-audit/SKILL.md" <<'EOF'
+  mkdir -p "$NANOSTACK_STORE/skills/license-audit" "$NANOSTACK_STORE/know-how/solutions" \
+           "$NANOSTACK_STORE/know-how/diarizations" "$NANOSTACK_STORE/review"
+  cat > "$NANOSTACK_STORE/skills/license-audit/SKILL.md" <<'EOF'
 ---
 name: license-audit
 description: custom skill for routing tests
@@ -72,421 +53,229 @@ concurrency: read
 depends_on: [review]
 ---
 EOF
+  printf '%s' "$proj"
 }
 
-# Save a "verified" review artifact via the real save-artifact path.
 save_verified_review() {
-  "$REPO/bin/save-artifact.sh" review \
+  nf_save_artifact review \
     '{"phase":"review","summary":{"v":1,"blocking":0},"scope_drift":{"status":"clean"},"findings":[],"context_checkpoint":{"summary":"routing test"}}' >/dev/null
 }
 
-# Save a review artifact WITHOUT .integrity (legacy / stripped).
+# A review artifact with no .integrity, via the shared fixture.
 save_integrity_missing_review() {
-  local ts="$(date -u +%Y%m%dT%H%M%S)"
-  printf '%s\n' '{"phase":"review","project":"'"$(pwd)"'","summary":"missing integrity"}' > "$NANOSTACK_STORE/review/${ts}.json"
+  nf_write_artifact "$NANOSTACK_STORE" review integrity_missing "$(date -u +%Y%m%dT%H%M%S)" "$(pwd)" >/dev/null
 }
 
-echo "Custom Routing Contract E2E"
-echo "==========================="
-echo "Tmp root: $TMP_ROOT"
-echo
-
-# Cell 1: backward compat — no phase_context keeps the existing
-# dependency-only behavior. routing.declared = false.
-echo "[1] backward compat: no phase_context keeps current behavior"
-new_project "cell1-backcompat"
-cat > "$NANOSTACK_STORE/config.json" <<'EOF'
-{"custom_phases": ["license-audit"]}
-EOF
-out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-assert_eq "routing.declared = false" "false" "$(echo "$out" | jq -r '.routing.declared')"
-assert_eq "routing.trust = normal (default)" "normal" "$(echo "$out" | jq -r '.routing.trust')"
-assert_eq "solutions empty (no tags)" "0" "$(echo "$out" | jq '.solutions | length')"
-assert_eq "diarizations empty (no paths)" "0" "$(echo "$out" | jq '.diarizations | length')"
-
-# Cell 2: missing required upstream surfaces explicitly. Spec says
-# upstream_status reports the state, not silently null.
-echo "[2] missing required upstream is explicit in upstream_status"
-new_project "cell2-missing"
-cat > "$NANOSTACK_STORE/config.json" <<'EOF'
-{
-  "custom_phases": ["license-audit"],
-  "phase_context": {
-    "license-audit": {
-      "upstream_required": ["review"]
-    }
-  }
+# Cell 1: backward compat — no phase_context keeps dependency-only behavior.
+cell_backcompat() {
+  routing_project "cell1-backcompat" >/dev/null
+  printf '%s\n' '{"custom_phases": ["license-audit"]}' > "$NANOSTACK_STORE/config.json"
+  local out; out=$("$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "routing.declared = false"        "false"  "$(echo "$out" | jq -r '.routing.declared')"
+  nh_assert_eq "routing.trust = normal (default)" "normal" "$(echo "$out" | jq -r '.routing.trust')"
+  nh_assert_eq "solutions empty (no tags)"        "0"      "$(echo "$out" | jq '.solutions | length')"
+  nh_assert_eq "diarizations empty (no paths)"    "0"      "$(echo "$out" | jq '.diarizations | length')"
 }
+
+# Cell 2: missing required upstream surfaces explicitly.
+cell_missing_required() {
+  routing_project "cell2-missing" >/dev/null
+  cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{"custom_phases":["license-audit"],"phase_context":{"license-audit":{"upstream_required":["review"]}}}
 EOF
-out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-assert_eq "upstream_status.review = missing" "missing" \
-  "$(echo "$out" | jq -r '.upstream_status.review')"
-assert_eq "routing.upstream_required lists review" '["review"]' \
-  "$(echo "$out" | jq -c '.routing.upstream_required')"
+  local out; out=$("$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "upstream_status.review = missing" "missing" "$(echo "$out" | jq -r '.upstream_status.review')"
+  nh_assert_eq "routing.upstream_required lists review" '["review"]' "$(echo "$out" | jq -c '.routing.upstream_required')"
+}
 
 # Cell 3: strict trust drops integrity_missing artifacts.
-echo "[3] strict trust drops integrity_missing artifacts"
-new_project "cell3-strict"
-save_integrity_missing_review
-cat > "$NANOSTACK_STORE/config.json" <<'EOF'
-{
-  "custom_phases": ["license-audit"],
-  "phase_context": {
-    "license-audit": { "trust": "strict" }
-  }
-}
+cell_strict_drops() {
+  routing_project "cell3-strict" >/dev/null
+  save_integrity_missing_review
+  cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{"custom_phases":["license-audit"],"phase_context":{"license-audit":{"trust":"strict"}}}
 EOF
-out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-assert_eq "strict: upstream_status.review = integrity_missing (diagnostic preserved)" \
-  "integrity_missing" "$(echo "$out" | jq -r '.upstream_status.review')"
-assert_eq "strict: upstream_artifacts.review = null (artifact dropped)" \
-  "null" "$(echo "$out" | jq -r '.upstream_artifacts.review')"
+  local out; out=$("$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "strict: upstream_status.review = integrity_missing (diagnostic preserved)" \
+    "integrity_missing" "$(echo "$out" | jq -r '.upstream_status.review')"
+  nh_assert_eq "strict: upstream_artifacts.review = null (artifact dropped)" \
+    "null" "$(echo "$out" | jq -r '.upstream_artifacts.review')"
+}
 
-# Cell 4: normal trust keeps the integrity_missing artifact in
-# upstream_artifacts so legacy stores continue to load.
-echo "[4] normal trust keeps integrity_missing artifact (legacy compat)"
-new_project "cell4-normal"
-save_integrity_missing_review
-cat > "$NANOSTACK_STORE/config.json" <<'EOF'
-{
-  "custom_phases": ["license-audit"],
-  "phase_context": {
-    "license-audit": { "trust": "normal" }
-  }
-}
+# Cell 4: normal trust keeps the integrity_missing artifact.
+cell_normal_keeps() {
+  routing_project "cell4-normal" >/dev/null
+  save_integrity_missing_review
+  cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{"custom_phases":["license-audit"],"phase_context":{"license-audit":{"trust":"normal"}}}
 EOF
-out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-assert_eq "normal: upstream_status.review = integrity_missing" \
-  "integrity_missing" "$(echo "$out" | jq -r '.upstream_status.review')"
-# upstream_artifacts.review should be a string path (not null), since
-# legacy artifacts still load under normal trust.
-art=$(echo "$out" | jq -r '.upstream_artifacts.review // ""')
-assert_eq "normal: upstream_artifacts.review is the stored path" \
-  "true" "$( [ -n "$art" ] && echo "true" || echo "false" )"
+  local out art; out=$("$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "normal: upstream_status.review = integrity_missing" \
+    "integrity_missing" "$(echo "$out" | jq -r '.upstream_status.review')"
+  art=$(echo "$out" | jq -r '.upstream_artifacts.review // ""')
+  nh_assert_eq "normal: upstream_artifacts.review is the stored path" \
+    "true" "$( [ -n "$art" ] && echo "true" || echo "false" )"
+}
 
-# Cell 5: max_age_days overrides the default per-phase age. We mark
-# an artifact 90 days old; the default is 30, so max_age_days = 120
-# is required to load it.
-echo "[5] max_age_days overrides the per-phase age"
-new_project "cell5-age"
-save_verified_review
-art_path=$(ls "$NANOSTACK_STORE/review/"*.json | head -1)
-# Touch the artifact's mtime 90 days into the past.
-touch -t "$(date -u -v-90d +%Y%m%d%H%M.%S 2>/dev/null || date -u --date='90 days ago' +%Y%m%d%H%M.%S)" "$art_path" 2>/dev/null || true
-cat > "$NANOSTACK_STORE/config.json" <<'EOF'
-{
-  "custom_phases": ["license-audit"],
-  "phase_context": {
-    "license-audit": { "max_age_days": 120 }
-  }
-}
+# Cell 5: max_age_days overrides the default per-phase age.
+cell_max_age() {
+  routing_project "cell5-age" >/dev/null
+  save_verified_review
+  local art_path; art_path=$(ls "$NANOSTACK_STORE/review/"*.json | head -1)
+  touch -t "$(date -u -v-90d +%Y%m%d%H%M.%S 2>/dev/null || date -u --date='90 days ago' +%Y%m%d%H%M.%S)" "$art_path" 2>/dev/null || true
+  cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{"custom_phases":["license-audit"],"phase_context":{"license-audit":{"max_age_days":120}}}
 EOF
-out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-assert_eq "max_age_days = 120 loads a 90-day-old verified artifact" \
-  "verified" "$(echo "$out" | jq -r '.upstream_status.review')"
-assert_eq "routing.max_age_days = 120 reported" "120" \
-  "$(echo "$out" | jq -r '.routing.max_age_days')"
+  local out; out=$("$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "max_age_days = 120 loads a 90-day-old verified artifact" \
+    "verified" "$(echo "$out" | jq -r '.upstream_status.review')"
+  nh_assert_eq "routing.max_age_days = 120 reported" "120" "$(echo "$out" | jq -r '.routing.max_age_days')"
+}
 
-# Cell 6: solution_tags loads matching solutions filtered by content.
-echo "[6] solution_tags filters know-how/solutions"
-new_project "cell6-solutions"
-cat > "$NANOSTACK_STORE/know-how/solutions/license-resolution.md" <<'EOF'
----
-tags: [license, oss]
----
-license stuff
+# Cell 6: solution_tags filters know-how/solutions.
+cell_solution_tags() {
+  routing_project "cell6-solutions" >/dev/null
+  printf '%s\n' '---' 'tags: [license, oss]' '---' 'license stuff' > "$NANOSTACK_STORE/know-how/solutions/license-resolution.md"
+  printf '%s\n' '---' 'tags: [debug]' '---' 'unrelated content' > "$NANOSTACK_STORE/know-how/solutions/random.md"
+  cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{"custom_phases":["license-audit"],"phase_context":{"license-audit":{"solutions":{"tags":["license"],"limit":5}}}}
 EOF
-cat > "$NANOSTACK_STORE/know-how/solutions/random.md" <<'EOF'
----
-tags: [debug]
----
-unrelated content
-EOF
-cat > "$NANOSTACK_STORE/config.json" <<'EOF'
-{
-  "custom_phases": ["license-audit"],
-  "phase_context": {
-    "license-audit": {
-      "solutions": { "tags": ["license"], "limit": 5 }
-    }
-  }
+  local out; out=$("$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "solutions filtered to license-tagged file" "1" "$(echo "$out" | jq '.solutions | length')"
+  nh_assert_contains "selected solution is license-resolution.md" "$(echo "$out" | jq -r '.solutions[0] // ""')" "license-resolution.md"
 }
-EOF
-out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-sol_count=$(echo "$out" | jq '.solutions | length')
-sol_first=$(echo "$out" | jq -r '.solutions[0] // ""')
-assert_eq "solutions filtered to license-tagged file" "1" "$sol_count"
-case "$sol_first" in
-  *license-resolution.md) PASS=$((PASS+1)); printf "    ${GREEN}OK${NC}    %s\n" "selected solution is license-resolution.md" ;;
-  *) FAIL=$((FAIL+1)); printf "    ${RED}FAIL${NC}  %s (got %s)\n" "selected solution is license-resolution.md" "$sol_first" ;;
-esac
 
-# Cell 7: diarization paths / keywords. A diarization whose subject
-# matches one of the declared paths is loaded.
-echo "[7] diarization paths load matching subjects"
-new_project "cell7-diarizations"
-cat > "$NANOSTACK_STORE/know-how/diarizations/2026-04-01-pkg.md" <<'EOF'
----
-subject: package.json
-date: 2026-04-01
----
-notes about package.json
+# Cell 7: diarization paths load matching subjects.
+cell_diarization_paths() {
+  routing_project "cell7-diarizations" >/dev/null
+  printf '%s\n' '---' 'subject: package.json' 'date: 2026-04-01' '---' 'notes' > "$NANOSTACK_STORE/know-how/diarizations/2026-04-01-pkg.md"
+  printf '%s\n' '---' 'subject: src/unrelated' 'date: 2026-04-01' '---' 'unrelated' > "$NANOSTACK_STORE/know-how/diarizations/2026-04-01-other.md"
+  cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{"custom_phases":["license-audit"],"phase_context":{"license-audit":{"diarizations":{"paths":["package.json"],"keywords":[]}}}}
 EOF
-cat > "$NANOSTACK_STORE/know-how/diarizations/2026-04-01-other.md" <<'EOF'
----
-subject: src/unrelated
-date: 2026-04-01
----
-unrelated notes
-EOF
-cat > "$NANOSTACK_STORE/config.json" <<'EOF'
-{
-  "custom_phases": ["license-audit"],
-  "phase_context": {
-    "license-audit": {
-      "diarizations": { "paths": ["package.json"], "keywords": [] }
-    }
-  }
+  local out; out=$("$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "diarizations filtered to package.json subject" "1" "$(echo "$out" | jq '.diarizations | length')"
+  nh_assert_eq "diarization subject = package.json" "package.json" "$(echo "$out" | jq -r '.diarizations[0].subject // ""')"
 }
-EOF
-out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-diar_count=$(echo "$out" | jq '.diarizations | length')
-diar_subj=$(echo "$out" | jq -r '.diarizations[0].subject // ""')
-assert_eq "diarizations filtered to package.json subject" "1" "$diar_count"
-assert_eq "diarization subject = package.json" "package.json" "$diar_subj"
 
-# Cell 7a: a routed upstream that is NOT in depends_on still gets
-# its artifact looked up. The routing contract is supposed to give
-# skills a way to ask for context outside the dependency edges;
-# Codex caught the missing wiring on the PR 5 first review pass
-# (declaring upstream_optional: ["security"] without depends_on
-# left security absent from upstream_status entirely).
-echo "[7a] routed upstreams not in depends_on are still resolved"
-new_project "cell7a-routed-only"
-"$REPO/bin/save-artifact.sh" security \
-  '{"phase":"security","summary":{"v":1},"findings":[],"context_checkpoint":{"summary":"routing test"}}' >/dev/null
-cat > "$NANOSTACK_STORE/config.json" <<'EOF'
-{
-  "custom_phases": ["license-audit"],
-  "phase_context": {
-    "license-audit": {
-      "upstream_optional": ["security"]
-    }
-  }
-}
+# Cell 7a: routed upstreams not in depends_on are still resolved.
+cell_routed_only() {
+  routing_project "cell7a-routed-only" >/dev/null
+  nf_save_artifact security '{"phase":"security","summary":{"v":1},"findings":[],"context_checkpoint":{"summary":"routing test"}}' >/dev/null
+  cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{"custom_phases":["license-audit"],"phase_context":{"license-audit":{"upstream_optional":["security"]}}}
 EOF
-out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-assert_eq "upstream_status.security present even though only routed" \
-  "verified" "$(echo "$out" | jq -r '.upstream_status.security')"
-sec_art=$(echo "$out" | jq -r '.upstream_artifacts.security // ""')
-assert_eq "upstream_artifacts.security is the resolved path" \
-  "true" "$( [ -n "$sec_art" ] && echo "true" || echo "false" )"
+  local out sec_art; out=$("$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "upstream_status.security present even though only routed" \
+    "verified" "$(echo "$out" | jq -r '.upstream_status.security')"
+  sec_art=$(echo "$out" | jq -r '.upstream_artifacts.security // ""')
+  nh_assert_eq "upstream_artifacts.security is the resolved path" \
+    "true" "$( [ -n "$sec_art" ] && echo "true" || echo "false" )"
+}
 
-# Cell 7b: phase_context can live in the global ~/.nanostack/
-# config.json. nano_phase_kind already consults the global file as a
-# fallback; resolve.sh now uses the same config-resolution path so
-# routing intent is honored even when the project has no local
-# config.json. Codex caught the missed fallback on the PR 5 second
-# review pass.
-echo "[7b] phase_context in the global ~/.nanostack/config.json is honored"
-GLOBAL_HOME="$TMP_ROOT/global-home"
-GLOBAL_PROJ="$TMP_ROOT/global-proj"
-mkdir -p "$GLOBAL_HOME/.nanostack" \
-         "$GLOBAL_PROJ/.nanostack/skills/license-audit"
-cat > "$GLOBAL_HOME/.nanostack/config.json" <<'EOF'
-{
-  "custom_phases": ["license-audit"],
-  "phase_context": {
-    "license-audit": {
-      "trust": "strict",
-      "upstream_required": ["review"]
-    }
-  }
-}
+# Cell 7b: phase_context in the global ~/.nanostack/config.json is honored.
+cell_global_config() {
+  local gh gp
+  gh="$NH_TMP/global-home"; gp="$NH_TMP/global-proj"
+  mkdir -p "$gh/.nanostack" "$gp/.nanostack/skills/license-audit"
+  cat > "$gh/.nanostack/config.json" <<'EOF'
+{"custom_phases":["license-audit"],"phase_context":{"license-audit":{"trust":"strict","upstream_required":["review"]}}}
 EOF
-cat > "$GLOBAL_PROJ/.nanostack/skills/license-audit/SKILL.md" <<'EOF'
+  cat > "$gp/.nanostack/skills/license-audit/SKILL.md" <<'EOF'
 ---
 name: license-audit
 description: routed via global config
 concurrency: read
 ---
 EOF
-cd "$GLOBAL_PROJ"
-git init -q
-out=$(HOME="$GLOBAL_HOME" NANOSTACK_STORE="$GLOBAL_PROJ/.nanostack" \
-  "$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-assert_eq "global config: routing.declared = true" "true" \
-  "$(echo "$out" | jq -r '.routing.declared')"
-assert_eq "global config: routing.trust = strict" "strict" \
-  "$(echo "$out" | jq -r '.routing.trust')"
-
-# Cell 7c: diarization paths and keywords are matched literally, not
-# as regex. A subject like app/users/[id]/page.tsx must not match a
-# decoy app/users/i/page.tsx even though [id] reads as a character
-# class under default grep. Codex caught the regex-vs-literal bug on
-# the PR 5 second review pass.
-echo "[7c] diarization paths are literal substrings, not regex"
-new_project "cell7c-literal"
-cat > "$NANOSTACK_STORE/know-how/diarizations/exact.md" <<'EOF'
----
-subject: app/users/[id]/page.tsx
-date: 2026-04-01
----
-EOF
-cat > "$NANOSTACK_STORE/know-how/diarizations/decoy.md" <<'EOF'
----
-subject: app/users/i/page.tsx
-date: 2026-04-01
----
-EOF
-cat > "$NANOSTACK_STORE/config.json" <<'EOF'
-{
-  "custom_phases": ["license-audit"],
-  "phase_context": {
-    "license-audit": {
-      "diarizations": { "paths": ["app/users/[id]/page.tsx"], "keywords": [] }
-    }
-  }
+  cd "$gp"; git init -q
+  local out; out=$(HOME="$gh" NANOSTACK_STORE="$gp/.nanostack" "$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "global config: routing.declared = true" "true"   "$(echo "$out" | jq -r '.routing.declared')"
+  nh_assert_eq "global config: routing.trust = strict"  "strict" "$(echo "$out" | jq -r '.routing.trust')"
 }
+
+# Cell 7c: diarization paths are literal substrings, not regex.
+cell_diar_literal() {
+  routing_project "cell7c-literal" >/dev/null
+  printf '%s\n' '---' 'subject: app/users/[id]/page.tsx' 'date: 2026-04-01' '---' > "$NANOSTACK_STORE/know-how/diarizations/exact.md"
+  printf '%s\n' '---' 'subject: app/users/i/page.tsx' 'date: 2026-04-01' '---' > "$NANOSTACK_STORE/know-how/diarizations/decoy.md"
+  cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{"custom_phases":["license-audit"],"phase_context":{"license-audit":{"diarizations":{"paths":["app/users/[id]/page.tsx"],"keywords":[]}}}}
 EOF
-out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-diar_subjects=$(echo "$out" | jq -c '.diarizations | map(.subject) | sort')
-assert_eq "literal match: only the exact subject is loaded" \
-  '["app/users/[id]/page.tsx"]' "$diar_subjects"
+  local out; out=$("$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "literal match: only the exact subject is loaded" \
+    '["app/users/[id]/page.tsx"]' "$(echo "$out" | jq -c '.diarizations | map(.subject) | sort')"
+}
 
 # Cell 7d: solution_tags are also matched literally, not as regex.
-# A tag like next.js or app/users/[id] must not match unrelated
-# files because of the `.` or `[id]` characters. Codex caught the
-# regex interpretation on the PR 5 third review pass.
-echo "[7d] solution_tags are literal substrings, not regex"
-new_project "cell7d-tag-literal"
-cat > "$NANOSTACK_STORE/know-how/solutions/exact.md" <<'EOF'
----
-tags: [next.js]
----
-next.js notes
+cell_tag_literal() {
+  routing_project "cell7d-tag-literal" >/dev/null
+  printf '%s\n' '---' 'tags: [next.js]' '---' 'next.js notes' > "$NANOSTACK_STORE/know-how/solutions/exact.md"
+  printf '%s\n' '---' 'tags: [nextxjs]' '---' 'nextxjs notes' > "$NANOSTACK_STORE/know-how/solutions/decoy.md"
+  cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{"custom_phases":["license-audit"],"phase_context":{"license-audit":{"solutions":{"tags":["next.js"],"limit":5}}}}
 EOF
-cat > "$NANOSTACK_STORE/know-how/solutions/decoy.md" <<'EOF'
----
-tags: [nextxjs]
----
-nextxjs notes (decoy must contain neither the literal tag nor a regex-equivalent)
-EOF
-cat > "$NANOSTACK_STORE/config.json" <<'EOF'
-{
-  "custom_phases": ["license-audit"],
-  "phase_context": {
-    "license-audit": {
-      "solutions": { "tags": ["next.js"], "limit": 5 }
-    }
-  }
+  local out; out=$("$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "literal tag: only the exact tag file matches" "1" "$(echo "$out" | jq '.solutions | length')"
+  nh_assert_contains "selected solution is exact.md" "$(echo "$out" | jq -r '.solutions[0] // ""')" "exact.md"
 }
-EOF
-out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-sol_count=$(echo "$out" | jq '.solutions | length')
-sol_first=$(echo "$out" | jq -r '.solutions[0] // ""')
-assert_eq "literal tag: only the exact tag file matches" "1" "$sol_count"
-case "$sol_first" in
-  *exact.md) PASS=$((PASS+1)); printf "    ${GREEN}OK${NC}    %s\n" "selected solution is exact.md" ;;
-  *) FAIL=$((FAIL+1)); printf "    ${RED}FAIL${NC}  %s (got %s)\n" "selected solution is exact.md" "$sol_first" ;;
-esac
 
-# Cell 7e: diarization subjects/paths containing JSON metacharacters
-# (quotes, backslashes) must still produce valid JSON. The previous
-# string-concat path emitted invalid JSON for a subject like
-# app/"weird"/path.tsx; the resolver now builds the array through jq
-# so the escape is automatic. Codex caught the injection on the PR 5
-# third review pass.
-echo "[7e] diarization subjects with JSON metacharacters parse cleanly"
-new_project "cell7e-json-safe"
-cat > "$NANOSTACK_STORE/know-how/diarizations/quoted.md" <<'EOF'
----
-subject: app/"weird"/path.tsx
-date: 2026-04-01
----
+# Cell 7e: diarization subjects with JSON metacharacters parse cleanly.
+cell_json_safe() {
+  routing_project "cell7e-json-safe" >/dev/null
+  printf '%s\n' '---' 'subject: app/"weird"/path.tsx' 'date: 2026-04-01' '---' > "$NANOSTACK_STORE/know-how/diarizations/quoted.md"
+  cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{"custom_phases":["license-audit"],"phase_context":{"license-audit":{"diarizations":{"paths":["weird"],"keywords":[]}}}}
 EOF
-cat > "$NANOSTACK_STORE/config.json" <<'EOF'
-{
-  "custom_phases": ["license-audit"],
-  "phase_context": {
-    "license-audit": {
-      "diarizations": { "paths": ["weird"], "keywords": [] }
-    }
-  }
+  local out; out=$("$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "quote in subject lands intact" 'app/"weird"/path.tsx' "$(echo "$out" | jq -r '.diarizations[0].subject // ""')"
 }
-EOF
-out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-diar_subject=$(echo "$out" | jq -r '.diarizations[0].subject // ""')
-assert_eq "quote in subject lands intact" 'app/"weird"/path.tsx' "$diar_subject"
 
-# Cell 8: routing block surfaces every applied field so consumers
-# can audit what the resolver did.
-echo "[8] routing block surfaces every applied field"
-new_project "cell8-routing-shape"
-cat > "$NANOSTACK_STORE/config.json" <<'EOF'
-{
-  "custom_phases": ["license-audit"],
-  "phase_context": {
-    "license-audit": {
-      "trust": "strict",
-      "upstream_required": ["review"],
-      "upstream_optional": ["security"],
-      "max_age_days": 7,
-      "solutions": { "tags": ["compliance"], "limit": 3 },
-      "diarizations": { "paths": ["src/privacy"], "keywords": ["pii"] }
-    }
-  }
+# Cell 8: routing block surfaces every applied field.
+cell_routing_shape() {
+  routing_project "cell8-routing-shape" >/dev/null
+  cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{"custom_phases":["license-audit"],"phase_context":{"license-audit":{"trust":"strict","upstream_required":["review"],"upstream_optional":["security"],"max_age_days":7,"solutions":{"tags":["compliance"],"limit":3},"diarizations":{"paths":["src/privacy"],"keywords":["pii"]}}}}
+EOF
+  local out; out=$("$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "routing.declared = true" "true" "$(echo "$out" | jq -r '.routing.declared')"
+  nh_assert_eq "routing.trust = strict" "strict" "$(echo "$out" | jq -r '.routing.trust')"
+  nh_assert_eq "routing.upstream_required" '["review"]' "$(echo "$out" | jq -c '.routing.upstream_required')"
+  nh_assert_eq "routing.upstream_optional" '["security"]' "$(echo "$out" | jq -c '.routing.upstream_optional')"
+  nh_assert_eq "routing.max_age_days" "7" "$(echo "$out" | jq -r '.routing.max_age_days')"
+  nh_assert_eq "routing.solutions.tags" '["compliance"]' "$(echo "$out" | jq -c '.routing.solutions.tags')"
+  nh_assert_eq "routing.solutions.limit" "3" "$(echo "$out" | jq -r '.routing.solutions.limit')"
+  nh_assert_eq "routing.diarizations.paths" '["src/privacy"]' "$(echo "$out" | jq -c '.routing.diarizations.paths')"
+  nh_assert_eq "routing.diarizations.keywords" '["pii"]' "$(echo "$out" | jq -c '.routing.diarizations.keywords')"
 }
-EOF
-out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-assert_eq "routing.declared = true" "true" "$(echo "$out" | jq -r '.routing.declared')"
-assert_eq "routing.trust = strict" "strict" "$(echo "$out" | jq -r '.routing.trust')"
-assert_eq "routing.upstream_required" '["review"]' "$(echo "$out" | jq -c '.routing.upstream_required')"
-assert_eq "routing.upstream_optional" '["security"]' "$(echo "$out" | jq -c '.routing.upstream_optional')"
-assert_eq "routing.max_age_days" "7" "$(echo "$out" | jq -r '.routing.max_age_days')"
-assert_eq "routing.solutions.tags" '["compliance"]' "$(echo "$out" | jq -c '.routing.solutions.tags')"
-assert_eq "routing.solutions.limit" "3" "$(echo "$out" | jq -r '.routing.solutions.limit')"
-assert_eq "routing.diarizations.paths" '["src/privacy"]' "$(echo "$out" | jq -c '.routing.diarizations.paths')"
-assert_eq "routing.diarizations.keywords" '["pii"]' "$(echo "$out" | jq -c '.routing.diarizations.keywords')"
 
-# Cell 8a: when tags are declared but limit is omitted, the routing
-# block reports the documented default (10) instead of null so
-# consumers auditing the routing output see what actually applied.
-# Codex flagged the silent default on the PR 5 fourth review pass.
-echo "[8a] routing.solutions.limit reports the documented default"
-new_project "cell8a-default-limit"
-cat > "$NANOSTACK_STORE/config.json" <<'EOF'
-{
-  "custom_phases": ["license-audit"],
-  "phase_context": {
-    "license-audit": {
-      "solutions": { "tags": ["any"] }
-    }
-  }
+# Cell 8a: routing.solutions.limit reports the documented default.
+cell_default_limit() {
+  routing_project "cell8a-default-limit" >/dev/null
+  cat > "$NANOSTACK_STORE/config.json" <<'EOF'
+{"custom_phases":["license-audit"],"phase_context":{"license-audit":{"solutions":{"tags":["any"]}}}}
+EOF
+  local out; out=$("$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "limit omitted with tags declared reports default 10" "10" "$(echo "$out" | jq -r '.routing.solutions.limit')"
+  routing_project "cell8a-no-context" >/dev/null
+  printf '%s\n' '{"custom_phases": ["license-audit"]}' > "$NANOSTACK_STORE/config.json"
+  out=$("$RESOLVE" license-audit 2>/dev/null)
+  nh_assert_eq "no phase_context: routing.solutions.limit stays null" "null" "$(echo "$out" | jq -r '.routing.solutions.limit')"
 }
-EOF
-out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-assert_eq "limit omitted with tags declared reports default 10" "10" \
-  "$(echo "$out" | jq -r '.routing.solutions.limit')"
-# Sanity: a config without phase_context at all stays null (no
-# default leaks when nothing was declared).
-new_project "cell8a-no-context"
-cat > "$NANOSTACK_STORE/config.json" <<'EOF'
-{"custom_phases": ["license-audit"]}
-EOF
-out=$("$REPO/bin/resolve.sh" license-audit 2>/dev/null)
-assert_eq "no phase_context: routing.solutions.limit stays null" "null" \
-  "$(echo "$out" | jq -r '.routing.solutions.limit')"
 
-cd "$TMP_ROOT"
+nh_cell backcompat        cell_backcompat
+nh_cell missing-required  cell_missing_required
+nh_cell strict-drops      cell_strict_drops
+nh_cell normal-keeps      cell_normal_keeps
+nh_cell max-age           cell_max_age
+nh_cell solution-tags     cell_solution_tags
+nh_cell diarization-paths cell_diarization_paths
+nh_cell routed-only       cell_routed_only
+nh_cell global-config     cell_global_config
+nh_cell diar-literal      cell_diar_literal
+nh_cell tag-literal       cell_tag_literal
+nh_cell json-safe         cell_json_safe
+nh_cell routing-shape     cell_routing_shape
+nh_cell default-limit     cell_default_limit
 
-echo
-echo "==========================="
-TOTAL=$((PASS + FAIL))
-if [ "$FAIL" -eq 0 ]; then
-  printf "${GREEN}Custom Routing E2E: %d checks passed, 0 failed${NC}\n" "$PASS"
-  exit 0
-else
-  printf "${RED}Custom Routing E2E: %d failed of %d total${NC}\n" "$FAIL" "$TOTAL"
-  exit 1
-fi
+nh_summary
