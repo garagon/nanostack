@@ -470,3 +470,66 @@ nano_phase_skill_path() {
   unset -f _phases_append_root
   return 1
 }
+
+# Resolve a phase's declared concurrency from its skill's SKILL.md
+# frontmatter. Echoes the value (typically "read", "write", or
+# "exclusive") and returns 0 when found. Returns 1 with NO output when
+# the phase, its skill directory, its SKILL.md, or the concurrency
+# field cannot be resolved.
+#
+# Both built-in and registered custom phases resolve through
+# nano_phase_skill_path, so a custom read-only phase gets the same
+# treatment as the built-in ones. The lookup deliberately FAILS OPEN
+# (returns 1, no output) on a missing or malformed skill: the guard
+# hooks call this on every tool invocation, and a bad custom skill must
+# never brick tool use. Callers treat a non-zero return as "no
+# read-only constraint applies", preserving pre-helper behavior.
+nano_phase_concurrency() {
+  local phase="${1:-}"
+  [ -n "$phase" ] || return 1
+  local skill_dir
+  skill_dir=$(nano_phase_skill_path "$phase" "${2:-}" 2>/dev/null) || return 1
+  [ -n "$skill_dir" ] && [ -f "$skill_dir/SKILL.md" ] || return 1
+  # Parse concurrency only from a CLOSED frontmatter block. A malformed
+  # SKILL.md that opens '---' but never closes it must fail open: awk
+  # buffers the value and emits it only after it has seen the closing
+  # delimiter, so a stray 'concurrency:' line in the body of an unclosed
+  # block can never enforce a read-only phase.
+  local conc
+  conc=$(awk '
+    NR==1 && $0 !~ /^---[[:space:]]*$/ { exit }
+    NR==1 { next }
+    /^---[[:space:]]*$/ { closed=1; exit }
+    /^concurrency:/ && !found { val=$0; sub(/^concurrency:[[:space:]]*/, "", val); found=1 }
+    END { if (closed && found) print val }
+  ' "$skill_dir/SKILL.md" 2>/dev/null)
+  conc=$(printf '%s' "$conc" | tr -d '[:space:]')
+  [ -n "$conc" ] || return 1
+  printf '%s\n' "$conc"
+  return 0
+}
+
+# Resolve the active session's current phase and its concurrency.
+# Reads the session JSON from $1 (default $NANOSTACK_STORE/session.json)
+# and emits a single tab-delimited record:
+#   <phase><TAB><concurrency>
+#
+# Returns 0 ONLY when an active current_phase exists and its concurrency
+# resolves. Returns 1 (no output) when there is no session, no current
+# phase, the current phase is the conductor's no-skill "build" stage, or
+# the concurrency cannot be resolved. Stays silent on every non-active
+# state because the Bash and Write/Edit guard hooks call this on every
+# tool invocation — this is the single shared lookup that keeps the two
+# hooks from drifting on what "read-only phase" means.
+nano_active_phase_concurrency() {
+  local session="${1:-${NANOSTACK_STORE:-}/session.json}"
+  [ -n "$session" ] && [ -f "$session" ] || return 1
+  command -v jq >/dev/null 2>&1 || return 1
+  local phase
+  phase=$(jq -r '.current_phase // ""' "$session" 2>/dev/null)
+  [ -n "$phase" ] && [ "$phase" != "null" ] && [ "$phase" != "build" ] || return 1
+  local conc
+  conc=$(nano_phase_concurrency "$phase") || return 1
+  printf '%s\t%s\n' "$phase" "$conc"
+  return 0
+}
