@@ -1,6 +1,6 @@
 # Extending Nanostack
 
-Add your own skills that plug into Nanostack's workflow. Your skills save artifacts, read what other skills produced, and compose with `/think`, `/review`, and `/ship`. Multiple skills can compose into a domain workflow stack that gates `/ship` on its own evidence.
+Add your own skills that plug into Nanostack's workflow. Your skills save artifacts, read what other skills produced, and compose with `/think`, `/review`, and `/ship`. Multiple skills can compose into a custom workflow stack that gates `/ship` on its own evidence.
 
 ## Two starting points
 
@@ -17,6 +17,8 @@ Add your own skills that plug into Nanostack's workflow. Your skills save artifa
 > ```
 >
 > The first command scaffolds a working skill from the bundled template, registers it as a custom phase, and rewrites every helper path to be self-contained. It writes to the same store path the lifecycle scripts read from (your repo root's `.nanostack/`, or `$HOME/.nanostack/` outside git), so the skill is visible whether you invoke the tool from the project root or a subdirectory. The second runs a check that covers `SKILL.md` frontmatter shape, the frontmatter `name:` matches the directory, `agents/openai.yaml` has the required discovery keys, the `display_name` is consistent with the skill, `bash -n` on helpers, registration in config, no leaked example paths, and a `save-artifact` + `find-artifact` round-trip. Restart your agent and `/license-audit` is live.
+>
+> To scaffold from a different template instead of the bundled default, pass `--from <template-dir>` (for example `bin/create-skill.sh my-skill --from path/to/template`).
 >
 > The contract those tools enforce lives in [`reference/custom-stack-contract.md`](reference/custom-stack-contract.md). The 15-cell end-to-end harness that proves the journey works (including subdir-scaffold and no-git scaffold paths) is at [`ci/e2e-custom-stack-flows.sh`](ci/e2e-custom-stack-flows.sh).
 
@@ -80,17 +82,29 @@ Only include categories you want to override. Everything else uses nanostack def
 
 If the project already has dependencies (package.json, go.mod, etc.), /nano uses the existing stack regardless of any config.
 
-## Example: build a /deploy skill in 5 minutes
+## Advanced: skill anatomy by hand
 
-Let's create a skill that verifies a deploy after /ship creates the PR.
+Most skills should be scaffolded with `bin/create-skill.sh` (see [Two
+starting points](#two-starting-points) above). It generates the SKILL.md,
+registers the custom phase, writes the `agents/openai.yaml` discovery file,
+places the skill in the right store path, and passes
+`bin/check-custom-skill.sh`. This section walks the core pieces by hand
+(SKILL.md plus phase registration) so you understand how a skill reads and
+writes artifacts, using a `/deploy` skill that verifies a deploy after
+`/ship` creates the PR. It is illustrative, not a complete skill: a
+validated skill also needs the `agents/openai.yaml` file the scaffolder
+writes, so use `bin/create-skill.sh` for anything you intend to ship.
 
 ### 1. Create the skill file
 
+Custom skills live under the store's `skills/` directory (the scaffolder
+puts them there automatically):
+
 ```bash
-mkdir -p ~/.claude/skills/nanostack/deploy
+mkdir -p .nanostack/skills/deploy
 ```
 
-Create `deploy/SKILL.md`:
+Create `.nanostack/skills/deploy/SKILL.md`:
 
 ```yaml
 ---
@@ -423,3 +437,20 @@ Removes artifacts from a bad session. Works with custom phases.
 ```
 
 Register custom phases so `save-artifact.sh` accepts them. Without this, only the 6 core phases are accepted (think, plan, review, qa, security, ship).
+
+## Contributing: running the checks
+
+The CI suites are inventoried in [`ci/harnesses.json`](ci/harnesses.json)
+and run through one local runner. The full local gauntlet is:
+
+```bash
+ci/run-harness.sh --all          # run every registered suite
+ci/run-harness.sh --list         # see what exists
+ci/run-harness.sh --suite artifact-trust   # run one suite
+ci/run-harness.sh --tier pr      # just the always-on PR checks
+```
+
+`ci/check-harness-manifest.sh` keeps the inventory honest: it fails if a
+suite is unregistered, a path is missing, or a workflow job no longer runs
+the suite it claims. The heavier end-to-end suites are opt-in (they run via
+`workflow_dispatch`, not on every PR).

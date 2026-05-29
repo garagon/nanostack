@@ -278,7 +278,7 @@ Un equipo de marketing arma `/audience` y `/campaign`. Un equipo de datos arma `
 
 Walkthrough completo: [`EXTENDING.md`](EXTENDING.md).
 
-## Artifactos visuales
+## Artefactos visuales
 
 Cada artefacto de fase es JSON. El JSON es lo que leen los skills, lo que firma el hash de integridad y lo que agrega el sprint journal. Esa capa es la canónica.
 
@@ -299,7 +299,7 @@ El renderer es offline: cada página trae su propio CSS, el Content-Security-Pol
 
 `--interactive` suma botones de copia en `/plan` y `/review` (copy as prompt, copy as Markdown, copy as JSON patch). Usan solo el clipboard local. Sin escrituras a disco, sin llamadas de red, sin form submission.
 
-Los artifactos visuales son una capa opcional de inspección. Nada depende de ellos: borrar `.nanostack/visual/` no cambia el comportamiento de ningún skill ni el estado del sprint. El contrato vive en `reference/visual-artifact-contract.md`.
+Los artefactos visuales son una capa opcional de inspección. Nada depende de ellos: borrar `.nanostack/visual/` no cambia el comportamiento de ningún skill ni el estado del sprint. El contrato vive en `reference/visual-artifact-contract.md`.
 
 ## Privacidad
 
