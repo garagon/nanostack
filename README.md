@@ -28,6 +28,7 @@
   <a href="#the-sprint">The Sprint</a> &middot;
   <a href="#know-how">Know-how</a> &middot;
   <a href="#build-on-nanostack">Extend</a> &middot;
+  <a href="RELEASE_NOTES.md">Release notes</a> &middot;
   <a href="README.es.md">Español</a>
 </p>
 
@@ -37,6 +38,8 @@
 Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). Nanostack ships 13 built-in skills, a seven-phase default sprint, and a framework for adding your own skills or workflow stacks. No Nanostack cloud. No build step.
 
 Verified adapters today: **Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI**. The skill files are plain text, so other agents may load them, but only those five have a verified adapter and capability declaration in [`adapters/`](adapters/).
+
+What changed in the latest release (custom workflow stacks, visual artifacts, stronger safety contracts): see [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
 ## What is Nanostack?
 
@@ -114,6 +117,7 @@ A detailed per-host matrix (Bash guard, Write/Edit guard, phase gate) lives furt
 | Already shipping with AI agents | Install Nanostack, then start with `/think` or `/feature` |
 | Evaluating safety | Read [Guard](#guard) and the [host enforcement matrix](#what-enforces-on-which-agent) |
 | Building your own workflow | Start with [`EXTENDING.md`](EXTENDING.md) and [`compliance-release`](examples/custom-stack-template/compliance-release/) |
+| Inspecting what the agent did | Render any phase as local HTML with [visual artifacts](#visual-artifacts) (`bin/render-artifact.sh`) |
 
 ## Try it safely first
 
