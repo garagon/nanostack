@@ -63,6 +63,41 @@ audit_trail_append() {
 
 CMD_BASE=$(echo "$CMD" | awk '{print $1}' | sed 's|.*/||')
 
+BLOCK_INPUT="$CMD"
+
+# Catastrophic recursive rm, independent of flag spelling and operand order.
+# The rm rules (G-001..G-004) are written against the canonical
+# `rm -rf <target>`, but `rm -fr`, `rm -r -f`, `rm --recursive --force`,
+# `rm -r -f -- ~`, `rm -r --interactive=never *`, and `rm -fr /tmp /` are the
+# same operation. Rather than rewrite flags in place (which is sensitive to
+# operand position), detect a recursive rm and then scan every operand for a
+# catastrophic target (root, home, current dir, wildcard) in any quoting. For
+# each catastrophic target found, append the canonical form so the existing
+# rules fire. A recursive cleanup of an ordinary path (e.g. `rm -r /tmp/build`)
+# has no catastrophic operand, so nothing is appended and it is not blocked.
+if printf '%s' "$CMD" | grep -qE '(^|[;&|[:space:]])rm[[:space:]]+([-][-a-zA-Z0-9=]*[[:space:]]+)*(-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)([[:space:]]|$)' 2>/dev/null; then
+  printf '%s' "$CMD" | grep -qE "([[:space:]=]|^)[\"']?/+[*]?[\"']?([[:space:]]|[;&]|\$)" 2>/dev/null && BLOCK_INPUT="$BLOCK_INPUT
+rm -rf /"
+  printf '%s' "$CMD" | grep -qE "([[:space:]=]|^)[\"']?~/?[*]?[\"']?([[:space:]]|[;&]|\$)" 2>/dev/null && BLOCK_INPUT="$BLOCK_INPUT
+rm -rf ~"
+  printf '%s' "$CMD" | grep -qE "([[:space:]=]|^)[\"']?[*][\"']?([[:space:]]|[;&]|\$)" 2>/dev/null && BLOCK_INPUT="$BLOCK_INPUT
+rm -rf *"
+  printf '%s' "$CMD" | grep -qE "([[:space:]=]|^)[\"']?[.]/?[\"']?([[:space:]]|[;&]|\$)" 2>/dev/null && BLOCK_INPUT="$BLOCK_INPUT
+rm -rf ."
+fi
+
+# Heredoc and other multi-line invocations put the interpreter on one line
+# and the secret read on another. Add a newline-flattened copy so rules like
+# the interpreter secret-read guard (G-036) can match across the lines.
+case "$CMD" in
+  *"
+"*)
+    FLAT_CMD=$(printf '%s' "$CMD" | tr '\n' ' ')
+    [ -n "$FLAT_CMD" ] && BLOCK_INPUT="$BLOCK_INPUT
+$FLAT_CMD"
+    ;;
+esac
+
 # ─── Tier 1: Block rules (authoritative, no exceptions) ─────
 # Block patterns run before the allowlist so commands whose binary
 # happens to be on the allowlist (cat, find, head, tail) still get
@@ -71,11 +106,11 @@ CMD_BASE=$(echo "$CMD" | awk '{print $1}' | sed 's|.*/||')
 # circuit past block rules; audit finding from April 2026.
 BLOCK_PATTERNS=$(jq -r '.tiers.block.rules[] | .pattern' "$RULES_FILE" 2>/dev/null)
 BLOCK_COMBINED=$(echo "$BLOCK_PATTERNS" | paste -sd'|' -)
-if [ -n "$BLOCK_COMBINED" ] && echo "$CMD" | grep -qiE -- "$BLOCK_COMBINED" 2>/dev/null; then
+if [ -n "$BLOCK_COMBINED" ] && printf '%s\n' "$BLOCK_INPUT" | grep -qiE -- "$BLOCK_COMBINED" 2>/dev/null; then
   BLOCK_IDX=0
   while IFS= read -r PATTERN; do
     [ -z "$PATTERN" ] && continue
-    if echo "$CMD" | grep -qiE -- "$PATTERN" 2>/dev/null; then
+    if printf '%s\n' "$BLOCK_INPUT" | grep -qiE -- "$PATTERN" 2>/dev/null; then
       RULE=$(jq -c ".tiers.block.rules[$BLOCK_IDX]" "$RULES_FILE")
       ID=$(echo "$RULE" | jq -r '.id')
       DESC=$(echo "$RULE" | jq -r '.description')
