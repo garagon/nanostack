@@ -4,7 +4,9 @@ The detailed "what changed" surface for Nanostack. The [README](README.md)
 stays the stable, user-facing overview; this file records what each release
 adds and why it matters. Newest first.
 
-## 2026-05-29 (changes since v1.0.0)
+## v1.1.0 (2026-05-29)
+
+Changes since v1.0.0.
 
 ### What changed
 
@@ -41,10 +43,10 @@ adds and why it matters. Newest first.
 ### Honest scope
 
 Hard enforcement is host-dependent. Claude Code has the strongest
-continuous hook coverage; the other verified adapters (Cursor, OpenAI
-Codex, OpenCode, Gemini CLI) run the same workflow as guided instructions
-unless their `adapters/<host>.json` proves otherwise. Nanostack has no
-cloud or backend; everything is local under `.nanostack/`. The heavier
-runtime end-to-end suites run in the opt-in E2E workflow
-(`workflow_dispatch`), not on every PR; lighter contract checks, including
-the visual-artifact contract, do run on every PR.
+continuous hook coverage; the other verified adapters (Cursor,
+OpenAI Codex, OpenCode, Gemini CLI) run the same workflow as guided
+instructions unless their `adapters/<host>.json` proves otherwise.
+Nanostack has no cloud or backend; everything is local under
+`.nanostack/`. The heavier runtime end-to-end suites run in the opt-in
+E2E workflow (`workflow_dispatch`), not on every PR; lighter contract
+checks, including the visual-artifact contract, do run on every PR.

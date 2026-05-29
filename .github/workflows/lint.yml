@@ -2048,6 +2048,21 @@ jobs:
       - name: Run README narrative claim locks
         run: ci/check-readme-narrative-locks.sh
 
+  release-docs-locks:
+    name: Release-surface doc locks (notes, EXTENDING, llms, AGENTS)
+    runs-on: ubuntu-latest
+    # Spec release-readme-site-refresh-2026-05-29 PR 3. The narrative
+    # locks above cover README.md and README.es.md. This job locks the
+    # rest of the release surface the refresh round touched
+    # (RELEASE_NOTES.md, EXTENDING.md, llms.txt, AGENTS.md): the same
+    # required + forbidden token set, plus a version-currency check so a
+    # published release cannot advertise a version that differs from the
+    # VERSION file.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run release-surface doc locks
+        run: ci/check-release-docs-locks.sh
+
   examples-library:
     name: Examples library contract
     runs-on: ubuntu-latest

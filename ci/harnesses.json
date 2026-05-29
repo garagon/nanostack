@@ -279,6 +279,18 @@
       "job": "readme-narrative-locks"
     },
     {
+      "id": "check-release-docs-locks",
+      "path": "ci/check-release-docs-locks.sh",
+      "kind": "static-contract",
+      "tier": "pr",
+      "surface": ["release-notes", "extending", "llms", "agents", "public-copy"],
+      "deps": ["bash"],
+      "expected_checks": 0,
+      "timeout_minutes": 2,
+      "workflow": ".github/workflows/lint.yml",
+      "job": "release-docs-locks"
+    },
+    {
       "id": "check-visual-artifact-public-copy",
       "path": "ci/check-visual-artifact-public-copy.sh",
       "kind": "static-contract",
