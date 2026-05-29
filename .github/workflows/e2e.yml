@@ -19,9 +19,7 @@ jobs:
       - name: jq is present (smoke check)
         run: jq --version
       - name: Run end-to-end harness
-        run: |
-          chmod +x ci/e2e-user-flows.sh
-          ci/e2e-user-flows.sh
+        run: ci/run-harness.sh --suite user-flows
 
   e2e-concurrency-parity:
     name: E2E read-only phase write parity
@@ -38,9 +36,7 @@ jobs:
       - name: jq is present
         run: jq --version
       - name: Run concurrency parity matrix
-        run: |
-          chmod +x ci/e2e-concurrency-parity.sh
-          ci/e2e-concurrency-parity.sh
+        run: ci/run-harness.sh --suite concurrency-parity
 
   e2e-delivery-matrix:
     name: E2E delivery matrix (9 cells)
@@ -55,9 +51,7 @@ jobs:
       - name: jq is present
         run: jq --version
       - name: Run delivery matrix
-        run: |
-          chmod +x ci/e2e-delivery-matrix.sh
-          ci/e2e-delivery-matrix.sh
+        run: ci/run-harness.sh --suite delivery-matrix
 
   e2e-think-flows:
     name: E2E /think vNext flows
@@ -73,9 +67,7 @@ jobs:
       - name: jq is present
         run: jq --version
       - name: Run /think E2E flows
-        run: |
-          chmod +x ci/e2e-think-flows.sh
-          ci/e2e-think-flows.sh
+        run: ci/run-harness.sh --suite think-flows
 
   e2e-examples:
     name: E2E Examples Library (per-archetype sprint roundtrip)
@@ -98,9 +90,7 @@ jobs:
           node --version
           curl --version | head -1
       - name: Run examples library E2E
-        run: |
-          chmod +x ci/e2e-examples.sh
-          ci/e2e-examples.sh
+        run: ci/run-harness.sh --suite examples
 
   e2e-think-archetypes:
     name: E2E /think Guided Archetypes v1 (9 cells)
@@ -119,9 +109,7 @@ jobs:
       - name: jq is present
         run: jq --version
       - name: Run /think archetypes E2E
-        run: |
-          chmod +x ci/e2e-think-archetypes.sh
-          ci/e2e-think-archetypes.sh
+        run: ci/run-harness.sh --suite think-archetypes
 
   e2e-custom-stack-examples:
     name: E2E Custom Stack Examples v1 (compliance-release runtime)
@@ -144,9 +132,7 @@ jobs:
           jq --version
           node --version
       - name: Run custom-stack-examples runtime E2E
-        run: |
-          chmod +x ci/e2e-custom-stack-examples.sh
-          ci/e2e-custom-stack-examples.sh
+        run: ci/run-harness.sh --suite custom-stack-examples
 
   e2e-custom-stack:
     name: E2E Custom Stack Framework v1 (22-cell journey)
@@ -166,9 +152,7 @@ jobs:
           jq --version
           node --version
       - name: Run custom-stack E2E
-        run: |
-          chmod +x ci/e2e-custom-stack-flows.sh
-          ci/e2e-custom-stack-flows.sh
+        run: ci/run-harness.sh --suite custom-stack-flows
 
   e2e-onboarding-flows:
     name: E2E /nano-run vNext flows (9 cells)
@@ -185,9 +169,7 @@ jobs:
       - name: jq is present
         run: jq --version
       - name: Run /nano-run E2E flows
-        run: |
-          chmod +x ci/e2e-onboarding-flows.sh
-          ci/e2e-onboarding-flows.sh
+        run: ci/run-harness.sh --suite onboarding-flows
 
   e2e-adapter-freshness:
     name: E2E Adapter Schema + Freshness (8 cells)
@@ -203,9 +185,7 @@ jobs:
       - name: jq is present
         run: jq --version
       - name: Run adapter freshness E2E
-        run: |
-          chmod +x ci/e2e-adapter-freshness.sh
-          ci/e2e-adapter-freshness.sh
+        run: ci/run-harness.sh --suite adapter-freshness
 
   e2e-custom-routing:
     name: E2E Custom Routing Contract (8 cells)
@@ -221,9 +201,7 @@ jobs:
       - name: jq is present
         run: jq --version
       - name: Run custom routing E2E
-        run: |
-          chmod +x ci/e2e-custom-routing.sh
-          ci/e2e-custom-routing.sh
+        run: ci/run-harness.sh --suite custom-routing
 
   e2e-graph-aware-session:
     name: E2E Graph-aware Session + Next-step (10 cells)
@@ -239,9 +217,7 @@ jobs:
       - name: jq is present
         run: jq --version
       - name: Run graph-aware session E2E
-        run: |
-          chmod +x ci/e2e-graph-aware-session.sh
-          ci/e2e-graph-aware-session.sh
+        run: ci/run-harness.sh --suite graph-aware-session
 
   e2e-structured-artifacts:
     name: E2E Structured Artifact Contract (9 cells)
@@ -257,9 +233,7 @@ jobs:
       - name: jq is present
         run: jq --version
       - name: Run structured artifact E2E
-        run: |
-          chmod +x ci/e2e-structured-artifacts.sh
-          ci/e2e-structured-artifacts.sh
+        run: ci/run-harness.sh --suite structured-artifacts
 
   e2e-artifact-trust:
     name: E2E Artifact Trust v2 (9 cells)
@@ -276,6 +250,4 @@ jobs:
       - name: jq is present
         run: jq --version
       - name: Run artifact-trust E2E
-        run: |
-          chmod +x ci/e2e-artifact-trust.sh
-          ci/e2e-artifact-trust.sh
+        run: ci/run-harness.sh --suite artifact-trust
