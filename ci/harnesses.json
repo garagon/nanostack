@@ -255,6 +255,42 @@
       "job": "custom-stack-examples-contract"
     },
     {
+      "id": "check-readme-public-copy",
+      "path": "ci/check-readme-public-copy.sh",
+      "kind": "static-contract",
+      "tier": "pr",
+      "surface": ["readme", "public-copy"],
+      "deps": ["bash"],
+      "expected_checks": 0,
+      "timeout_minutes": 2,
+      "workflow": ".github/workflows/lint.yml",
+      "job": "readme-public-copy"
+    },
+    {
+      "id": "check-readme-narrative-locks",
+      "path": "ci/check-readme-narrative-locks.sh",
+      "kind": "static-contract",
+      "tier": "pr",
+      "surface": ["readme", "public-copy", "narrative"],
+      "deps": ["bash"],
+      "expected_checks": 0,
+      "timeout_minutes": 2,
+      "workflow": ".github/workflows/lint.yml",
+      "job": "readme-narrative-locks"
+    },
+    {
+      "id": "check-visual-artifact-public-copy",
+      "path": "ci/check-visual-artifact-public-copy.sh",
+      "kind": "static-contract",
+      "tier": "pr",
+      "surface": ["visual-render", "public-copy"],
+      "deps": ["bash"],
+      "expected_checks": 0,
+      "timeout_minutes": 2,
+      "workflow": ".github/workflows/lint.yml",
+      "job": "visual-artifact-public-copy"
+    },
+    {
       "id": "tests-run",
       "path": "tests/run.sh",
       "kind": "unit",
