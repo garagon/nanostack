@@ -2191,6 +2191,18 @@ jobs:
       - name: Run helper path-containment check
         run: ci/check-helper-path-containment.sh
 
+  trusted-evidence:
+    name: Gates and context loaders use verified artifacts
+    runs-on: ubuntu-latest
+    # The /feature commit gate, restore-context, and conductor complete all
+    # consume phase artifacts. This job confirms a tampered artifact is treated
+    # as missing by the gate, skipped by the context loader, and that conductor
+    # only links a real in-scope JSON file, while intact evidence keeps working.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run trusted-evidence check
+        run: ci/check-trusted-evidence.sh
+
   examples-library:
     name: Examples library contract
     runs-on: ubuntu-latest

@@ -346,18 +346,59 @@ cmd_complete() {
     exit 1
   fi
 
-  # Write done marker
+  # Validate the artifact BEFORE recording completion. Writing the done marker
+  # unblocks dependent phases and downstream readers treat phase_dir/artifact.json
+  # as trusted phase evidence, so a rejected artifact must stop the command
+  # before anything is marked complete. Reject a symlink (it could point
+  # anywhere), require valid JSON, and require the resolved path to stay under
+  # the nanostack store or the project.
+  local artifact_real=""
+  if [ -n "$artifact" ]; then
+    if [ -L "$artifact" ]; then
+      echo "ERROR: --artifact must not be a symlink" >&2
+      exit 1
+    fi
+    if [ ! -f "$artifact" ]; then
+      echo "ERROR: --artifact '$artifact' not found" >&2
+      exit 1
+    fi
+    if ! jq empty "$artifact" >/dev/null 2>&1; then
+      echo "ERROR: --artifact '$artifact' is not valid JSON" >&2
+      exit 1
+    fi
+    # Canonicalize the containing directory with `cd ... && pwd -P` (portable,
+    # resolves ".." and symlinked path components without depending on realpath)
+    # and fail closed if it cannot be resolved, so a lexical prefix like
+    # "$NANOSTACK_STORE/../../outside.json" cannot pass the check below.
+    local store_real project_real art_dir
+    art_dir=$(cd "$(dirname "$artifact")" 2>/dev/null && pwd -P) || {
+      echo "ERROR: cannot resolve --artifact path" >&2
+      exit 1
+    }
+    artifact_real="$art_dir/$(basename "$artifact")"
+    store_real=$(cd "$NANOSTACK_STORE" 2>/dev/null && pwd -P) || store_real="$NANOSTACK_STORE"
+    project_real=$(cd "$PROJECT" 2>/dev/null && pwd -P) || project_real="$PROJECT"
+    case "$artifact_real" in
+      "$store_real"/*|"$project_real"/*) ;;
+      *)
+        echo "ERROR: --artifact must live under the nanostack store or the project" >&2
+        exit 1
+        ;;
+    esac
+  fi
+
+  # Write done marker (only reached once the artifact, if any, is valid).
   local done_data
   done_data=$(jq -n \
     --arg agent "$agent" \
     --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-    --arg artifact "$artifact" \
+    --arg artifact "$artifact_real" \
     '{agent: $agent, completed_at: $date, artifact: $artifact}')
 
   echo "$done_data" > "$phase_dir/done"
 
-  # Symlink artifact if provided
-  [ -n "$artifact" ] && [ -f "$artifact" ] && ln -snf "$artifact" "$phase_dir/artifact.json"
+  # Link the validated artifact so downstream phases can read it.
+  [ -n "$artifact_real" ] && ln -snf "$artifact_real" "$phase_dir/artifact.json"
 
   # Release lock
   rm -rf "$phase_dir/lock"
