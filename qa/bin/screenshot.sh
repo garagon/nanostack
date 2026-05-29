@@ -9,6 +9,15 @@ URL="${2:?Usage: screenshot.sh <name> <url> [width] [height]}"
 WIDTH="${3:-1280}"
 HEIGHT="${4:-720}"
 
+# The name becomes a filename, so keep it to a single plain basename. This
+# keeps the output inside the results directory.
+case "$NAME" in
+  ''|-*|*/*|*..*)
+    echo "ERROR: invalid screenshot name '$NAME' (use a plain file name)" >&2
+    exit 1
+    ;;
+esac
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RESULTS_DIR="${SCRIPT_DIR}/../results"
 mkdir -p "$RESULTS_DIR"

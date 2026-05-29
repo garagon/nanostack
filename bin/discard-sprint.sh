@@ -32,10 +32,33 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# If --phase given, only clean that phase
+# If --phase given, only clean that phase. Validate it against the registered
+# phases first so a traversal or unknown selector cannot redirect the delete
+# loop at "$STORE/$phase" outside the store.
 if [ -n "$PHASE" ]; then
+  # A phase is a single token. Reject whitespace, newlines, slashes, or ".."
+  # first so a multiline value cannot slip a second word past the membership
+  # check below (grep treats newlines as separate lines) and then split into a
+  # path in the delete loop.
+  case "$PHASE" in
+    *[[:space:]]*|*/*|*..*)
+      echo "ERROR: invalid phase '$PHASE' (expected a single phase name)" >&2
+      exit 1
+      ;;
+  esac
+  if ! printf '%s\n' $PHASES | grep -qxF -- "$PHASE"; then
+    echo "ERROR: unknown phase '$PHASE' (not a registered phase)" >&2
+    exit 1
+  fi
   PHASES="$PHASE"
 fi
+
+# A date selector must be an exact YYYY-MM-DD so it cannot widen the filename
+# match (e.g. "*") or carry path characters into the prefix.
+case "$DATE" in
+  [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+  *) echo "ERROR: --date must be YYYY-MM-DD" >&2; exit 1 ;;
+esac
 
 # Convert date to prefix for matching artifact filenames (YYYYMMDD)
 DATE_PREFIX=$(echo "$DATE" | tr -d '-')
