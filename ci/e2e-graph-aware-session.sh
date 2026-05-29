@@ -711,11 +711,12 @@ rc=$?
 set -e
 assert_eq "ship-less graph blocks commit (rc 1, legacy fallback)" "1" "$rc"
 
-# Cell 10: default sprint user_message remains exactly the historical
-# wording. No regression for built-in flows.
-echo "[10] default sprint user_message is unchanged"
+# Cell 10: default sprint professional user_message remains exactly
+# the historical wording. Pin the profile explicitly so this cell is
+# deterministic in clean containers where no enforcing host is present.
+echo "[10] default sprint professional user_message is unchanged"
 new_project "cell7-default-msg"
-"$SESSION_SH" init development >/dev/null
+"$SESSION_SH" init development --profile professional >/dev/null
 for ph in think plan; do
   "$SESSION_SH" phase-start "$ph" >/dev/null
   "$SESSION_SH" phase-complete "$ph" >/dev/null
