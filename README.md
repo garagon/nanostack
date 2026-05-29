@@ -6,14 +6,14 @@
 <br>
 
 <p align="center">
-  Turn your AI coding agent into a local delivery workflow.
+  Local delivery workflow harness for AI coding agents.
 </p>
 
 <p align="center">
-  Nanostack helps an agent challenge scope, plan the change, build, review, audit, test, and ship with a record of what happened. Use the default sprint, or build your own workflow stack on top.
+  Nanostack gives an agent a delivery method: scope, plan, build, review, security, QA, ship. Each step writes local artifacts the next step can read. Use the default sprint, or build your own workflow stack on top.
 </p>
 
-<p align="center"><strong>Plain text skills. Local artifacts. No Nanostack cloud. No build step.</strong></p>
+<p align="center"><strong>Plain text skills. Local artifacts. Verified adapters. No Nanostack cloud.</strong></p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
@@ -23,10 +23,9 @@
 
 <p align="center">
   <a href="#what-is-nanostack">What is it</a> &middot;
-  <a href="#two-profiles-same-rigor">Profiles</a> &middot;
   <a href="#quick-start">Install</a> &middot;
   <a href="#the-sprint">The Sprint</a> &middot;
-  <a href="#know-how">Know-how</a> &middot;
+  <a href="#visual-artifacts">Visual artifacts</a> &middot;
   <a href="#build-on-nanostack">Extend</a> &middot;
   <a href="RELEASE_NOTES.md">Release notes</a> &middot;
   <a href="README.es.md">Español</a>
@@ -35,7 +34,7 @@
 <br>
 
 
-Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). Nanostack ships 13 built-in skills, a seven-phase default sprint, and a framework for adding your own skills or workflow stacks. No Nanostack cloud. No build step.
+Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). Nanostack ships 13 built-in skills, a seven-phase default sprint, and a framework for composing your own workflow stacks. It is local files and scripts: no Nanostack cloud, no daemon, no app runtime.
 
 Verified adapters today: **Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI**. The skill files are plain text, so other agents may load them, but only those five have a verified adapter and capability declaration in [`adapters/`](adapters/).
 
@@ -43,18 +42,26 @@ What changed in the latest release (custom workflow stacks, visual artifacts, st
 
 ## What is Nanostack?
 
-Your agent can already write code. Nanostack gives it delivery structure.
+Your agent can already edit files and run commands. Nanostack gives it a method.
 
-The default sprint turns a vague request into a scoped, reviewed, audited, tested change with a PR and a sprint journal. Each phase reads the artifact the previous phase wrote, so context does not vanish between steps. On Claude Code the pipeline is enforced via PreToolUse hooks: `git commit` is blocked until `/review`, `/security`, and `/qa` produce fresh artifacts. On other agents the same workflow runs as guided instructions; see [What enforces on which agent](#what-enforces-on-which-agent) for the per-host capability table.
+The default sprint turns a request into a scoped, reviewed, security-checked, tested change with a PR and a sprint journal. Each phase writes a structured artifact. Later phases read those artifacts instead of depending only on chat history.
 
-The framework layer lets you add your own phases. Custom skills write artifacts, read upstream context, appear in journals and analytics, and can be scheduled by the conductor. See [Build on Nanostack](#build-on-nanostack).
+The bet is artifact-first delivery:
+
+- Skills are plain text.
+- Artifacts are local JSON.
+- Gates verify evidence before release.
+- Visual artifacts render the same evidence as local HTML.
+- Custom workflow stacks extend the same pipeline with your own phases.
+
+On Claude Code, Nanostack can enforce parts of the workflow through PreToolUse hooks. On other agents, the same workflow runs as guided instructions. See [What enforces on which agent](#what-enforces-on-which-agent) for the honest per-host table.
 
 The built-in sprint is the default stack:
 
 |        | Step              | What the specialist does                                                |
 | ------ | ----------------- | ----------------------------------------------------------------------- |
-| **01** | `/think`          | Challenges scope. Finds the smallest thing worth building.              |
-| **02** | `/nano`           | Plans the implementation. Names every file and every risk.              |
+| **01** | `/think`          | Challenges scope. Finds the smallest useful version.                    |
+| **02** | `/nano`           | Plans the implementation. Names files, risks, and checks.               |
 | **03** | build             | You or the agent writes the code.                                       |
 | **04** | `/review`         | Two-pass code review. Scope drift detection. Auto-fixes the mechanical. |
 | **05** | `/security`       | OWASP A01-A10 audit + STRIDE threat modeling. Graded A-F.               |
