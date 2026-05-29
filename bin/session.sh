@@ -21,6 +21,18 @@ PROJECT="$(pwd)"
 PROJECT_NAME=$(basename "$PROJECT")
 NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+# Reduce a session_id read from session.json to a safe filename segment.
+# session.json is mutable local state; a poisoned session_id like
+# "../../tmp/evil" would otherwise redirect the archive mv/write outside the
+# sessions directory. Strip any path components and keep only filename-safe
+# characters; fall back to "unknown" if nothing safe remains.
+nano_safe_id() {
+  local id="${1##*/}"
+  id=$(printf '%s' "$id" | tr -cd 'A-Za-z0-9._-')
+  case "$id" in ''|.|..) id="unknown" ;; esac
+  printf '%s' "$id"
+}
+
 # ─── host + capability detection ────────────────────────────
 # Used by cmd_init to snapshot what the running host can actually
 # enforce. Resolution order: explicit flag > NANOSTACK_HOST env >
@@ -170,6 +182,7 @@ cmd_init() {
   if [ -f "$SESSION_FILE" ]; then
     local old_id
     old_id=$(jq -r '.session_id // "unknown"' "$SESSION_FILE")
+    old_id=$(nano_safe_id "$old_id")
     local archive_dir="$NANOSTACK_STORE/sessions"
     mkdir -p "$archive_dir"
     mv "$SESSION_FILE" "$archive_dir/${old_id}.json"
@@ -651,6 +664,7 @@ cmd_archive() {
 
   local session_id
   session_id=$(jq -r '.session_id' "$SESSION_FILE")
+  session_id=$(nano_safe_id "$session_id")
   local archive_dir="$NANOSTACK_STORE/sessions"
   mkdir -p "$archive_dir"
 

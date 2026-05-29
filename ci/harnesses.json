@@ -291,6 +291,18 @@
       "job": "release-docs-locks"
     },
     {
+      "id": "check-helper-path-containment",
+      "path": "ci/check-helper-path-containment.sh",
+      "kind": "static-contract",
+      "tier": "pr",
+      "surface": ["session", "conductor", "discard-sprint", "screenshot"],
+      "deps": ["bash", "jq", "git"],
+      "expected_checks": 10,
+      "timeout_minutes": 2,
+      "workflow": ".github/workflows/lint.yml",
+      "job": "helper-path-containment"
+    },
+    {
       "id": "check-visual-artifact-public-copy",
       "path": "ci/check-visual-artifact-public-copy.sh",
       "kind": "static-contract",

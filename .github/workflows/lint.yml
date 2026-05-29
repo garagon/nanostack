@@ -2178,6 +2178,19 @@ jobs:
       - name: Run release-surface doc locks
         run: ci/check-release-docs-locks.sh
 
+  helper-path-containment:
+    name: Helper scripts stay within their folders
+    runs-on: ubuntu-latest
+    # A few helpers build a path from a value they do not fully control (a
+    # session_id from session.json, a conductor phase argument, the discard
+    # selectors, the screenshot name). This job confirms each helper keeps its
+    # writes and deletes inside the folder it manages, and still accepts
+    # ordinary inputs.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run helper path-containment check
+        run: ci/check-helper-path-containment.sh
+
   examples-library:
     name: Examples library contract
     runs-on: ubuntu-latest

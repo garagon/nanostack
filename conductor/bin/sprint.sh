@@ -30,6 +30,20 @@ else
 fi
 PROJECT_HASH=$(printf '%s' "$PROJECT" | nano_sha256 | cut -c1-12)
 
+# Reject a phase argument that is not a single safe path segment before it is
+# used to build a sprint path. claim/complete/abort/unstuck join the phase into
+# "$sprint_dir/$phase" and remove lock directories with rm -rf, so a phase like
+# "../../foo" would otherwise let cleanup escape the sprint directory. A valid
+# phase is one path segment: no slash, no "..", no leading dash, non-empty.
+require_safe_phase() {
+  case "$1" in
+    ''|-*|*/*|*..*)
+      echo "ERROR: invalid phase name '$1' (expected a single phase segment)" >&2
+      exit 1
+      ;;
+  esac
+}
+
 # Default phases and dependency graph. Node order under review/qa/
 # security and ship.depends_on match bin/lib/phases.sh's default
 # graph so a conductor sprint that mirrors into session.json does
@@ -236,6 +250,7 @@ cmd_start() {
 # ─── claim ───────────────────────────────────────────────────
 cmd_claim() {
   local phase="${1:?Usage: sprint.sh claim <phase> [--agent <name>]}"
+  require_safe_phase "$phase"
   local agent="${3:-$(detect_agent)}"
   local sprint_dir
   sprint_dir=$(find_sprint) || { echo "ERROR: no active sprint" >&2; exit 1; }
@@ -310,6 +325,7 @@ cmd_claim() {
 # ─── complete ────────────────────────────────────────────────
 cmd_complete() {
   local phase="${1:?Usage: sprint.sh complete <phase> [--artifact <path>]}"
+  require_safe_phase "$phase"
   local artifact="${3:-}"
   local agent="$(detect_agent)"
   local sprint_dir
@@ -353,6 +369,7 @@ cmd_complete() {
 # ─── abort ───────────────────────────────────────────────────
 cmd_abort() {
   local phase="${1:?Usage: sprint.sh abort <phase>}"
+  require_safe_phase "$phase"
   local sprint_dir
   sprint_dir=$(find_sprint) || { echo "ERROR: no active sprint" >&2; exit 1; }
 
@@ -435,6 +452,7 @@ cmd_next() {
 # release a lock with a live PID; required when stdin is not a TTY.
 cmd_unstuck() {
   local phase="${1:?Usage: sprint.sh unstuck <phase> [--force]}"
+  require_safe_phase "$phase"
   local force=false
   [ "${2:-}" = "--force" ] && force=true
 
