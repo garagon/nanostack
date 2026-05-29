@@ -193,23 +193,23 @@
         },
         {
           "id": "G-023",
-          "pattern": "curl.*\\| *sh",
+          "pattern": "curl.*\\|[[:space:]]*((/(usr/)?bin/)?env([[:space:]]+.*)?[[:space:]]+)?(/(usr/)?bin/)?(sh|bash|zsh|dash|ksh)($|[^[:alnum:]_.-])",
           "category": "remote-code-execution",
-          "description": "Piping remote content to shell",
+          "description": "Piping remote content to a shell",
           "alternative": "Download the script first, review it, then run it"
         },
         {
           "id": "G-024",
-          "pattern": "curl.*\\| *bash",
+          "pattern": "wget.*\\|[[:space:]]*((/(usr/)?bin/)?env([[:space:]]+.*)?[[:space:]]+)?(/(usr/)?bin/)?(sh|bash|zsh|dash|ksh)($|[^[:alnum:]_.-])",
           "category": "remote-code-execution",
-          "description": "Piping remote content to bash",
+          "description": "Piping a remote download to a shell",
           "alternative": "Download the script first, review it, then run it"
         },
         {
           "id": "G-025",
-          "pattern": "wget.*\\| *sh",
+          "pattern": "(^|[;&|[:space:]])(eval|source|\\.|sh|bash|zsh|dash|ksh)[[:space:]][^|]*(\\$\\(|<\\(|`)[[:space:]]*(curl|wget)",
           "category": "remote-code-execution",
-          "description": "Piping remote download to shell",
+          "description": "Running remote content through shell command or process substitution",
           "alternative": "Download the script first, review it, then run it"
         },
         {
@@ -281,6 +281,13 @@
           "category": "secrets-access",
           "description": "Reading or editing JSON credential files directly",
           "alternative": "Use the project's secrets management. Do not read credential JSON into the agent transcript."
+        },
+        {
+          "id": "G-036",
+          "pattern": "(python3?|node|nodejs|deno|bun|ruby|perl|php)([[:space:]]|$)[^|]*([^a-zA-Z0-9_](open|fopen|readfile|read_file|readfilesync|readlines|readall|readtextfile|readtextfilesync|slurp|file_get_contents|get-?content|read|file\\.read|io\\.read|pathname\\.read)[[:space:]]*\\([[:space:]]*([^()|;]*,[[:space:]]*)?\\\\?[\"'][^\"'|;]*(\\.(env(\\.(local|production|staging|dev|development|test))?|pem|key|p12|pfx|pkcs12|keystore|jks|crt|cer)\\\\?[\"']|(id_(rsa|dsa|ecdsa|ed25519)|(service[-_]?account|firebase[-_]?adminsdk|(aws|gcp|google|client)[-_]?(secret|credential)s?|credentials)[^\"'|;]*\\.json|/\\.(ssh|aws|gnupg|gcp)/)[^\"'|;]*\\\\?[\"'])|\\\\?[\"'][^\"'|;]*(\\.(env(\\.(local|production|staging|dev|development|test))?|pem|key|p12|pfx|pkcs12|keystore|jks|crt|cer)\\\\?[\"']|(id_(rsa|dsa|ecdsa|ed25519)|(service[-_]?account|firebase[-_]?adminsdk|(aws|gcp|google|client)[-_]?(secret|credential)s?|credentials)[^\"'|;]*\\.json|/\\.(ssh|aws|gnupg|gcp)/)[^\"'|;]*\\\\?[\"'])[[:space:]]*\\)?[[:space:]]*\\.(read_text|read_bytes|readlines|read|slurp))",
+          "category": "secrets-access",
+          "description": "Reading a secret file through a language interpreter (bypasses direct-reader rules)",
+          "alternative": "Use the project's secrets management. Do not read credentials into the agent transcript through python/node/ruby/etc."
         }
       ]
     },
