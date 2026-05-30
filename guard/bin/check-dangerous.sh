@@ -46,6 +46,19 @@ if [ ! -f "$RULES_FILE" ]; then
   exit 0
 fi
 
+# Mask inline secrets in a command string before it is shown or persisted. The
+# audit log and the deny output echo the command back, so a command carrying a
+# secret would otherwise leave it in a log file or the transcript. Shared with
+# the sprint phase gate so both audit writers redact the same way.
+REDACT_LIB="$NANOSTACK_ROOT/bin/lib/redact-secrets.sh"
+if [ -f "$REDACT_LIB" ]; then
+  # shellcheck disable=SC1090
+  source "$REDACT_LIB"
+else
+  # Fallback no-op if the helper is missing: never break the guard over logging.
+  redact_secrets() { printf '%s' "${1:-}"; }
+fi
+
 # Helper: append a JSON record to the audit log if the store resolved.
 # No-op when the store is unavailable so guard still blocks even on
 # machines without a configured .nanostack/ directory.
@@ -54,7 +67,7 @@ audit_trail_append() {
   [ -n "${AUDIT_LOG:-}" ] && [ -d "$(dirname "$AUDIT_LOG")" ] || return 0
   jq -cn \
     --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    --arg cmd "$CMD" \
+    --arg cmd "$(redact_secrets "$CMD")" \
     --arg result "$result" \
     --arg rule "$rule" \
     '{at:$at, cmd:$cmd, result:$result, rule:$rule}' \
@@ -119,7 +132,7 @@ if [ -n "$BLOCK_COMBINED" ] && printf '%s\n' "$BLOCK_INPUT" | grep -qiE -- "$BLO
 
       echo "BLOCKED [$ID] $DESC"
       echo "Category: $CATEGORY"
-      echo "Command: $CMD"
+      echo "Command: $(redact_secrets "$CMD")"
       echo ""
       echo "Safer alternative: $ALT"
       audit_trail_append blocked "$ID"
@@ -192,7 +205,7 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
           *rm\ *|*mv\ *|*cp\ *|*mkdir\ *|*touch\ *|*chmod\ *|*git\ add*|*git\ commit*|*git\ push*|*git\ reset*)
             echo "BLOCKED [PHASE] Write operation during read-only phase '$CURRENT_PHASE'"
             echo "Category: concurrency-safety"
-            echo "Command: $CMD"
+            echo "Command: $(redact_secrets "$CMD")"
             echo ""
             echo "Action: report this as a finding instead of auto-fixing. The current phase is read-only to prevent race conditions when multiple agents run in parallel."
             echo "Bypass: complete the current phase first (\`bin/session.sh phase-complete $CURRENT_PHASE\`), or end the session if you're not in a sprint."
@@ -288,7 +301,7 @@ if [ -n "$WARN_COMBINED" ] && echo "$CMD" | grep -qiE -- "$WARN_COMBINED" 2>/dev
 
       echo "WARNING [$ID] $DESC"
       echo "Category: $CATEGORY"
-      echo "Command: $CMD"
+      echo "Command: $(redact_secrets "$CMD")"
       echo ""
       echo "Proceeding. Consider the impact."
       exit 0

@@ -2203,6 +2203,18 @@ jobs:
       - name: Run trusted-evidence check
         run: ci/check-trusted-evidence.sh
 
+  data-hygiene:
+    name: Logs and promoted context do not carry data they should not
+    runs-on: ubuntu-latest
+    # The guard audit log/deny output, the telemetry finalizer, and graduated
+    # rules all handle local data. This job confirms inline secrets are masked
+    # in the audit trail, the finalizer reads its state file as data rather than
+    # shell code, and graduated rules are reduced to a plain single line.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run data-hygiene check
+        run: ci/check-data-hygiene.sh
+
   examples-library:
     name: Examples library contract
     runs-on: ubuntu-latest
