@@ -1,6 +1,6 @@
 ---
 name: guard
-description: Use when working near production, sensitive systems, or destructive operations. Activates on-demand safety hooks that block dangerous commands. Supports modes — careful (warn), freeze (block writes outside scope), unfreeze (remove restrictions). Triggers on /guard, /careful, /freeze, /unfreeze.
+description: Use when working near production, sensitive systems, or destructive operations. Activates on-demand safety hooks that block dangerous commands. Supports modes — careful (warn), freeze (guided, keeps writes within scope), unfreeze (remove restrictions). Triggers on /guard, /careful, /freeze, /unfreeze.
 concurrency: exclusive
 depends_on: []
 summary: "Safety guardrails. Blocks dangerous commands near production or sensitive systems."
@@ -57,12 +57,17 @@ Use `AskUserQuestion` to get explicit confirmation before proceeding.
 
 ### Freeze Mode
 
-**What it does:** Blocks all file writes (Edit, Write) outside of a specified scope.
+**What it does:** Asks the agent to keep its file writes (Edit, Write) within a
+chosen scope for the rest of the session. This is a guided instruction the agent
+follows, not a hook-enforced block: unlike the secret and system-path denylist
+in `check-write.sh`, the Write/Edit hook does not currently reject an
+out-of-scope write. Treat freeze as agent-level discipline, not a wall.
 
 When the user says `/freeze` or `/guard freeze`:
 1. Ask which directories/files are in scope (or accept them as arguments)
 2. Store the scope in `guard/config.json`
-3. For the remainder of the session, block any Edit or Write operation outside the frozen scope
+3. For the remainder of the session, keep Edit and Write operations within the
+   frozen scope and decline anything outside it
 
 ```json
 // guard/config.json
@@ -76,11 +81,12 @@ When the user says `/freeze` or `/guard freeze`:
 }
 ```
 
-When a write is attempted outside scope:
+When you are about to write outside the frozen scope, decline and say so (the
+hook does not stop the write for you, so this is on the agent to honor):
 ```
-🔒 GUARD FREEZE: Write blocked
+🔒 GUARD FREEZE: declining write outside the frozen scope
 File: {{path}}
-Reason: Not in allowed scope
+Reason: not in the allowed scope
 Allowed: {{list of allowed paths}}
 
 To unfreeze: /unfreeze
@@ -112,7 +118,7 @@ When the user says `/unfreeze` or `/guard unfreeze`:
 
 **Sprint phase gate.** Blocks `git commit` / `git push` until the required-before-ship ancestors of the active `phase_graph` have completed. The built-in sprint defaults to review + security + qa; custom graphs gate on their own ancestor list.
 
-**Budget gate.** Blocks all commands when the configured budget is exceeded.
+**Budget gate.** Blocks all commands when the configured budget is exceeded. A small set of safe reads (`git status`, `git diff`, `ls`, `cat`) stay runnable so you can inspect and save work behind the wall. This gate is a cost cap, not a sandbox: it does not defend against a repository whose own git config runs helper programs (`diff.external`, textconv, `core.fsmonitor`, filters, hooks), since those run on any git command regardless of the gate. Command-line vectors that turn a read into command execution (`-c`, `--ext-diff`, `--output`, `--exec-path=`) are rejected from the read exemption.
 
 **Warn rules.** Final pass: matched commands are allowed but flagged in the output so the user is reminded what they're doing.
 

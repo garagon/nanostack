@@ -2215,6 +2215,18 @@ jobs:
       - name: Run data-hygiene check
         run: ci/check-data-hygiene.sh
 
+  policy-contract:
+    name: Global gates run before the allowlist, and freeze wording is honest
+    runs-on: ubuntu-latest
+    # #8: the phase concurrency, sprint phase gate, and budget gate run before
+    # the allowlist short-circuit and the in-project fast-path, so a safe-listed
+    # or in-project command cannot skip them (checked via the budget gate).
+    # #9: the docs describe /freeze as guided, not hook-enforced.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run policy-contract check
+        run: ci/check-policy-contract.sh
+
   examples-library:
     name: Examples library contract
     runs-on: ubuntu-latest
