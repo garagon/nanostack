@@ -4,6 +4,31 @@ The detailed "what changed" surface for Nanostack. The [README](README.md)
 stays the stable, user-facing overview; this file records what each release
 adds and why it matters. Newest first.
 
+## v1.1.1 (2026-05-30)
+
+Security and safety hardening after v1.1.0. A focused follow-up that closes a
+review pass over the guard and workflow-control surface. Normal use is
+unchanged: these changes tighten what the guard already does and make the docs
+match it. Each one shipped with sabotage and false-positive test cells and a CI
+contract.
+
+### Guard and safety
+
+- Command recognition: the guard catches risky operations it previously missed
+  through flag permutations, path prefixes, command wrappers, and
+  download-to-shell forms.
+- Cleanup and archive helpers stay inside their own folders, checked by strict
+  selectors.
+- Gates and context loaders read verified, integrity-checked evidence.
+- Logs and promoted context no longer carry data they should not.
+- The global gates (phase concurrency, sprint phase gate, budget gate) run
+  before any allowlist or in-project shortcut, so a safe-listed or in-project
+  command cannot skip them. The allowlist read exemption is precise about which
+  git reads stay available behind the budget wall. `/freeze` is documented as a
+  guided instruction the agent follows, not a hook-enforced block.
+
+See PRs #242 through #246.
+
 ## v1.1.0 (2026-05-29)
 
 The largest release since v1.0.0: 76 merged PRs. It grows Nanostack from a
