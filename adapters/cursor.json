@@ -1,10 +1,10 @@
 {
   "host": "cursor",
   "schema_version": "1",
-  "last_verified": "2026-04-25",
+  "last_verified": "2026-05-30",
   "verification": {
     "method": "manual",
-    "evidence": "setup install_cursor writes a single rules file at .cursor/rules/nanostack.md telling the agent to read SKILL.md files. No PreToolUse hook integration is configured. Verified by reading setup lines 429-451 on 2026-04-25."
+    "evidence": "setup install_cursor writes a single rules file at .cursor/rules/nanostack.md telling the agent to read this install's SKILL.md files. No PreToolUse hook integration is configured. Verified with an isolated project install smoke on 2026-05-30."
   },
   "skill_discovery": "rules_file",
   "bash_guard": "instructions_only",

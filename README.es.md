@@ -41,7 +41,7 @@ Adapters verificados hoy: **Claude Code, Cursor, OpenAI Codex, OpenCode y Gemini
 npx create-nanostack
 ```
 
-Un solo comando. Detecta tus agentes, instala todo, corre setup. Adapters verificados hoy: Claude Code, Cursor, Codex, OpenCode y Gemini CLI.
+Un solo comando. Detecta tus agentes, instala todo, corre setup. Adapters verificados hoy: Claude Code, Cursor, OpenAI Codex, OpenCode y Gemini CLI.
 
 Después corré `/nano-run` en tu agente para configurar el proyecto a través de una conversación.
 
