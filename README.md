@@ -525,7 +525,7 @@ This gap is the single biggest known caveat in the framework. The roadmap is to 
 npx create-nanostack
 ```
 
-Detects your agents, installs all skills, runs setup. Verified adapters today: Claude Code, Cursor, Codex, OpenCode, and Gemini CLI.
+Detects your agents, installs all skills, runs setup. Verified adapters today: Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI.
 
 Update from your agent:
 

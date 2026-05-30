@@ -1,10 +1,10 @@
 {
   "host": "opencode",
   "schema_version": "1",
-  "last_verified": "2026-04-25",
+  "last_verified": "2026-05-30",
   "verification": {
     "method": "manual",
-    "evidence": "setup install_opencode symlinks the source dir under ~/.agents/skills/nanostack. OpenCode reads the skill folder natively but no pre-action hook integration exists. Verified by reading setup lines 453-464 on 2026-04-25."
+    "evidence": "setup install_opencode symlinks the source dir under ~/.agents/skills/nanostack. OpenCode reads the skill folder natively but no pre-action hook integration exists. Verified with an isolated HOME install smoke on 2026-05-30."
   },
   "skill_discovery": "skill_folder",
   "bash_guard": "instructions_only",

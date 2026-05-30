@@ -442,7 +442,7 @@ description: "Nanostack engineering workflow skills"
 alwaysApply: true
 ---
 
-You have access to nanostack skills. Read SKILL.md files in ~/.claude/skills/nanostack/ for instructions.
+You have access to nanostack skills. Read SKILL.md files in $SOURCE_DIR for instructions.
 
 Available: /think, /nano, /review, /qa, /security, /ship, /guard, /conductor, /compound, /feature, /nano-run, /nano-help
 Workflow: /think → /nano → build → /review → /qa → /security → /ship
