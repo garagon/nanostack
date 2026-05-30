@@ -65,9 +65,21 @@ if [ -n "$_nano_tel_lib" ]; then
   # pruner handles the case where finalize never ran.
   _nano_state_file="${NANO_TEL_HOME:-$HOME/.nanostack}/.active-$_nano_skill_name.env"
   if [ -f "$_nano_state_file" ]; then
-    # shellcheck disable=SC1090
-    . "$_nano_state_file" 2>/dev/null
+    # Parse the state file as data, not shell code. skill-preamble.sh writes a
+    # small, fixed set of KEY=value lines; reading them through a key allowlist
+    # (instead of sourcing the file) means a tampered state file is treated as
+    # plain values and cannot execute anything when finalize loads it.
+    while IFS='=' read -r _nano_k _nano_v; do
+      case "$_nano_k" in
+        NANO_TEL_SESSION_ID)      NANO_TEL_SESSION_ID="$_nano_v" ;;
+        NANO_TEL_START_EPOCH)     NANO_TEL_START_EPOCH="$_nano_v" ;;
+        NANO_TEL_TIER)            NANO_TEL_TIER="$_nano_v" ;;
+        NANO_TEL_INSTALLATION_ID) NANO_TEL_INSTALLATION_ID="$_nano_v" ;;
+      esac
+    done < "$_nano_state_file"
+    export NANO_TEL_SESSION_ID NANO_TEL_START_EPOCH NANO_TEL_TIER NANO_TEL_INSTALLATION_ID
     rm -f "$_nano_state_file" 2>/dev/null
+    unset _nano_k _nano_v
   fi
 
   command -v nano_telemetry_finalize >/dev/null 2>&1 && \

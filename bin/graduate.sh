@@ -54,6 +54,21 @@ get_field() {
   sed -n '/^---$/,/^---$/p' "$file" | grep -i "^${field}:" | head -1 | sed "s/^${field}: *//i"
 }
 
+# Reduce a solution-supplied field to a plain single line before it is written
+# into a SKILL.md as a durable graduated rule. Solution files are local content
+# that an agent (or a compromised store) can author, so the promoted text must
+# not carry structure that could break the rules block or read as new
+# instructions: drop newlines and markdown/structure characters, neutralize the
+# "GRADUATED RULES" marker words so a value cannot close the block early, strip
+# control characters, collapse whitespace, and cap the length.
+sanitize_rule_field() {
+  printf '%s' "$1" \
+    | tr '\r\n\t' '   ' \
+    | sed -E 's/`//g; s/<//g; s/>//g; s/[*]//g; s/#//g; s/[$]//g; s/\\//g; s/\|//g; s/\{//g; s/\}//g; s/\[//g; s/\]//g' \
+    | sed -E 's/[[:cntrl:]]//g; s/[[:space:]]+/ /g; s/GRADUATED RULES//g; s/[[:space:]]+/ /g; s/^ //; s/ $//' \
+    | head -c 200
+}
+
 count_graduated_rules() {
   local skill_file="$1"
   # Count rule lines between Graduated Rules header and END marker
@@ -303,6 +318,13 @@ if [ "$MODE" = "apply" ]; then
 
     TARGET_FILE=$(skill_file_for "$target")
     [ ! -f "$TARGET_FILE" ] && continue
+
+    # Sanitize the solution-supplied fields before they become a durable rule,
+    # and keep applied as a plain number.
+    title=$(sanitize_rule_field "$title")
+    rule_text=$(sanitize_rule_field "$rule_text")
+    source_ref=$(sanitize_rule_field "$source_ref")
+    applied=$(printf '%s' "$applied" | tr -cd '0-9'); [ -z "$applied" ] && applied=0
 
     # Build the rule line
     RULE_LINE="- **$(echo "$title" | head -c 80)** — $rule_text (Source: $source_ref, applied ${applied}x)"

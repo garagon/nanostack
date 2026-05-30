@@ -315,6 +315,18 @@
       "job": "trusted-evidence"
     },
     {
+      "id": "check-data-hygiene",
+      "path": "ci/check-data-hygiene.sh",
+      "kind": "static-contract",
+      "tier": "pr",
+      "surface": ["guard-audit", "telemetry", "graduation"],
+      "deps": ["bash", "jq"],
+      "expected_checks": 16,
+      "timeout_minutes": 2,
+      "workflow": ".github/workflows/lint.yml",
+      "job": "data-hygiene"
+    },
+    {
       "id": "check-visual-artifact-public-copy",
       "path": "ci/check-visual-artifact-public-copy.sh",
       "kind": "static-contract",

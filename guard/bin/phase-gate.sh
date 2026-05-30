@@ -33,6 +33,15 @@ source "$STORE_PATH_SH"
 PORTABLE_SH="$NANOSTACK_ROOT/bin/lib/portable.sh"
 [ -f "$PORTABLE_SH" ] && source "$PORTABLE_SH"
 
+# Mask inline secrets before the blocked command is written to the audit log.
+REDACT_LIB="$NANOSTACK_ROOT/bin/lib/redact-secrets.sh"
+if [ -f "$REDACT_LIB" ]; then
+  # shellcheck disable=SC1090
+  source "$REDACT_LIB"
+else
+  redact_secrets() { printf '%s' "${1:-}"; }
+fi
+
 FIND_ARTIFACT="$NANOSTACK_ROOT/bin/find-artifact.sh"
 SESSION_SH="$NANOSTACK_ROOT/bin/session.sh"
 SESSION_FILE="$NANOSTACK_STORE/session.json"
@@ -213,9 +222,9 @@ if [ -f "$SESSION_FILE" ]; then
     if [ -n "$MISSING" ]; then
       print_block "$MISSING"
 
-      # Audit
+      # Audit (the command is redacted so an inline secret is not persisted)
       if [ -d "$(dirname "$NANOSTACK_STORE/audit.log")" ]; then
-        echo "{\"at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"event\":\"phase-gate-block\",\"missing\":\"$MISSING\",\"cmd\":$(echo "$CMD" | jq -Rs .)}" >> "$NANOSTACK_STORE/audit.log" 2>/dev/null || true
+        echo "{\"at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"event\":\"phase-gate-block\",\"missing\":\"$MISSING\",\"cmd\":$(redact_secrets "$CMD" | jq -Rs .)}" >> "$NANOSTACK_STORE/audit.log" 2>/dev/null || true
       fi
 
       exit 1
