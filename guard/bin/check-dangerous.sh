@@ -142,25 +142,150 @@ if [ -n "$BLOCK_COMBINED" ] && printf '%s\n' "$BLOCK_INPUT" | grep -qiE -- "$BLO
   done <<< "$BLOCK_PATTERNS"
 fi
 
-# ─── Tier 2: Allowlist ──────────────────────────────────────
-# Runs only after block rules had a chance to fire. For commands
-# that matched no block, a matching allowlist entry short-circuits
-# the remaining tiers.
+# ─── Tier 2: Allowlist match ────────────────────────────────
+# Determine whether this is an allowlisted safe command, but do NOT exit yet.
+# The global gates (phase concurrency, sprint phase gate, budget gate) run
+# before the allowlist short-circuit below, so they are truly global and a
+# safe-command match cannot skip them.
+IS_ALLOWLISTED=false
 TIER1=$(jq -r --arg cmd "$CMD" --arg base "$CMD_BASE" '
   .tiers.allowlist.commands[] |
   split(" ")[0] | gsub(".*/"; "") |
   select(. == $base)' "$RULES_FILE" 2>/dev/null | head -1)
 
+# A chained, piped, substituted, or redirected command is never treated as
+# allowlisted: the allowlist matches only the first command, so a safe prefix
+# like `ls && git commit`, `echo "$(git commit -m x)"`, or `git diff > out`
+# must not short-circuit the global gates. Quote handling differs by operator:
+# control operators and output redirection (&& ; | & >) are literal inside both
+# quote styles, so strip both before checking them; command and process
+# substitution ($( ` <( ) are still active inside double quotes, so for those
+# strip only single quotes. This keeps a real read like `grep 'a|b' f` or
+# `grep "a|b" f` exempt while catching substitution hidden in double quotes.
+CMD_NOQ=$(printf '%s' "$CMD" | sed "s/'[^']*'//g; s/\"[^\"]*\"//g")
+CMD_NOSQ=$(printf '%s' "$CMD" | sed "s/'[^']*'//g")
+case "$CMD_NOQ" in *'&&'*|*';'*|*'|'*|*'&'*|*'>'*) TIER1="" ;; esac
+case "$CMD_NOSQ" in *'$('*|*'`'*|*'<('*) TIER1="" ;; esac
+# Wrapper commands run another program, so an allowlisted wrapper must not exempt
+# the wrapped command from the gates: `env git commit` is a commit, not a read.
+# These go through the gates, which inspect the full command string.
+case "$CMD_BASE" in
+  env|xargs|time|timeout|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch) TIER1="" ;;
+esac
+# find is a read only without an action that executes a command (-exec/-ok) or
+# writes/deletes (-delete/-fprint*/-fls). With any of those it must go through the
+# gates, e.g. `find . -exec git commit {} +` is a commit, not a read.
+if [ "$CMD_BASE" = "find" ]; then
+  case " $CMD " in
+    *' -exec'*|*' -ok'*|*' -delete'*|*' -fprint'*|*' -fls'*) TIER1="" ;;
+  esac
+fi
+# git is allowlisted only for read-only subcommands. It is classified specially
+# (not by raw prefix) so that global options before the subcommand are tolerated
+# (`git -C . diff`, `git --no-pager status`) while mutating forms stay gated —
+# in particular `git branch <name>` / `-m` / `-d` create or change refs and must
+# not ride the save-work exemption that bare `git branch` (list) gets.
+#
+# Scope boundary: this rejects the command-line vectors that turn a "read" into
+# command execution (`-c` config injection, `--ext-diff`, `--output`,
+# `--exec-path=`). It does NOT defend against a repository whose own git config
+# runs helper programs (`diff.external`, textconv, `core.fsmonitor`, filters,
+# hooks). Those helpers run on ANY git command the agent issues, with or without
+# the budget gate, so they are out of scope here: the budget gate is a cost cap,
+# not a sandbox against a hostile repo config.
+git_read_allowlisted() {
+  local toks; IFS=' ' read -ra toks <<< "$1"
+  # The shell strips quotes before git runs, so a quoted flag like
+  # `"--output=out"` or `'--ext-diff'` reaches git as a bare flag. Dequote each
+  # token (one surrounding pair) so the matching below cannot be evaded by
+  # quoting a write-producing option.
+  local k tk
+  for k in "${!toks[@]}"; do
+    tk="${toks[$k]}"; tk="${tk#[\"\']}"; tk="${tk%[\"\']}"; toks[$k]="$tk"
+  done
+  local i=1 n=${#toks[@]} sub="" t
+  while [ "$i" -lt "$n" ]; do
+    t="${toks[$i]}"
+    case "$t" in
+      # Config / exec-path injection: `-c diff.external=cmd`, `--config-env`, or a
+      # rewritten `--exec-path=` can make a "read" execute an external helper, so
+      # any of these disqualifies the read exemption outright.
+      -c|--config-env|-c=*|--config-env=*|--exec-path=*) return 1 ;;
+      -C|--git-dir|--work-tree|--namespace) i=$((i + 2)); continue ;;
+      --git-dir=*|--work-tree=*|--namespace=*) i=$((i + 1)); continue ;;
+      --) return 1 ;;
+      -*) i=$((i + 1)); continue ;;
+      *) sub="$t"; break ;;
+    esac
+  done
+  local rest=("${toks[@]:$((i + 1))}") a
+  case "$sub" in
+    status|log|diff|show)
+      # These are reads, except --output/-o writes a file and --ext-diff runs an
+      # external diff helper configured in the repo.
+      for a in ${rest[@]+"${rest[@]}"}; do
+        case "$a" in -o|--output|--output=*|--ext-diff) return 1 ;; esac
+      done
+      return 0 ;;
+    remote)
+      # Read-only only when bare or `remote -v` with no following subcommand
+      # (a trailing `remove`/`set-url`/`add` would mutate config).
+      [ -z "${rest[0]:-}" ] && return 0
+      [ "${rest[0]:-}" = "-v" ] && [ -z "${rest[1]:-}" ] && return 0
+      return 1 ;;
+    stash) [ "${rest[0]:-}" = "list" ] && [ -z "${rest[1]:-}" ] && return 0; return 1 ;;
+    branch)
+      # Write forms (-m/-d/-c/-f/-u/...) are gated. Real list/filter modes accept
+      # a positional (a pattern or commit) and stay read: --list 'feature/*',
+      # --contains HEAD, --merged main. A positional with no list-mode flag is a
+      # new branch name, which creates a ref and is gated — even alongside output
+      # modifiers like --sort/--format, which do NOT force list mode (and consume
+      # their own value token).
+      local listmode=false haspos=false j=0 m=${#rest[@]} a
+      while [ "$j" -lt "$m" ]; do
+        a="${rest[$j]}"
+        case "$a" in
+          -m|-M|-d|-D|-c|-C|-f|-u|--move|--copy|--delete|--force|--unset-upstream \
+            |--edit-description|--set-upstream-to=*) return 1 ;;
+          --list|-l|--contains|--contains=*|--no-contains|--no-contains=* \
+            |--merged|--merged=*|--no-merged|--no-merged=*|--points-at|--points-at=* \
+            |-a|--all|-r|--remotes|--show-current) listmode=true ;;
+          --sort|--format) j=$((j + 1)) ;;   # output modifier: consumes its value
+          --sort=*|--format=*) ;;            # value inline, no positional
+          -*) ;;            # other read-only flags (-v, --color, --abbrev, ...)
+          *) haspos=true ;; # pattern/commit in list mode, else a new branch name
+        esac
+        j=$((j + 1))
+      done
+      [ "$listmode" = true ] && return 0
+      [ "$haspos" = true ] && return 1
+      return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 if [ -n "$TIER1" ]; then
-  # Base matches. For multi-word entries, verify full match
+  if [ "$CMD_BASE" = "git" ]; then
+    git_read_allowlisted "$CMD" && IS_ALLOWLISTED=true
+  else
+  # Base matches. Collect ALL multi-word allowlist entries for this base.
   MULTI=$(jq -r --arg base "$CMD_BASE" '
     .tiers.allowlist.commands[] |
-    select((split(" ")[0] | gsub(".*/"; "")) == $base and (split(" ") | length) > 1)' "$RULES_FILE" 2>/dev/null | head -1)
+    select((split(" ")[0] | gsub(".*/"; "")) == $base and (split(" ") | length) > 1)' "$RULES_FILE" 2>/dev/null)
   if [ -z "$MULTI" ]; then
-    # Single-word entry: base match is enough
-    exit 0
-  elif echo "$CMD" | grep -qF "$MULTI" 2>/dev/null; then
-    exit 0
+    # Single-word entry: base match is enough.
+    IS_ALLOWLISTED=true
+  else
+    # Multi-word entries (e.g. "node --version", "npm list"): the command must
+    # start with one of them. The first token is normalized to its basename first
+    # so a path-prefixed invocation matches the same as the bare command.
+    CMD_FIRST="${CMD%% *}"
+    CMD_NORM="${CMD_FIRST##*/}${CMD#"$CMD_FIRST"}"
+    while IFS= read -r entry; do
+      [ -z "$entry" ] && continue
+      case "$CMD_NORM" in "$entry"|"$entry "*) IS_ALLOWLISTED=true; break ;; esac
+    done <<< "$MULTI"
+  fi
   fi
 fi
 
@@ -185,8 +310,11 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
   # output) for stale sessions, the conductor's "build" stage, removed
   # skills, and malformed custom skill metadata — so the guard never
   # blocks because of a bad session pointer.
+  # Allowlisted safe reads (ls, cat, grep, echo, git status) are not writes, so
+  # they are exempt from the concurrency substring check even when their
+  # arguments happen to contain write-command text like `grep 'git commit'`.
   PHASES_LIB="$NANOSTACK_ROOT/bin/lib/phases.sh"
-  if [ -f "$PHASES_LIB" ]; then
+  if [ "$IS_ALLOWLISTED" != true ] && [ -f "$PHASES_LIB" ]; then
     # shellcheck disable=SC1090
     source "$PHASES_LIB" 2>/dev/null || true
     if command -v nano_active_phase_concurrency >/dev/null 2>&1; then
@@ -217,6 +345,74 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
     fi
   fi
 fi
+
+# ─── Tier 2.75: Sprint phase gate (global) ─────────────────
+# Runs before the allowlist short-circuit and the in-project fast-path so an
+# in-project command cannot skip the commit/push gate. Allowlisted safe reads
+# are exempt so a command like `grep 'git commit' README.md` is not treated as
+# a commit attempt.
+PHASE_GATE="$(dirname "$0")/phase-gate.sh"
+if [ "$IS_ALLOWLISTED" != true ] && [ -x "$PHASE_GATE" ]; then
+  GATE_OUTPUT=$("$PHASE_GATE" "$CMD" 2>&1) || {
+    echo "$GATE_OUTPUT"
+    exit 1
+  }
+  # Print warnings (exit 0 with output = advisory)
+  [ -n "$GATE_OUTPUT" ] && echo "$GATE_OUTPUT"
+fi
+
+# ─── Tier 2.8: Budget gate (global) ────────────────────────
+# Runs before the allowlist short-circuit and the in-project fast-path so a
+# non-trivial in-project write cannot skip the budget wall. Allowlisted safe
+# reads stay exempt (the agent can still run ls / git status to save work),
+# matching the documented budget behavior. The budget-management commands the
+# block message itself suggests (budget.sh check / set) are also exempt so the
+# user can inspect or raise the limit through the guarded path.
+# Exempt only the trusted budget.sh check / set invocation. The command must
+# name the check or set subcommand, contain no substitution, redirection, or
+# chaining (so nothing rides along past the wall, e.g. `budget.sh check $(npm t)`
+# or `npm t && budget.sh check`), AND resolve to this Nanostack install's own
+# bin/budget.sh — a project's own bin/budget.sh on the same relative path is not
+# trusted. A bare `budget.sh` (PATH-dependent) is never exempt.
+BUDGET_MGMT=false
+case "$CMD" in
+  *'$('*|*'`'*|*'<'*|*'>'*|*'&&'*|*';'*|*'|'*|*'&'*) ;;
+  *"
+"*) ;;
+  *)
+    BUDGET_BIN="${CMD%% *}"                 # first token
+    BUDGET_REST="${CMD#"$BUDGET_BIN"}"; BUDGET_REST="${BUDGET_REST# }"
+    BUDGET_SUB="${BUDGET_REST%% *}"         # second token
+    case "$BUDGET_SUB" in
+      check|set) ;;
+      *) BUDGET_BIN="" ;;
+    esac
+    case "$BUDGET_BIN" in
+      */budget.sh) BUDGET_CAND="$BUDGET_BIN" ;;
+      *) BUDGET_BIN="" ;;                    # bare name / not a budget.sh path
+    esac
+    if [ -n "$BUDGET_BIN" ]; then
+      case "$BUDGET_CAND" in /*) ;; *) BUDGET_CAND="$PWD/$BUDGET_CAND" ;; esac
+      if [ -f "$BUDGET_CAND" ] && [ -f "$NANOSTACK_ROOT/bin/budget.sh" ] \
+         && [ "$BUDGET_CAND" -ef "$NANOSTACK_ROOT/bin/budget.sh" ]; then
+        BUDGET_MGMT=true
+      fi
+    fi
+    ;;
+esac
+if [ "$IS_ALLOWLISTED" != true ] && [ "$BUDGET_MGMT" != true ] && [ -z "${NANOSTACK_SKIP_BUDGET:-}" ]; then
+  BUDGET_GATE="$(dirname "$0")/budget-gate.sh"
+  if [ -x "$BUDGET_GATE" ]; then
+    BGATE_OUTPUT=$("$BUDGET_GATE" 2>&1) || {
+      echo "$BGATE_OUTPUT"
+      exit 1
+    }
+  fi
+fi
+
+# ─── Tier 2: Allowlist short-circuit ───────────────────────
+# A safe command exits here, AFTER the global gates above have run.
+[ "$IS_ALLOWLISTED" = true ] && exit 0
 
 # ─── Tier 2.5: In-project operations ────────────────────────
 # If the command only touches files inside the current git repo,
@@ -255,30 +451,6 @@ if [ -n "$PROJECT_ROOT" ]; then
       fi
       ;;
   esac
-fi
-
-# ─── Tier 2.75: Sprint phase gate ──────────────────────────
-# If a sprint is active, block git commit/push until review, security, qa are done.
-PHASE_GATE="$(dirname "$0")/phase-gate.sh"
-if [ -x "$PHASE_GATE" ]; then
-  GATE_OUTPUT=$("$PHASE_GATE" "$CMD" 2>&1) || {
-    echo "$GATE_OUTPUT"
-    exit 1
-  }
-  # Print warnings (exit 0 with output = advisory)
-  [ -n "$GATE_OUTPUT" ] && echo "$GATE_OUTPUT"
-fi
-
-# ─── Tier 2.8: Budget gate ────────────────────────────────────
-# If a sprint budget is set and exceeded, block ALL commands.
-if [ -z "${NANOSTACK_SKIP_BUDGET:-}" ]; then
-  BUDGET_GATE="$(dirname "$0")/budget-gate.sh"
-  if [ -x "$BUDGET_GATE" ]; then
-    BGATE_OUTPUT=$("$BUDGET_GATE" 2>&1) || {
-      echo "$BGATE_OUTPUT"
-      exit 1
-    }
-  fi
 fi
 
 # ─── Tier 3: Warn patterns ──────────────────────────────────

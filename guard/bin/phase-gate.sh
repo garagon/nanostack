@@ -12,11 +12,23 @@ set -euo pipefail
 
 CMD="${1:-}"
 
-# Only intercept git commit and git push
-case "$CMD" in
-  *git\ commit*|*git\ push*) ;;
-  *) exit 0 ;;
-esac
+# Only intercept git commit and git push. The subcommand is recognized even when
+# global options sit between `git` and it (`git -C . commit`,
+# `git -c user.name='Jane Doe' commit`, with single- or double-quoted values),
+# while commit/push must be a whole word so `git diff -- commit_helper.py` and
+# `git grep commit` are not mistaken for a commit. Quoted spans are deliberately
+# NOT stripped: a shell-executed commit such as `sh -c 'git commit -m x'` must
+# still be gated. The trade-off is that a literal `git commit` inside a quoted
+# argument of another command can be over-gated; for an enforcement gate, gating
+# a non-commit is safer than letting a real commit skip the required phases.
+#
+# Backslash-escaped whitespace is a single shell token to git (`git -c
+# user.name=Jane\ Doe commit`), so collapse it first or the option value would
+# look like two tokens and the gate would miss the commit.
+CMD_GATE=$(printf '%s' "$CMD" | sed 's/\\[[:space:]]/_/g')
+if ! printf '%s' "$CMD_GATE" | grep -qE "(^|[^[:alnum:]_])git( +-[^ ]+( +([^ ]*('[^']*'|\"[^\"]*\"))*[^ ]*)?)* +(commit|push)([^[:alnum:]_]|\$)"; then
+  exit 0
+fi
 
 # Explicit bypass
 if [ "${NANOSTACK_SKIP_GATE:-}" = "1" ]; then

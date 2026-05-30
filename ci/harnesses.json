@@ -327,6 +327,18 @@
       "job": "data-hygiene"
     },
     {
+      "id": "check-policy-contract",
+      "path": "ci/check-policy-contract.sh",
+      "kind": "static-contract",
+      "tier": "pr",
+      "surface": ["guard", "phase-gate", "budget-gate", "freeze-docs"],
+      "deps": ["bash", "jq", "git"],
+      "expected_checks": 32,
+      "timeout_minutes": 2,
+      "workflow": ".github/workflows/lint.yml",
+      "job": "policy-contract"
+    },
+    {
       "id": "check-visual-artifact-public-copy",
       "path": "ci/check-visual-artifact-public-copy.sh",
       "kind": "static-contract",
