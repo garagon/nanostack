@@ -31,9 +31,14 @@ if [ "$LAST_CODE_CHANGE" -eq 0 ]; then
   unset _srcs
 fi
 
-# Check for artifacts that are newer than the last code change
+# Check for artifacts that are newer than the last code change. This is a
+# commit gate, so require trusted evidence: --require-integrity makes
+# find-artifact.sh exit non-zero when the phase artifact is absent, has no
+# .integrity field, or whose recomputed hash does not match. A tampered or
+# unsigned artifact is treated exactly like a missing one, matching the sprint
+# phase gate in guard/bin/phase-gate.sh.
 for phase in plan review security qa; do
-  ARTIFACT=$("$SCRIPT_DIR/bin/find-artifact.sh" "$phase" 2 2>/dev/null) || {
+  ARTIFACT=$("$SCRIPT_DIR/bin/find-artifact.sh" "$phase" 2 --require-integrity --no-session-sync 2>/dev/null) || {
     MISSING="${MISSING:+$MISSING, }$phase"
     continue
   }

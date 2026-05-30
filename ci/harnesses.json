@@ -303,6 +303,18 @@
       "job": "helper-path-containment"
     },
     {
+      "id": "check-trusted-evidence",
+      "path": "ci/check-trusted-evidence.sh",
+      "kind": "static-contract",
+      "tier": "pr",
+      "surface": ["feature-gate", "restore-context", "conductor", "artifact-trust"],
+      "deps": ["bash", "jq", "git"],
+      "expected_checks": 11,
+      "timeout_minutes": 2,
+      "workflow": ".github/workflows/lint.yml",
+      "job": "trusted-evidence"
+    },
+    {
       "id": "check-visual-artifact-public-copy",
       "path": "ci/check-visual-artifact-public-copy.sh",
       "kind": "static-contract",

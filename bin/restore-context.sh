@@ -39,7 +39,7 @@ CHECKPOINT_ONLY=false
 if [ "$TOKEN_BUDGET" -gt 0 ]; then
   TOTAL_ESTIMATED=0
   for phase in $PHASES; do
-    ARTIFACT=$("$SCRIPT_DIR/find-artifact.sh" "$phase" "$MAX_AGE" 2>/dev/null) || continue
+    ARTIFACT=$("$SCRIPT_DIR/find-artifact.sh" "$phase" "$MAX_AGE" --verify --no-session-sync 2>/dev/null) || continue
     # Read estimated_tokens from the skill's SKILL.md, fall back to artifact size estimate
     NANOSTACK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
     SKILL_MD=""
@@ -64,8 +64,13 @@ fi
 FOUND=0
 JSON_ARRAY="["
 
+# Restored content is fed back into agent context, so pass --verify: a phase
+# artifact whose recomputed hash does not match its .integrity field is skipped
+# instead of printed. Legacy artifacts saved before integrity existed (no
+# .integrity field) are still read for human and context use; this is a context
+# loader, not a release gate, so it does not require --require-integrity.
 for phase in $PHASES; do
-  ARTIFACT=$("$SCRIPT_DIR/find-artifact.sh" "$phase" "$MAX_AGE" 2>/dev/null) || continue
+  ARTIFACT=$("$SCRIPT_DIR/find-artifact.sh" "$phase" "$MAX_AGE" --verify --no-session-sync 2>/dev/null) || continue
 
   # Check if artifact has a context_checkpoint
   HAS_CHECKPOINT=$(jq -e '.context_checkpoint.summary' "$ARTIFACT" >/dev/null 2>&1 && echo "yes" || echo "no")
