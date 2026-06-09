@@ -16,7 +16,7 @@ Other agents may read the SKILL.md files directly, but are not verified adapters
 
 ## Default sprint
 
-- /think: Strategic product thinking with calibrated intensity per archetype (founder validation, CLI tooling, API backend, landing experience). Saves a structured artifact with value proposition, scope mode, target user, narrowest wedge, key risk, and premise validation.
+- /think: Refines a rough idea before any code is written: questions one at a time, 2-3 alternative approaches with trade-offs, design walked in sections. Calibrates intensity per archetype (founder validation, CLI tooling, API backend, landing experience). Saves a structured artifact with value proposition, scope mode, target user, narrowest wedge, key risk, and premise validation.
 - /nano (alias /plan): Implementation plan with planned_files, plan approval, scope assessment, and product standards.
 - build: The agent's own dev work. Not a saved phase; the artifact appears on review.
 - /review: Two-pass code review (structural + adversarial). Detects scope drift against the plan and conflict-precedence against prior /security.

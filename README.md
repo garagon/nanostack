@@ -176,7 +176,7 @@ The built-in sprint is the default stack:
 
 |        | Step              | What the specialist does                                                |
 | ------ | ----------------- | ----------------------------------------------------------------------- |
-| **01** | `/think`          | Challenges scope. Finds the smallest useful version.                    |
+| **01** | `/think`          | Refines your rough idea through questions. Finds the smallest useful version. |
 | **02** | `/nano`           | Plans the implementation. Names files, risks, and checks.               |
 | **03** | build             | You or the agent writes the code.                                       |
 | **04** | `/review`         | Two-pass code review. Scope drift detection. Auto-fixes the mechanical. |
@@ -223,7 +223,7 @@ Each skill feeds into the next. `/nano` writes an artifact that `/review` reads 
 
 | Skill | Your specialist | What they do |
 |-------|----------------|--------------|
-| `/think` | **Product discovery** | Challenges scope before planning. Produces a structured brief with value proposition, target user, smallest wedge, key risk, and premise state. Supports guided archetypes, search privacy modes (`local_only`, `private`, `public`), `--retro` for sprint reflection, and `--autopilot` after the brief is complete. |
+| `/think` | **Product discovery** | Activates before you build. Refines a rough idea through questions, one at a time. Explores 2-3 approaches with trade-offs. Walks the design with you, section by section. Saves a brief your next steps read. Supports guided archetypes, search privacy modes (`local_only`, `private`, `public`), `--retro` for sprint reflection, and `--autopilot` after the brief is complete. |
 | `/nano` | **Eng Manager** | Auto-generates product specs (Medium scope) or product + technical specs (Large scope) before implementation steps. Product standards for web (shadcn/ui), CLI/TUI (Bubble Tea, Rich, Ink, Ratatui). Stack defaults with CLI preference for beginners. |
 | `/review` | **Staff Engineer** | Two-pass code review: structural then adversarial. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan. Cross-references `/security` with 10 conflict precedents. |
 | `/qa` | **QA Lead** | Functional testing + Visual QA. Takes screenshots and analyzes UI against product standards. Browser, API, CLI and debug modes. WTF heuristic stops before fixes cause regressions. |

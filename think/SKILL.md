@@ -1,9 +1,9 @@
 ---
 name: think
-description: Use before planning when you need strategic clarity — product discovery, scope decisions, premise validation. Applies YC-grade product thinking to challenge assumptions and find the smallest starting point. Supports --autopilot to run the full sprint automatically after approval. Use --retro after a sprint to reflect on what shipped. Triggers on /think, /office-hours, /ceo-review.
+description: Use when you have a rough idea and want it sharpened before any code is written. Refines the idea through questions, one at a time. Explores 2-3 approaches with trade-offs. Walks the design with you, section by section. Saves a brief your next steps read. Still challenges scope and finds the smallest starting point. Supports --autopilot to run the full sprint automatically after approval. Use --retro after a sprint to reflect on what shipped. Triggers on /think, /office-hours, /ceo-review.
 concurrency: read
 depends_on: []
-summary: "Strategic product thinking. Challenges assumptions, finds the smallest starting point, validates premise before planning."
+summary: "Refines a rough idea through questions, alternatives, and a sectioned brief. Challenges scope, finds the smallest starting point."
 estimated_tokens: 450
 ---
 

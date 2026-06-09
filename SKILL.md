@@ -11,7 +11,7 @@ You have access to a set of composable engineering workflow skills. Each skill i
 
 | Skill | When to use | Modes | Key files |
 |-------|-------------|-------|-----------|
-| `/think` | Before planning — strategic product thinking, premise validation, scope decisions. | — | `think/references/forcing-questions.md`, `think/references/cognitive-patterns.md` |
+| `/think` | Before you build. Refines a rough idea through questions, explores alternatives, walks the design in sections. | — | `think/references/forcing-questions.md`, `think/references/cognitive-patterns.md` |
 | `/nano` | Before starting any non-trivial work. Produces a scoped, actionable plan. | — | `plan/templates/plan-template.md` |
 | `/review` | After code is written. Two-pass review + scope drift detection + conflict resolution. | `--quick` `--standard` `--thorough` | `review/checklist.md`, `reference/conflict-precedents.md` |
 | `/qa` | To verify code works. Browser-based testing with Playwright, plus root-cause debugging. | `--quick` `--standard` `--thorough` | `qa/bin/screenshot.sh` |

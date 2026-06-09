@@ -8,7 +8,7 @@ This file lists every built-in skill shipped by Nanostack for the verified adapt
 
 | Skill | Directory | Description |
 |-------|-----------|-------------|
-| think | `think/` | Strategic product thinking with calibrated intensity per archetype. Saves a structured artifact (value proposition, scope mode, target user, narrowest wedge, key risk, premise validation). |
+| think | `think/` | Refines a rough idea before code: questions one at a time, alternatives with trade-offs, design walked in sections. Calibrated per archetype. Saves a structured artifact (value proposition, scope mode, target user, narrowest wedge, key risk, premise validation). |
 | nano  | `plan/` | Implementation planning. Planned files, plan approval, scope assessment, product standards. |
 | review | `review/` | Two-pass code review (structural + adversarial). Scope drift detection against /nano. Conflict precedence with /security. |
 | qa     | `qa/` | Browser, API, CLI, or debug testing. WTF heuristic. |
