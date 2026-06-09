@@ -154,7 +154,7 @@ Nanostack es un proceso, no una colección de herramientas. Las skills corren en
 
 | Skill | Tu especialista | Qué hace |
 |-------|-----------------|----------|
-| `/think` | **CEO / Founder** | Cuestiona el alcance antes de construir. Tres modos de intensidad (Founder, Startup, Builder). Seis preguntas de calibración. `--autopilot` corre el sprint completo después de aprobar el brief. `--retro` reflexiona sobre lo que ya se hizo. |
+| `/think` | **CEO / Founder** | Se activa antes de construir. Refina una idea cruda con preguntas, de a una. Explora 2-3 caminos con sus trade-offs. Recorre el diseño con vos, sección por sección. Guarda un brief que los próximos pasos leen. `--autopilot` corre el sprint completo después de aprobar el brief. `--retro` reflexiona sobre lo que ya se hizo. |
 | `/nano` | **Eng Manager** | Genera specs de producto (alcance Mediano) o specs de producto + técnico (alcance Grande) antes de los pasos de implementación. Estándares por tipo de proyecto (web, CLI/TUI). |
 | `/review` | **Staff Engineer** | Revisión de código en dos pasadas: estructural y luego adversarial. Auto-arregla cosas mecánicas. Detecta scope drift contra el plan. |
 | `/qa` | **QA Lead** | Testing funcional + Visual QA. Toma screenshots y analiza la UI contra los estándares de producto. Modos browser, API, CLI y debug. |

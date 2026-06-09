@@ -48,7 +48,7 @@ Local workflow framework for AI coding agents. The built-in sprint plus a framew
 
 | Command | What it does |
 |---------|-------------|
-| /think | Challenge assumptions, find the starting point. --autopilot for full sprint. --retro to reflect. |
+| /think | Refine a rough idea through questions and alternatives, find the starting point. --autopilot for full sprint. --retro to reflect. |
 | /nano | Turn idea into implementation plan with file names and risks. |
 | /review | Two-pass code review: structural + adversarial. |
 | /security | OWASP Top 10 + STRIDE audit. |
