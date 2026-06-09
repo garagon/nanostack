@@ -112,24 +112,6 @@ numfield() {
     echo ""
   fi
 
-  # QA
-  QA_FILE=$(find_latest qa)
-  if [ -n "$QA_FILE" ]; then
-    echo "## /qa"
-    echo ""
-    STATUS=$(field '.summary.status' "$QA_FILE")
-    TESTS_RUN=$(numfield '.summary.tests_run' "$QA_FILE")
-    PASSED=$(numfield '.summary.tests_passed' "$QA_FILE")
-    FAILED=$(numfield '.summary.tests_failed' "$QA_FILE")
-    BUGS=$(numfield '.summary.bugs_found' "$QA_FILE")
-    FIXED=$(numfield '.summary.bugs_fixed' "$QA_FILE")
-    WTF=$(numfield '.summary.wtf_likelihood' "$QA_FILE")
-    echo "**Status:** $STATUS | **Tests:** $TESTS_RUN ($PASSED passed, $FAILED failed)"
-    echo "**Bugs:** $BUGS found, $FIXED fixed"
-    [ "$WTF" -gt 0 ] && echo "**WTF likelihood:** ${WTF}%"
-    echo ""
-  fi
-
   # Security
   SEC_FILE=$(find_latest security)
   if [ -n "$SEC_FILE" ]; then
@@ -151,6 +133,24 @@ numfield() {
 
     [ -n "$MODE" ] && echo "**Mode:** $MODE | **Score:** $GRADE" || echo "**Score:** $GRADE"
     echo "**Findings:** CRITICAL=$CRIT HIGH=$HIGH MEDIUM=$MED LOW=$LOW (total: $TOTAL)"
+    echo ""
+  fi
+
+  # QA
+  QA_FILE=$(find_latest qa)
+  if [ -n "$QA_FILE" ]; then
+    echo "## /qa"
+    echo ""
+    STATUS=$(field '.summary.status' "$QA_FILE")
+    TESTS_RUN=$(numfield '.summary.tests_run' "$QA_FILE")
+    PASSED=$(numfield '.summary.tests_passed' "$QA_FILE")
+    FAILED=$(numfield '.summary.tests_failed' "$QA_FILE")
+    BUGS=$(numfield '.summary.bugs_found' "$QA_FILE")
+    FIXED=$(numfield '.summary.bugs_fixed' "$QA_FILE")
+    WTF=$(numfield '.summary.wtf_likelihood' "$QA_FILE")
+    echo "**Status:** $STATUS | **Tests:** $TESTS_RUN ($PASSED passed, $FAILED failed)"
+    echo "**Bugs:** $BUGS found, $FIXED fixed"
+    [ "$WTF" -gt 0 ] && echo "**WTF likelihood:** ${WTF}%"
     echo ""
   fi
 
