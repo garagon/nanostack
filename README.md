@@ -6,14 +6,18 @@
 <br>
 
 <p align="center">
-  Local delivery workflow harness for AI coding agents.
+  Your AI agent writes code. Nanostack makes sure it ships work you can trust.
 </p>
 
 <p align="center">
-  Nanostack gives an agent a delivery method: scope, plan, build, review, security, QA, ship. Each step writes local artifacts the next step can read. Use the default sprint, or build your own workflow stack on top.
+  <em>Local delivery workflow harness for AI coding agents.</em>
 </p>
 
-<p align="center"><strong>Plain text skills. Local artifacts. Verified adapters. No Nanostack cloud.</strong></p>
+<p align="center">
+  Scope, plan, build, review, security, QA, ship. Every step leaves evidence you can read, in plain files on your disk. Use the default sprint, or build your own workflow stack on top.
+</p>
+
+<p align="center"><strong>Open source. Plain text skills. Local artifacts. Verified adapters. No Nanostack cloud.</strong></p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
@@ -34,125 +38,11 @@
 <br>
 
 
-Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). Nanostack ships 13 built-in skills, a seven-phase default sprint, and a framework for composing your own workflow stacks. It is local files and scripts: no Nanostack cloud, no daemon, no app runtime.
+Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). Nanostack gives your agent the working method of a small product team: it questions the scope, plans, reviews the code, audits security, tests, and ships, leaving a paper trail you can inspect at every step. Everything is plain text and local scripts under Apache 2.0, so you can read every rule your agent follows. No Nanostack cloud, no daemon, no app runtime.
 
 Verified adapters today: **Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI**. The skill files are plain text, so other agents may load them, but only those five have a verified adapter and capability declaration in [`adapters/`](adapters/).
 
 What changed in the latest release (custom workflow stacks, visual artifacts, stronger safety contracts): see [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
-
-## What is Nanostack?
-
-Your agent can already edit files and run commands. Nanostack gives it a method.
-
-The default sprint turns a request into a scoped, reviewed, security-checked, tested change with a PR and a sprint journal. Each phase writes a structured artifact. Later phases read those artifacts instead of depending only on chat history.
-
-The bet is artifact-first delivery:
-
-- Skills are plain text.
-- Artifacts are local JSON.
-- Gates verify evidence before release.
-- Visual artifacts render the same evidence as local HTML.
-- Custom workflow stacks extend the same pipeline with your own phases.
-
-On Claude Code, Nanostack can enforce parts of the workflow through PreToolUse hooks. On other agents, the same workflow runs as guided instructions. See [What enforces on which agent](#what-enforces-on-which-agent) for the honest per-host table.
-
-The built-in sprint is the default stack:
-
-|        | Step              | What the specialist does                                                |
-| ------ | ----------------- | ----------------------------------------------------------------------- |
-| **01** | `/think`          | Challenges scope. Finds the smallest useful version.                    |
-| **02** | `/nano`           | Plans the implementation. Names files, risks, and checks.               |
-| **03** | build             | You or the agent writes the code.                                       |
-| **04** | `/review`         | Two-pass code review. Scope drift detection. Auto-fixes the mechanical. |
-| **05** | `/security`       | OWASP A01-A10 audit + STRIDE threat modeling. Graded A-F.               |
-| **06** | `/qa`             | Tests the thing. Browser, API, CLI, or root-cause debug.                |
-| **07** | `/ship`           | PR creation, CI verification, release notes, sprint journal. Production deployment stays explicit and user-controlled. |
-
-## Two profiles, same rigor
-
-Nanostack adapts the explanation, not the standard.
-
-| Profile | What changes |
-|---------|--------------|
-| **Guided** | Plain language, one next action, safer defaults, no hidden jargon. |
-| **Professional** | Denser output, deeper tradeoffs, explicit files, commands, and risks. |
-
-Local mode uses Guided language by default. A git project can still use Guided if the user wants simpler explanations.
-
-The wording rules live in [`reference/plain-language-contract.md`](reference/plain-language-contract.md). The session fields that select the profile live in [`reference/session-state-contract.md`](reference/session-state-contract.md).
-
-## What is enforced depends on your agent
-
-Nanostack is agent-agnostic, but agent hosts do not expose the same control points. The adapter files in [`adapters/`](adapters/) are the source of truth for each host.
-
-| Level | Meaning |
-|-------|---------|
-| **L0 Guided** | The skill tells the agent what to do but cannot block it. Also covers a capability the host cannot provide at all. |
-| **L1 Checked** | Nanostack can detect and report the issue, but cannot block it. |
-| **L2 Guarded** | The host runs a nanostack hook before the action. |
-| **L3 Enforced** | The hook can block the action and the host honors the block. |
-| **L4 Continuously verified** | A CI job exercises the capability on every change. |
-
-A detailed per-host matrix (Bash guard, Write/Edit guard, phase gate) lives further down in [What enforces on which agent](#what-enforces-on-which-agent).
-
-## What changes after installing Nanostack
-
-| Without Nanostack | With Nanostack |
-| --- | --- |
-| ❌ A vague prompt turns into code immediately. | ✅ `/think` turns the idea into a brief, risk, and smallest useful starting point. |
-| ❌ The plan disappears in chat. | ✅ `/nano` saves a plan with files, risks, checks, and out-of-scope items. |
-| ❌ The agent quietly refactors three things you did not ask for. | ✅ `/review` compares the code against the plan. Scope drift is visible before merge. |
-| ❌ QA and security happen only if someone remembers. | ✅ `/qa` opens your app and exercises it. `/security` runs on every ship and catches the mistakes that make headlines. |
-| ❌ Your PR says "add notifications" and nobody knows what actually changed or why. | ✅ `/ship` explains why the change exists, how it was checked, and what remains. |
-| ❌ You rush-commit Friday 5pm and Monday find out it broke something unrelated. | ✅ The sprint blocks `git commit` until `/review`, `/security`, and `/qa` pass. (Enforcement varies by agent; see honesty matrix below.) |
-| ❌ Every session re-pastes the same context: what we use, what is fragile. | ✅ Every skill reads the artifact the previous skill wrote. Sprint journals preserve decisions in `.nanostack/`. |
-
-## Nanostack is right for you if
-
-- ✅ You have an AI agent open all day and still feel like you ship slowly
-- ✅ You want reviews that catch scope drift, not just typos
-- ✅ You want a security audit before every ship, not once a quarter
-- ✅ You want PR descriptions that explain the WHY, not just list files
-- ✅ You want a process that works across Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI
-- ✅ You want the skills on disk, inspectable, not locked in a SaaS
-
-## Choose your path
-
-| If you are... | Start here |
-|---|---|
-| New to agent workflows | Try [`starter-todo`](examples/starter-todo/), then run `/nano-run` |
-| Already shipping with AI agents | Install Nanostack, then start with `/think` or `/feature` |
-| Evaluating safety | Read [Guard](#guard) and the [host enforcement matrix](#what-enforces-on-which-agent) |
-| Building your own workflow | Start with [`EXTENDING.md`](EXTENDING.md) and [`compliance-release`](examples/custom-stack-template/compliance-release/) |
-| Inspecting what the agent did | Render any phase as local HTML with [visual artifacts](#visual-artifacts) (`bin/render-artifact.sh`) |
-
-## Try it safely first
-
-Not sure yet? Start with a disposable sandbox from the Examples Library. It gives you a real sprint without risking your product.
-
-| Example | Best for | Stack | Time |
-|---|---|---|---|
-| [`starter-todo`](examples/starter-todo/) | new and non-technical users | one HTML file | 5-10 min |
-| [`cli-notes`](examples/cli-notes/) | CLI workflows | Bash | 5-15 min |
-| [`api-healthcheck`](examples/api-healthcheck/) | backend flows | Node stdlib HTTP | 10-15 min |
-| [`static-landing`](examples/static-landing/) | founders and designers | static HTML/CSS | 10-15 min |
-| [`compliance-release`](examples/custom-stack-template/compliance-release/) | teams building a custom workflow stack | license + privacy + release gate | 15-30 min |
-
-Each example has a copy-paste prompt, expected sprint flow, success criteria, and reset steps. Full Examples Library: [`examples/`](examples/).
-
-`compliance-release` is advanced. It is not a starter app and it is not a compliance certification. It shows how several custom skills can compose into one release workflow.
-
-## Quick start
-
-```bash
-npx create-nanostack
-```
-
-One command. Detects your agents, installs everything, runs setup.
-
-Then run `/nano-run` in your agent to configure your project through a conversation. On your first sprint, `/think` shows the full pipeline so you know what comes next.
-
-If you want to see the workflow before installing into a real repo, use one of the sandbox examples above.
 
 ## See it work
 
@@ -206,6 +96,120 @@ You:    /ship
 ```
 
 That is the difference: not just code generation, but a delivery loop you can inspect.
+
+## What changes after installing Nanostack
+
+| Without Nanostack | With Nanostack |
+| --- | --- |
+| ❌ A vague prompt turns into code immediately. | ✅ `/think` turns the idea into a brief, risk, and smallest useful starting point. |
+| ❌ The plan disappears in chat. | ✅ `/nano` saves a plan with files, risks, checks, and out-of-scope items. |
+| ❌ The agent quietly refactors three things you did not ask for. | ✅ `/review` compares the code against the plan. Scope drift is visible before merge. |
+| ❌ QA and security happen only if someone remembers. | ✅ `/qa` opens your app and exercises it. `/security` runs on every ship and catches the mistakes that make headlines. |
+| ❌ Your PR says "add notifications" and nobody knows what actually changed or why. | ✅ `/ship` explains why the change exists, how it was checked, and what remains. |
+| ❌ You rush-commit Friday 5pm and Monday find out it broke something unrelated. | ✅ The sprint blocks `git commit` until `/review`, `/security`, and `/qa` pass. (Enforcement varies by agent; see honesty matrix below.) |
+| ❌ Every session re-pastes the same context: what we use, what is fragile. | ✅ Every skill reads the artifact the previous skill wrote. Sprint journals preserve decisions in `.nanostack/`. |
+
+## Nanostack is right for you if
+
+- ✅ You have an AI agent open all day and still feel like you ship slowly
+- ✅ You want reviews that catch scope drift, not just typos
+- ✅ You want a security audit before every ship, not once a quarter
+- ✅ You want PR descriptions that explain the WHY, not just list files
+- ✅ You want a process that works across Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI
+- ✅ You want the skills on disk, inspectable, not locked in a SaaS
+
+## Try it safely first
+
+Not sure yet? Start with a disposable sandbox from the Examples Library. It gives you a real sprint without risking your product.
+
+| Example | Best for | Stack | Time |
+|---|---|---|---|
+| [`starter-todo`](examples/starter-todo/) | new and non-technical users | one HTML file | 5-10 min |
+| [`cli-notes`](examples/cli-notes/) | CLI workflows | Bash | 5-15 min |
+| [`api-healthcheck`](examples/api-healthcheck/) | backend flows | Node stdlib HTTP | 10-15 min |
+| [`static-landing`](examples/static-landing/) | founders and designers | static HTML/CSS | 10-15 min |
+| [`compliance-release`](examples/custom-stack-template/compliance-release/) | teams building a custom workflow stack | license + privacy + release gate | 15-30 min |
+
+Each example has a copy-paste prompt, expected sprint flow, success criteria, and reset steps. Full Examples Library: [`examples/`](examples/).
+
+`compliance-release` is advanced. It is not a starter app and it is not a compliance certification. It shows how several custom skills can compose into one release workflow.
+
+## Quick start
+
+```bash
+npx create-nanostack
+```
+
+One command. Detects your agents, installs everything, runs setup.
+
+Then run `/nano-run` in your agent to configure your project through a conversation. On your first sprint, `/think` shows the full pipeline so you know what comes next.
+
+If you want to see the workflow before installing into a real repo, use one of the sandbox examples above.
+
+## Choose your path
+
+| If you are... | Start here |
+|---|---|
+| New to agent workflows | Try [`starter-todo`](examples/starter-todo/), then run `/nano-run` |
+| Already shipping with AI agents | Install Nanostack, then start with `/think` or `/feature` |
+| Evaluating safety | Read [Guard](#guard) and the [host enforcement matrix](#what-enforces-on-which-agent) |
+| Building your own workflow | Start with [`EXTENDING.md`](EXTENDING.md) and [`compliance-release`](examples/custom-stack-template/compliance-release/) |
+| Inspecting what the agent did | Render any phase as local HTML with [visual artifacts](#visual-artifacts) (`bin/render-artifact.sh`) |
+
+## What is Nanostack?
+
+Your agent can already edit files and run commands. Nanostack gives it a method: 13 built-in skills, a seven-phase default sprint, and a framework for composing your own workflow stacks.
+
+The default sprint turns a request into a scoped, reviewed, security-checked, tested change with a PR and a sprint journal. Each phase writes a structured artifact: a small local file that records what was decided and what was checked. Later phases read those files instead of depending only on chat history.
+
+The bet is artifact-first delivery:
+
+- Skills are plain text.
+- Artifacts are local JSON.
+- Gates verify evidence before release.
+- Visual artifacts render the same evidence as local HTML.
+- Custom workflow stacks extend the same pipeline with your own phases.
+
+On Claude Code, Nanostack can enforce parts of the workflow through PreToolUse hooks. On other agents, the same workflow runs as guided instructions. See [What enforces on which agent](#what-enforces-on-which-agent) for the honest per-host table.
+
+The built-in sprint is the default stack:
+
+|        | Step              | What the specialist does                                                |
+| ------ | ----------------- | ----------------------------------------------------------------------- |
+| **01** | `/think`          | Challenges scope. Finds the smallest useful version.                    |
+| **02** | `/nano`           | Plans the implementation. Names files, risks, and checks.               |
+| **03** | build             | You or the agent writes the code.                                       |
+| **04** | `/review`         | Two-pass code review. Scope drift detection. Auto-fixes the mechanical. |
+| **05** | `/security`       | OWASP A01-A10 audit + STRIDE threat modeling. Graded A-F.               |
+| **06** | `/qa`             | Tests the thing. Browser, API, CLI, or root-cause debug.                |
+| **07** | `/ship`           | PR creation, CI verification, release notes, sprint journal. Production deployment stays explicit and user-controlled. |
+
+## Two profiles, same rigor
+
+Nanostack adapts the explanation, not the standard.
+
+| Profile | What changes |
+|---------|--------------|
+| **Guided** | Plain language, one next action, safer defaults, no hidden jargon. |
+| **Professional** | Denser output, deeper tradeoffs, explicit files, commands, and risks. |
+
+Local mode uses Guided language by default. A git project can still use Guided if the user wants simpler explanations.
+
+The wording rules live in [`reference/plain-language-contract.md`](reference/plain-language-contract.md). The session fields that select the profile live in [`reference/session-state-contract.md`](reference/session-state-contract.md).
+
+## What is enforced depends on your agent
+
+Nanostack is agent-agnostic, but agent hosts do not expose the same control points. The adapter files in [`adapters/`](adapters/) are the source of truth for each host.
+
+| Level | Meaning |
+|-------|---------|
+| **L0 Guided** | The skill tells the agent what to do but cannot block it. Also covers a capability the host cannot provide at all. |
+| **L1 Checked** | Nanostack can detect and report the issue, but cannot block it. |
+| **L2 Guarded** | The host runs a nanostack hook before the action. |
+| **L3 Enforced** | The hook can block the action and the host honors the block. |
+| **L4 Continuously verified** | A CI job exercises the capability on every change. |
+
+A detailed per-host matrix (Bash guard, Write/Edit guard, phase gate) lives further down in [What enforces on which agent](#what-enforces-on-which-agent).
 
 ## The sprint
 

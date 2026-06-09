@@ -1,8 +1,9 @@
 <h1 align="center">Nanostack</h1>
 <p align="center">
-  Convertí tu agente de AI coding en un flujo de delivery local.<br>
-  Nanostack ayuda al agente a cuestionar el alcance, planificar el cambio, construir, revisar, auditar, probar y entregar con un registro de lo ocurrido. Usá el sprint por defecto, o construí tu propio workflow stack arriba.<br>
-  <strong>Skills en texto plano. Artefactos locales. Sin Nanostack cloud. Sin paso de build.</strong>
+  Tu agente de IA escribe código. Nanostack se asegura de que entregue trabajo en el que podés confiar.<br>
+  <em>Flujo de delivery local para agentes de AI coding.</em><br>
+  Alcance, plan, build, review, security, QA, ship. Cada paso deja evidencia que podés leer, en archivos de texto plano en tu disco. Usá el sprint por defecto, o construí tu propio workflow stack arriba.<br>
+  <strong>Open source. Skills en texto plano. Artefactos locales. Adapters verificados. Sin Nanostack cloud.</strong>
 </p>
 
 <br>
@@ -17,6 +18,7 @@
 </p>
 
 <p align="center">
+  <a href="#ejemplo">Ejemplo</a> &middot;
   <a href="#instalacion">Instalación</a> &middot;
   <a href="#dos-perfiles-mismo-rigor">Perfiles</a> &middot;
   <a href="#el-sprint">El sprint</a> &middot;
@@ -29,9 +31,58 @@
 
 > **Nota:** la versión en inglés ([README.md](README.md)) es la canónica. Si encontrás divergencias o algo desactualizado en este documento, por favor abrí un issue.
 
-Inspirado en [gstack](https://github.com/garrytan/gstack) de [Garry Tan](https://x.com/garrytan). Nanostack trae 13 skills built-in, un sprint default de siete fases, y un framework para sumar tus propios skills o workflow stacks. Sin Nanostack cloud. Sin paso de build.
+Inspirado en [gstack](https://github.com/garrytan/gstack) de [Garry Tan](https://x.com/garrytan). Nanostack le da a tu agente el método de trabajo de un equipo de producto chico: cuestiona el alcance, planifica, revisa el código, audita seguridad, prueba y entrega, dejando un registro que podés inspeccionar en cada paso. Todo es texto plano y scripts locales bajo Apache 2.0, así que podés leer cada regla que sigue tu agente. Sin Nanostack cloud, sin daemon, sin paso de build.
 
 Adapters verificados hoy: **Claude Code, Cursor, OpenAI Codex, OpenCode y Gemini CLI**. Los skill files son texto plano, así que otros agentes podrían cargarlos, pero solo esos cinco tienen un adapter verificado y declaración de capabilities en [`adapters/`](adapters/).
+
+## Ejemplo
+
+```
+Vos:    Necesito agregar notificaciones a mi app. Los usuarios se
+        pierden las respuestas a sus posts.
+Vos:    /think
+
+Agente: Antes de construir nada, ¿cómo lo están manejando hoy?
+
+Vos:    Abren la app 3 o 4 veces por día solo para chequear. A veces
+        se pierden las respuestas por horas. Están frustrados.
+
+Agente: Voy a empujar contra "notificaciones". Dijiste que abren la
+        app 3-4 veces por día. Eso es alta interacción. Ya vuelven.
+        El problema no es que no se les pueda avisar. El problema es
+        que cuando llegan, no pueden ver qué cambió.
+
+        Eso es un problema de visibilidad, no de mensajería.
+
+        Un sistema de notificaciones (email, push, in-app, preferencias,
+        digest, unsubscribe) es un proyecto de 3 semanas. Un puntito
+        rojo en el ícono que diga "hay algo nuevo" sale esta tarde.
+
+        RECOMENDACIÓN: Reducir alcance. Publicá el puntito. Ver si bajan
+        los reclamos. Si bajan, te ahorraste 3 semanas. Si no bajan,
+        ahí construís push notifications, pero ya con datos.
+
+Vos:    Tiene sentido. Hagamos el puntito.
+Vos:    /nano
+        [3 pasos, 2 archivos]
+
+Vos:    [construye]
+
+Vos:    /review
+        Review: 2 hallazgos (1 auto-arreglado, 1 detalle menor).
+
+Vos:    /security
+        Sin secretos, cambios de auth o flujos de datos inseguros. Grade A.
+
+Vos:    /qa
+        Abrí la app, posteé una respuesta, refresqué, confirmé que el
+        puntito aparece y se limpia. 4 chequeos OK.
+
+Vos:    /ship
+        Ship: PR creado. Tests pasaron.
+```
+
+Vos dijiste "notificaciones". El agente dijo "tus usuarios tienen un problema de visibilidad" y encontró una solución que sale en una tarde en lugar de tres semanas. El loop de delivery completo, no solo generación de código.
 
 ## Instalación
 
@@ -92,55 +143,6 @@ Guided cambia el lenguaje, no baja el estándar.
 El modo local usa Guiado por defecto. Un proyecto con git también puede usar Guiado si querés explicaciones más simples.
 
 Las reglas de lenguaje viven en [`reference/plain-language-contract.md`](reference/plain-language-contract.md). Los campos de sesión que seleccionan el perfil viven en [`reference/session-state-contract.md`](reference/session-state-contract.md).
-
-## Ejemplo
-
-```
-Vos:    Necesito agregar notificaciones a mi app. Los usuarios se
-        pierden las respuestas a sus posts.
-Vos:    /think
-
-Agente: Antes de construir nada, ¿cómo lo están manejando hoy?
-
-Vos:    Abren la app 3 o 4 veces por día solo para chequear. A veces
-        se pierden las respuestas por horas. Están frustrados.
-
-Agente: Voy a empujar contra "notificaciones". Dijiste que abren la
-        app 3-4 veces por día. Eso es alta interacción. Ya vuelven.
-        El problema no es que no se les pueda avisar. El problema es
-        que cuando llegan, no pueden ver qué cambió.
-
-        Eso es un problema de visibilidad, no de mensajería.
-
-        Un sistema de notificaciones (email, push, in-app, preferencias,
-        digest, unsubscribe) es un proyecto de 3 semanas. Un puntito
-        rojo en el ícono que diga "hay algo nuevo" sale esta tarde.
-
-        RECOMENDACIÓN: Reducir alcance. Publicá el puntito. Ver si bajan
-        los reclamos. Si bajan, te ahorraste 3 semanas. Si no bajan,
-        ahí construís push notifications, pero ya con datos.
-
-Vos:    Tiene sentido. Hagamos el puntito.
-Vos:    /nano
-        [3 pasos, 2 archivos]
-
-Vos:    [construye]
-
-Vos:    /review
-        Review: 2 hallazgos (1 auto-arreglado, 1 detalle menor).
-
-Vos:    /security
-        Sin secretos, cambios de auth o flujos de datos inseguros. Grade A.
-
-Vos:    /qa
-        Abrí la app, posteé una respuesta, refresqué, confirmé que el
-        puntito aparece y se limpia. 4 chequeos OK.
-
-Vos:    /ship
-        Ship: PR creado. Tests pasaron.
-```
-
-Vos dijiste "notificaciones". El agente dijo "tus usuarios tienen un problema de visibilidad" y encontró una solución que sale en una tarde en lugar de tres semanas. El loop de delivery completo, no solo generación de código.
 
 ## El sprint
 
