@@ -396,7 +396,7 @@ Understand the landscape, then determine the mode.
 
 **If the user didn't provide an idea or problem** (e.g. they just said `/think` or `/think --autopilot` with no context), simply ask in your response: "What do you want to build?" Do NOT use `AskUserQuestion` for this. Just ask in plain text and wait for their reply.
 
-**If AUTOPILOT is active:** Do NOT ask clarifying questions. Work with the information provided. Default to Builder mode. If the description is clear enough to plan, skip the diagnostic questions and go straight to Phase 5 (scope recommendation) with a brief that covers value prop, scope, starting point and risk. The user chose autopilot because they want speed, not a conversation.
+**If AUTOPILOT is active:** Do NOT ask clarifying questions. Work with the information provided. Default to Builder mode. If the description is clear enough to plan, skip the diagnostic questions, run a compressed Phase 4.5 (consider 2-3 approaches internally, pick one, record the discarded ones in `alternatives_considered` without asking the user), and go straight to Phase 5 (scope recommendation) with a brief that covers value prop, scope, starting point and risk. The user chose autopilot because they want speed, not a conversation; speed skips the dialogue, not the consideration of alternatives.
 
 Determine the mode from the user's description:
 
@@ -626,7 +626,7 @@ Save a clean markdown brief to `.nanostack/know-how/briefs/YYYY-MM-DD-<slug>.md`
 mkdir -p .nanostack/know-how/briefs
 ```
 
-Format and rules: see `think/references/brief-template.md`. Keep under 20 lines, skip sections that don't apply.
+Format and rules: see `think/references/brief-template.md`. Keep under 30 lines, skip sections that don't apply.
 
 ### Phase 6.6: Minimum Viable Brief Gate
 
