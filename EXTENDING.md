@@ -436,7 +436,7 @@ Removes artifacts from a bad session. Works with custom phases.
 }
 ```
 
-Register custom phases so `save-artifact.sh` accepts them. Without this, only the 6 core phases are accepted (think, plan, review, qa, security, ship).
+Register custom phases so `save-artifact.sh` accepts them. Without this, only the 6 core phases are accepted (think, plan, review, security, qa, ship).
 
 ## Contributing: running the checks
 

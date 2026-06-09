@@ -54,21 +54,21 @@ A sprint is a sequence of phases with dependencies:
     { "name": "plan",     "depends_on": ["think"] },
     { "name": "build",    "depends_on": ["plan"] },
     { "name": "review",   "depends_on": ["build"] },
-    { "name": "qa",       "depends_on": ["build"] },
     { "name": "security", "depends_on": ["build"] },
-    { "name": "ship",     "depends_on": ["review", "qa", "security"] }
+    { "name": "qa",       "depends_on": ["build"] },
+    { "name": "ship",     "depends_on": ["review", "security", "qa"] }
   ]
 }
 ```
 
-Note: `review`, `qa`, and `security` can run **in parallel** — they all depend on `build`, not on each other. `ship` waits for all three.
+Note: `review`, `security`, and `qa` can run **in parallel** — they all depend on `build`, not on each other. `ship` waits for all three.
 
 ## Commands
 
 ### Start a sprint
 
 ```bash
-conductor/bin/sprint.sh start [--phases "think,plan,build,review,qa,security,ship"]
+conductor/bin/sprint.sh start [--phases "think,plan,build,review,security,qa,ship"]
 ```
 
 Creates `.nanostack/conductor/<sprint_id>/` with the phase graph. Default is the full workflow.
@@ -146,11 +146,11 @@ Reads `concurrency` metadata from each skill's SKILL.md frontmatter and outputs 
 {"batch":1,"type":"read","phases":["think"]}
 {"batch":2,"type":"read","phases":["plan"]}
 {"batch":3,"type":"write","phases":["build"]}
-{"batch":4,"type":"read","phases":["review","qa","security"]}
+{"batch":4,"type":"read","phases":["review","security","qa"]}
 {"batch":5,"type":"exclusive","phases":["ship"]}
 ```
 
-Batch 4 shows review, qa, and security running in parallel — they share `concurrency: read` and all depend only on `build`.
+Batch 4 shows review, security, and qa running in parallel — they share `concurrency: read` and all depend only on `build`.
 
 ## Filesystem Protocol
 
@@ -194,7 +194,7 @@ One agent, one sprint. Same as today — the conductor just adds visibility:
 
 ```
 You:  /conductor start
-You:  /think → /nano → build → /review → /qa → /security → /ship
+You:  /think → /nano → build → /review → /security → /qa → /ship
       [each phase auto-claims and auto-completes]
 ```
 

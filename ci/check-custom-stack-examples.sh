@@ -178,7 +178,7 @@ for stack_dir in "${stack_dirs[@]}"; do
   done < <(jq -r '.skills[]? | "\(.name)\t\(.path)\t\(.concurrency)"' "$stack_dir/stack.json")
 
   # 10. phase_graph membership: every phase_graph[].name is core ∪ build ∪ skills.
-  core_phases="think plan review qa security ship"
+  core_phases="think plan review security qa ship"
   graph_names=$(jq -r '.phase_graph[]?.name' "$stack_dir/stack.json")
   bad_graph=""
   while IFS= read -r g; do

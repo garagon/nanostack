@@ -204,7 +204,7 @@ Cada comando de Bash pasa por estos seis tiers, en este orden:
 1. **Block rules**: las reglas de bloqueo corren primero. Cubren borrado masivo (`rm -rf .`, `find . -delete`), destrucción de historia (`git push --force`), lecturas de secretos (`.env`, `*.pem`), drops de DB, deploys a producción y ejecución remota (`curl | sh`). Una coincidencia bloquea aunque el binario esté en el allowlist de abajo. La fuente de verdad es [`guard/rules.json`](guard/rules.json); para ver el conteo actual: `jq '[.tiers.block.rules[].id] | length' guard/rules.json`.
 2. **Allowlist**: para comandos que pasaron las block rules, los allowlisteados (`git status`, `ls`, `cat`, `jq`, etc.) saltan el resto.
 3. **In-project**: operaciones que solo tocan archivos del repo actual pasan. El control de versiones es la red de seguridad.
-4. **Concurrencia por fase**: durante fases read-only (review, qa, security), las operaciones de escritura quedan bloqueadas para evitar race conditions.
+4. **Concurrencia por fase**: durante fases read-only (review, security, qa), las operaciones de escritura quedan bloqueadas para evitar race conditions.
 5. **Phase gate**: cuando hay un sprint activo, `git commit` y `git push` quedan bloqueados hasta que existan artifacts frescos de review, security y qa.
 6. **Budget gate**: cuando el sprint tiene un presupuesto y se gastó 95%+, todos los comandos no-allowlist quedan bloqueados.
 

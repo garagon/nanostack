@@ -1366,7 +1366,7 @@ EOF
     phases_list=$(nano_all_phases 2>/dev/null || true)
   fi
   if [ -z "$phases_list" ]; then
-    phases_list="think plan review qa security ship"
+    phases_list="think plan review security qa ship"
   fi
 
   printf '    <section class="card">\n      <h2>Sprint journal · %s</h2>\n' \

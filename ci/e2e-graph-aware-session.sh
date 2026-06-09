@@ -94,7 +94,7 @@ echo "[1] session init snapshots the active phase_graph"
 new_project "cell1-default"
 "$SESSION_SH" init development >/dev/null
 nodes=$(jq -r '.phase_graph // [] | map(.name) | join(",")' "$NANOSTACK_STORE/session.json")
-assert_eq "default graph nodes" "think,plan,build,review,qa,security,ship" "$nodes"
+assert_eq "default graph nodes" "think,plan,build,review,security,qa,ship" "$nodes"
 # At init, ready_phases is populated with the graph roots (every node
 # with empty depends_on). For the default sprint that is just `think`.
 # A previous form populated this with []; that was the regression
@@ -105,15 +105,16 @@ assert_eq "ready_phases at init = [think] (default sprint root)" '["think"]' "$r
 next_init=$(jq -r '.next_phase // "null"' "$NANOSTACK_STORE/session.json")
 assert_eq "next_phase at init = think" "think" "$next_init"
 
-# Cell 2: default sprint progression matches the legacy ordering.
-# review/qa/security ARE ready in parallel after plan, but next_phase
+# Cell 2: default sprint progression matches the canonical ordering
+# (review -> security -> qa, as published on every release surface).
+# review/security/qa ARE ready in parallel after plan, but next_phase
 # picks the first in graph order so existing skills continue to land
 # on /review first.
-echo "[2] default sprint walk preserves the historical next_phase order"
+echo "[2] default sprint walk follows the canonical next_phase order"
 new_project "cell2-default-walk"
 "$SESSION_SH" init development >/dev/null
-declare -a expected_next=("plan" "review" "qa" "security" "ship" "compound")
-declare -a phases_to_complete=("think" "plan" "review" "qa" "security" "ship")
+declare -a expected_next=("plan" "review" "security" "qa" "ship" "compound")
+declare -a phases_to_complete=("think" "plan" "review" "security" "qa" "ship")
 for i in 0 1 2 3 4 5; do
   ph="${phases_to_complete[$i]}"
   "$SESSION_SH" phase-start "$ph" >/dev/null
@@ -123,7 +124,7 @@ for i in 0 1 2 3 4 5; do
 done
 
 # Cell 3: after /plan, ready_phases lists every parallel branch
-# (review, qa, security) so next-step can fan out.
+# (review, security, qa) so next-step can fan out.
 echo "[3] ready_phases lists every parallel branch after /plan"
 new_project "cell3-fanout"
 "$SESSION_SH" init development >/dev/null
@@ -439,7 +440,7 @@ assert_eq "legacy session: can_ship still false" \
 echo "[9e] can_ship reflects required_before_ship, not next_phase identity"
 new_project "cell9e-canship"
 "$SESSION_SH" init development >/dev/null
-for ph in think plan review qa security; do
+for ph in think plan review security qa; do
   "$SESSION_SH" phase-start "$ph" >/dev/null
   "$SESSION_SH" phase-complete "$ph" >/dev/null
 done
@@ -453,7 +454,7 @@ assert_eq "after r+q+s: ready_phases = [ship]" \
 # promoted to "satisfied" once its declared deps land, but only when
 # it is not currently in_progress. Codex caught the racy promotion
 # on the PR 4 sixth review pass: a caller that did session.sh
-# phase-start build still unblocked review/qa/security right away.
+# phase-start build still unblocked review/security/qa right away.
 echo "[9f] in-progress build does not unblock downstream phases"
 new_project "cell9f-build-running"
 "$SESSION_SH" init development >/dev/null
@@ -465,7 +466,7 @@ done
 ready_during_build=$(jq -c '.ready_phases' "$NANOSTACK_STORE/session.json")
 assert_eq "build in_progress: ready_phases is empty" '[]' "$ready_during_build"
 # Once build is conceptually done (the user finishes the dev work and
-# the next phase-start lands), review/qa/security come back online.
+# the next phase-start lands), review/security/qa come back online.
 # We simulate the dev finishing build by completing it explicitly.
 "$SESSION_SH" phase-complete build >/dev/null
 ready_after_build=$(jq -c '.ready_phases | sort' "$NANOSTACK_STORE/session.json")
@@ -528,7 +529,7 @@ EOF
 "$SESSION_SH" init development >/dev/null
 nodes_before=$(jq -c '.phase_graph | map(.name)' "$NANOSTACK_STORE/session.json")
 assert_eq "before conductor: session phase_graph is the default sprint" \
-  '["think","plan","build","review","qa","security","ship"]' "$nodes_before"
+  '["think","plan","build","review","security","qa","ship"]' "$nodes_before"
 
 "$REPO/conductor/bin/sprint.sh" start --phases \
   '[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"license-audit","depends_on":["build"]},{"name":"ship","depends_on":["license-audit"]}]' \
@@ -564,7 +565,7 @@ for ph in plan review; do
   "$SESSION_SH" phase-complete "$ph" >/dev/null
 done
 next_after_review=$(jq -r '.next_phase' "$NANOSTACK_STORE/session.json")
-assert_eq "/feature after review: next_phase != think" "qa" "$next_after_review"
+assert_eq "/feature after review: next_phase != think" "security" "$next_after_review"
 
 # Cell 9j: the guard's phase-gate reads required phases from the
 # session's phase_graph too. A custom workflow stack whose ship

@@ -77,7 +77,7 @@ if [ -n "$CUSTOM_PHASES" ]; then
 fi
 TOTAL=$((CORE_TOTAL + CUSTOM_TOTAL))
 
-# Mode breakdown from review/qa/security
+# Mode breakdown from review/security/qa
 count_mode() {
   local phase="$1"
   local mode="$2"
@@ -142,7 +142,7 @@ if $JSON_OUTPUT; then
     '{
       month: $month,
       sprints: {
-        think: $think, plan: $plan, review: $review, qa: $qa, security: $security, ship: $ship,
+        think: $think, plan: $plan, review: $review, security: $security, qa: $qa, ship: $ship,
         core_total: $core_total,
         custom: $custom,
         custom_total: $custom_total,

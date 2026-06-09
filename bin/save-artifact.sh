@@ -15,7 +15,7 @@
 # the phase-specific validator (the prose blob would never satisfy
 # summary-as-object), so it writes a `schema_legacy: true` flag and
 # emits a deprecation warning to stderr. The core SKILL.md files
-# (plan/review/qa/security/ship) no longer document it.
+# (plan/review/security/qa/ship) no longer document it.
 #
 # Validates JSON has required fields before saving. Fails on invalid input.
 set -e
