@@ -2610,6 +2610,70 @@ jobs:
             exit 1
           fi
 
+  think-collaborative-contract:
+    name: /think collaborative cadence + alternatives contract
+    runs-on: ubuntu-latest
+    # think vNext (brainstorm-grade): the diagnostic asks one question per
+    # message, Phase 4.5 presents 2-3 alternatives with trade-offs before
+    # the scope mode, the brief walks in sections when interactive, and
+    # the artifact carries optional alternatives_considered and
+    # design_summary fields that the brief gate never reads. Lock the
+    # mechanics so a later edit cannot silently regress /think to
+    # batched-question, single-verdict behavior.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Diagnostic declares the one-question cadence
+        run: |
+          set -e
+          if ! grep -qF 'one question per message' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md no longer declares the one-question-per-message cadence"
+            exit 1
+          fi
+      - name: Phase 4.5 alternatives pass exists and keeps the reduce bias
+        run: |
+          set -e
+          if ! grep -qF '### Phase 4.5: Alternatives' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md is missing the Phase 4.5 Alternatives section"
+            exit 1
+          fi
+          if ! grep -qF 'recommend the smaller one' think/SKILL.md; then
+            echo "FAIL: Phase 4.5 lost the smaller-approach recommendation bias"
+            exit 1
+          fi
+      - name: Interactive brief walks in sections, autopilot keeps the gate
+        run: |
+          set -e
+          if ! grep -qF 'walk the brief in sections' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md is missing the sectioned brief validation instruction"
+            exit 1
+          fi
+          if ! grep -qF 'Under autopilot, skip the section walk' think/SKILL.md; then
+            echo "FAIL: the section walk no longer defers to the brief gate under autopilot"
+            exit 1
+          fi
+      - name: Optional collaborative fields documented and gate-exempt
+        run: |
+          set -e
+          for f in think/SKILL.md reference/artifact-schema.md; do
+            for field in alternatives_considered design_summary; do
+              if ! grep -qF "$field" "$f"; then
+                echo "FAIL: $f does not document $field"
+                exit 1
+              fi
+            done
+          done
+          if ! grep -qF 'Alternatives Considered' think/references/brief-template.md; then
+            echo "FAIL: brief-template.md is missing the Alternatives Considered section"
+            exit 1
+          fi
+          # The brief gate jq filter must keep checking exactly the five
+          # required fields and never consult the collaborative ones.
+          gate_block=$(sed -n '/### Phase 6.6/,/### Phase 7/p' think/SKILL.md)
+          if printf '%s' "$gate_block" | grep -qE 'alternatives_considered|design_summary'; then
+            echo "FAIL: the brief gate consults a collaborative field; it must stay optional"
+            exit 1
+          fi
+
   phase-registry-contract:
     name: Phase registry library exposes the public API
     runs-on: ubuntu-latest

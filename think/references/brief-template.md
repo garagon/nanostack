@@ -25,6 +25,12 @@ This is a human-readable document the user can share with a team, paste into a d
 ## Key Risk
 <the one thing most likely to make this fail>
 
+## Alternatives Considered
+<one line per approach from Phase 4.5: what it was, what it traded away, and which one was chosen and why>
+
+## Design
+<2-4 sentences: how the chosen approach works, written so a teammate who missed the conversation can follow it>
+
 ## What We Decided NOT to Build
 <out of scope items from the diagnostic>
 
@@ -34,9 +40,9 @@ This is a human-readable document the user can share with a team, paste into a d
 
 ## Rules
 
-- Keep it under 20 lines total.
+- Keep it under 30 lines total.
 - No filler, no headers without content.
-- Skip sections that don't apply (e.g., omit "What We Decided NOT to Build" if nothing was excluded).
+- Skip sections that don't apply (e.g., omit "What We Decided NOT to Build" if nothing was excluded, omit "Alternatives Considered" and "Design" if Phase 4.5 collapsed to a single obvious approach).
 - The slug is derived from the value proposition: lowercase, hyphenated, max ~5 words.
 
 ## Retro briefs
