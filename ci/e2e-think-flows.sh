@@ -21,6 +21,9 @@
 #      top of the static lint).
 #   7. Search privacy modes — reference doc declares the three modes
 #      and the search_summary fields exist by name.
+#   8. Collaborative fields — alternatives_considered + design_summary
+#      roundtrip when present, and the brief gate passes with or
+#      without them (they are optional, never gate input).
 #
 # Usage:
 #   ci/e2e-think-flows.sh
@@ -330,6 +333,48 @@ cell_search_privacy_modes() {
   done
 }
 
+# ─── Cell 8: collaborative fields are optional and roundtrip ─────────
+
+cell_collaborative_fields() {
+  # 8a: artifact with alternatives_considered + design_summary saves,
+  # and every collaborative field is retrievable by name.
+  new_project "cell8-collab"
+  git init -q
+  "$REPO/bin/session.sh" init development >/dev/null
+  local think_json
+  think_json=$(build_think_json | jq '
+    .summary.alternatives_considered = [
+      {approach: "full importer with schema migrations", tradeoff: "three weeks before any signal", chosen: false},
+      {approach: "CLI imports one JSON snapshot", tradeoff: "no migrations, manual re-run", chosen: true}
+    ]
+    | .summary.design_summary = "The CLI reads a snapshot file, validates the shape, and writes records in one pass."')
+  "$REPO/bin/save-artifact.sh" think "$think_json" >/dev/null
+  local artifact
+  artifact=$(ls .nanostack/think/*.json | head -1)
+  assert_true "alternatives_considered roundtrips (2 entries)" \
+    jq -e '.summary.alternatives_considered | length == 2' "$artifact"
+  assert_true "exactly one alternative is chosen" \
+    jq -e '[.summary.alternatives_considered[] | select(.chosen)] | length == 1' "$artifact"
+  assert_true "design_summary roundtrips non-empty" \
+    jq -e '.summary.design_summary | length > 0' "$artifact"
+  local gate
+  gate=$(brief_gate_pass "$artifact")
+  assert_eq "gate passes WITH collaborative fields present" "true" "$gate"
+
+  # 8b: a brief WITHOUT the collaborative fields is still a complete
+  # brief — the gate never consults them.
+  new_project "cell8-nocollab"
+  git init -q
+  "$REPO/bin/session.sh" init development >/dev/null
+  think_json=$(build_think_json)
+  "$REPO/bin/save-artifact.sh" think "$think_json" >/dev/null
+  artifact=$(ls .nanostack/think/*.json | head -1)
+  assert_true "collaborative fields absent from a v1-shaped brief" \
+    jq -e '.summary | has("alternatives_considered") | not' "$artifact"
+  gate=$(brief_gate_pass "$artifact")
+  assert_eq "gate passes WITHOUT collaborative fields" "true" "$gate"
+}
+
 # ─── Run ──────────────────────────────────────────────────────────────
 
 echo "Nanostack /think vNext flows"
@@ -343,6 +388,7 @@ cell brief_gate_complete
 cell brief_gate_incomplete
 cell preset_no_dump
 cell search_privacy_modes
+cell collaborative_fields
 
 echo ""
 echo "============================"

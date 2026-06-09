@@ -146,6 +146,7 @@ Every artifact can include a `context_checkpoint` — a self-contained summary t
 **Required vs optional in `summary`:**
 - Required: `value_proposition`, `scope_mode`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`. The autopilot brief gate (`/think --autopilot`) refuses to advance to `/nano` when any of these are missing or empty.
 - Optional: `out_of_scope`, `manual_delivery_test`, `search_summary`. Skills downstream of `/think` consume them when present, fall back to safe defaults when absent.
+- Optional collaborative fields: `alternatives_considered` (array of `{approach, tradeoff, chosen}` objects from the Phase 4.5 alternatives pass; the chosen approach has `chosen: true`) and `design_summary` (string, 2-4 sentences describing how the chosen approach works). The brief gate does NOT require these; a brief without alternatives is still a complete brief.
 - Optional Guided Archetypes v1: `archetype`, `archetype_confidence`, `archetype_source`, `archetype_reason`, `example_reference`. The brief gate does NOT require these. Skills that opt into archetype-aware behavior read them when present and fall back to canonical neutrality when absent. The full archetype contract lives in [`think/references/archetypes.md`](../think/references/archetypes.md).
 
 ### /nano

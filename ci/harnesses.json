@@ -153,7 +153,7 @@
       "tier": "opt-in",
       "surface": ["think", "session"],
       "deps": ["bash", "jq", "git"],
-      "expected_checks": 32,
+      "expected_checks": 38,
       "timeout_minutes": 6,
       "workflow": ".github/workflows/e2e.yml",
       "job": "e2e-think-flows"

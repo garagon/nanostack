@@ -441,6 +441,8 @@ Whatever mode you used, write the result to `summary.search_summary` in the stru
 
 ### Phase 2: The Diagnostic
 
+**Question cadence: one question per message.** Ask, wait for the answer, then ask the next. When a question has natural options, offer 2-4 short choices the user can pick from; an open answer is always welcome. Never batch the diagnostic into a numbered list of questions. The mode's questions still need to land before the brief is complete; the cadence changes how they arrive, not how many there are.
+
 **Apply the archetype lens to the opening question and the diagnostic emphasis** (see lens definitions in `think/references/archetypes.md`). The archetype selects and reorders the forcing questions, it does not replace them. Cover the **active mode's** diagnostic set: Startup forcing questions for `founder_validation` and `landing_experience`; Builder forcing questions for `cli_tooling` and `api_backend`. The archetype→mode mapping lives in `think/references/archetypes.md` ("Mode interaction"). The lens decides which question opens the conversation and which risks get extra airtime.
 
 | Archetype | Primary opening question | Diagnostic emphasis |
@@ -486,9 +488,17 @@ Then apply the **latent vs deterministic lens** from `think/references/latent-vs
 
 Then **argue the opposite**: construct the strongest case this should NOT be built. If the opposite argument is stronger, say so. If the original holds, it's battle-tested.
 
+### Phase 4.5: Alternatives
+
+Before recommending a scope mode, lay out the solution space. Present 2-3 genuinely different ways to attack the problem, each in 2-3 lines: what it is, what it trades away, what it costs to try. Make at least one a clearly smaller cut than the user's original framing. Then recommend one and say why.
+
+Keep the bias /think is known for: when two approaches deliver similar learning, recommend the smaller one. The point of the alternatives is not neutrality, it is making the recommendation legible: the user sees what was considered and what was traded, instead of receiving a single verdict.
+
+In Guided profile, present the approaches in plain language as "a few ways to do this" with no internal labels. The chosen approach feeds Phase 5: it becomes the scope the mode applies to. The discarded approaches become candidates for `out_of_scope` and land in the brief's "Alternatives considered" section and the artifact's optional `alternatives_considered` field.
+
 ### Phase 5: Scope Mode Selection
 
-Based on the diagnostic, recommend one of four scope modes:
+Based on the diagnostic and the approach chosen in Phase 4.5, recommend one of four scope modes:
 
 | Mode | When to use | Behavior |
 |------|-------------|----------|
@@ -519,9 +529,11 @@ Produce a clear brief for the next phase:
 - {{optional second, cap at three}}
 ```
 
+**Interactive validation (autopilot off): walk the brief in sections.** Do not drop the whole Think Summary as one blob and ask "look good?". Present it in three small passes, one per message, same cadence as the diagnostic: first what we are building (value proposition + starting point), then who it is for and the key risk, then what stays out of scope. Confirm each section before moving to the next and fold corrections in as they arrive. When the last section is confirmed, write the final Think Summary and save. Under autopilot, skip the section walk: the brief gate in Phase 6.6 is the validation.
+
 Immediately after writing the Think Summary — before anything else, before presenting next steps — save the artifact as **structured JSON** that matches the canonical schema in `reference/artifact-schema.md`. Downstream skills (`/nano`, `bin/sprint-journal.sh`, `bin/resolve.sh`) read the named fields, so the prose-blob form (`--from-session`) is no longer acceptable for `/think`.
 
-Build the JSON inline and pass it to `save-artifact.sh`. Required fields (the autopilot brief gate refuses to advance without them): `value_proposition`, `scope_mode`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`. Optional but encouraged: `out_of_scope`, `manual_delivery_test`, `search_summary`, `context_checkpoint`.
+Build the JSON inline and pass it to `save-artifact.sh`. Required fields (the autopilot brief gate refuses to advance without them): `value_proposition`, `scope_mode`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`. Optional but encouraged: `out_of_scope`, `manual_delivery_test`, `search_summary`, `alternatives_considered`, `design_summary`, `context_checkpoint`. The brief gate never consults the optional fields, so a brief without alternatives is still a complete brief.
 
 Use `jq -n` so the output is real JSON, not a string with embedded quotes:
 
@@ -541,6 +553,8 @@ THINK_JSON=$(jq -n \
   --argjson out_of_scope          '[]' \
   --argjson manual_delivery_test  '{"possible": false, "steps": []}' \
   --argjson search_summary        '{"mode": "local_only", "result": "", "existing_solution": "none"}' \
+  --argjson alternatives_considered '[]' \
+  --arg design_summary            "" \
   --arg archetype                 "unknown" \
   --arg archetype_confidence      "low" \
   --arg archetype_source          "fallback" \
@@ -559,6 +573,8 @@ THINK_JSON=$(jq -n \
        out_of_scope:      $out_of_scope,
        manual_delivery_test: $manual_delivery_test,
        search_summary:    $search_summary,
+       alternatives_considered: $alternatives_considered,
+       design_summary:    $design_summary,
        archetype:            $archetype,
        archetype_confidence: $archetype_confidence,
        archetype_source:     $archetype_source,
@@ -584,6 +600,8 @@ When an archetype WAS detected or set explicitly, replace the five default value
 | No signal hit threshold | `fallback` | `low` |
 
 `archetype_reason` is one short sentence the user could read: e.g. `"Current project has server.js and the prompt references an endpoint."` Empty string is acceptable for the `unknown`/`fallback` case.
+
+`alternatives_considered` carries the Phase 4.5 pass when it happened: one object per approach, `{"approach": "string", "tradeoff": "string", "chosen": false}`, with `chosen: true` on the one that won. `design_summary` is 2-4 sentences on how the chosen approach works, the same prose that lands in the brief's Design section. Leave both empty when Phase 4.5 collapsed to a single obvious approach; the gate never reads them.
 
 `example_reference` is `null` when archetype is `unknown`. Otherwise it is the object documented in `think/references/archetypes.md` for that archetype:
 
