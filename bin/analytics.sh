@@ -185,8 +185,8 @@ echo "  ─────────────"
 echo "  think       $THINK"
 echo "  plan        $PLAN"
 echo "  review      $REVIEW"
-echo "  qa          $QA"
 echo "  security    $SECURITY"
+echo "  qa          $QA"
 echo "  ship        $SHIP"
 if [ -n "$CUSTOM_PHASES" ]; then
   for phase in $CUSTOM_PHASES; do
@@ -256,8 +256,8 @@ if $OBSIDIAN_OUTPUT; then
     echo "| think | $THINK |"
     echo "| plan | $PLAN |"
     echo "| review | $REVIEW |"
-    echo "| qa | $QA |"
     echo "| security | $SECURITY |"
+    echo "| qa | $QA |"
     echo "| ship | $SHIP |"
     if [ -n "$CUSTOM_PHASES" ]; then
       for phase in $CUSTOM_PHASES; do
