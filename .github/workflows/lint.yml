@@ -3858,3 +3858,32 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run visual artifact public-copy locks
         run: ci/check-visual-artifact-public-copy.sh
+
+  runtime-contracts:
+    name: Runtime contracts (graph-aware session + concurrency parity)
+    # These two suites protect the runtime wiring most likely to break
+    # silently: the graph-aware session lifecycle (phase_graph snapshot,
+    # next_phase / ready_phases / required_before_ship derivation) and
+    # the read-only phase write block shared by both guard hooks. They
+    # used to be opt-in in e2e.yml, which meant a PR could land a
+    # regression in either contract and CI would stay green until a
+    # maintainer remembered to dispatch the e2e workflow. Promoted to
+    # PR-tier after the canonical-sprint-order reconciliation (#249) so
+    # the order the graph now encodes is locked on every merge.
+    #
+    # The remaining e2e.yml suites stay opt-in on purpose: they are
+    # slower full-install flows, and user-flows in particular carries a
+    # known macOS-local write_guard false-block that is tracked
+    # separately and out of scope here.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq is present
+        run: jq --version
+      - name: Run graph-aware session E2E
+        run: ci/run-harness.sh --suite graph-aware-session
+      - name: Run concurrency parity matrix
+        run: ci/run-harness.sh --suite concurrency-parity

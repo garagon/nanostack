@@ -42,13 +42,13 @@
       "id": "concurrency-parity",
       "path": "ci/e2e-concurrency-parity.sh",
       "kind": "runtime-e2e",
-      "tier": "opt-in",
+      "tier": "pr",
       "surface": ["guard", "phases", "concurrency"],
       "deps": ["bash", "jq", "git"],
       "expected_checks": 10,
       "timeout_minutes": 3,
-      "workflow": ".github/workflows/e2e.yml",
-      "job": "e2e-concurrency-parity"
+      "workflow": ".github/workflows/lint.yml",
+      "job": "runtime-contracts"
     },
     {
       "id": "structured-artifacts",
@@ -114,13 +114,13 @@
       "id": "graph-aware-session",
       "path": "ci/e2e-graph-aware-session.sh",
       "kind": "runtime-e2e",
-      "tier": "opt-in",
+      "tier": "pr",
       "surface": ["session", "phases", "phase-graph", "conductor"],
       "deps": ["bash", "jq", "git"],
       "expected_checks": 61,
       "timeout_minutes": 6,
-      "workflow": ".github/workflows/e2e.yml",
-      "job": "e2e-graph-aware-session"
+      "workflow": ".github/workflows/lint.yml",
+      "job": "runtime-contracts"
     },
     {
       "id": "delivery-matrix",

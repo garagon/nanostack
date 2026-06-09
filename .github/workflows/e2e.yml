@@ -21,22 +21,10 @@ jobs:
       - name: Run end-to-end harness
         run: ci/run-harness.sh --suite user-flows
 
-  e2e-concurrency-parity:
-    name: E2E read-only phase write parity
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # Locks that BOTH guard hooks (check-dangerous.sh for Bash,
-    # check-write.sh for Write/Edit/MultiEdit) enforce the read-only
-    # phase block through the shared nano_active_phase_concurrency
-    # helper. Includes custom-phase sabotage cells so the block stays
-    # registry-driven, not a hardcoded built-in list. Run after touching
-    # either guard hook or bin/lib/phases.sh concurrency helpers.
-    steps:
-      - uses: actions/checkout@v4
-      - name: jq is present
-        run: jq --version
-      - name: Run concurrency parity matrix
-        run: ci/run-harness.sh --suite concurrency-parity
+  # concurrency-parity and graph-aware-session were promoted to the
+  # PR-tier runtime-contracts job in lint.yml after #249. They run on
+  # every pull request now; dispatching this workflow no longer covers
+  # them.
 
   e2e-delivery-matrix:
     name: E2E delivery matrix (9 cells)
@@ -202,22 +190,6 @@ jobs:
         run: jq --version
       - name: Run custom routing E2E
         run: ci/run-harness.sh --suite custom-routing
-
-  e2e-graph-aware-session:
-    name: E2E Graph-aware Session + Next-step (10 cells)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # PR 4 of the 2026-05-10 architecture audit. Locks the graph-aware
-    # session lifecycle: session.json snapshots phase_graph at init,
-    # phase-complete fills next_phase + ready_phases from the snapshot,
-    # next-step.sh surfaces custom required_before_ship and keeps
-    # guided wording free of phase-graph jargon.
-    steps:
-      - uses: actions/checkout@v4
-      - name: jq is present
-        run: jq --version
-      - name: Run graph-aware session E2E
-        run: ci/run-harness.sh --suite graph-aware-session
 
   e2e-structured-artifacts:
     name: E2E Structured Artifact Contract (9 cells)
