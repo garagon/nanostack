@@ -25,9 +25,9 @@ You have access to a set of composable engineering workflow skills. Each skill i
 
 ## Workflow Order
 
-The default workflow is: `/think` → `/nano` → build → `/review` → `/qa` → `/security` → `/ship`
+The default workflow is: `/think` → `/nano` → build → `/review` → `/security` → `/qa` → `/ship`
 
-With `/conductor`, review + qa + security run **in parallel** — they all depend on build, not on each other:
+With `/conductor`, review + security + qa run **in parallel** — they all depend on build, not on each other:
 
 ```
 think → plan → build ─┬─ review  ─┐

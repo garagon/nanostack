@@ -6,7 +6,7 @@
 # the same view of which phases exist for the current project.
 #
 # Phases come from two places:
-#   - The immutable core list (think, plan, review, qa, security, ship).
+#   - The immutable core list (think, plan, review, security, qa, ship).
 #   - The .custom_phases array in .nanostack/config.json (project) or
 #     ~/.nanostack/config.json (global fallback).
 #
@@ -29,7 +29,7 @@ if [ "${_NANO_PHASES_LOADED:-0}" = "1" ]; then
 fi
 _NANO_PHASES_LOADED=1
 
-NANO_CORE_PHASES_LIST="think plan review qa security ship"
+NANO_CORE_PHASES_LIST="think plan review security qa ship"
 NANO_PHASE_NAME_RE='^[a-z][a-z0-9-]*$'
 
 # Resolve config path. Order: explicit arg, $NANOSTACK_STORE/config.json,
@@ -206,24 +206,24 @@ _nano_phase_graph_is_valid() {
 # Returns the phase_graph as a JSON array of {name, depends_on}. If
 # config has a valid phase_graph, returns it. Otherwise returns the
 # canonical default graph that mirrors conductor/bin/sprint.sh:
-# think -> plan -> build -> review/qa/security (parallel) -> ship.
+# think -> plan -> build -> review/security/qa (parallel) -> ship.
 # An invalid phase_graph in config falls back to the default and emits
 # a stderr warning so a malformed config never produces an invalid
 # topology downstream.
 nano_phase_graph_json() {
   local config
   config=$(_nano_phases_resolve_config "${1:-}") || true
-  # Node order under `review`/`qa`/`security` matches the legacy
-  # hardcoded progression in bin/session.sh that this PR replaces:
-  # review -> qa -> security -> ship. Next-phase walks graph order,
-  # so the graph IS the progression contract. required_before_ship
-  # ends up as ["review","qa","security"] (graph-derived order);
-  # consumers that need set semantics work either way and the doc
-  # is the single source of truth on the wire shape. Two earlier
-  # Codex passes pulled in opposite directions on the array order
-  # vs the progression; we side with the progression because that
-  # is what the previous PR (PR 4) explicitly promised to preserve.
-  local default_graph='[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"review","depends_on":["build"]},{"name":"qa","depends_on":["build"]},{"name":"security","depends_on":["build"]},{"name":"ship","depends_on":["review","qa","security"]}]'
+  # Node order under `review`/`security`/`qa` follows the canonical
+  # sprint order published everywhere user-facing (README, release
+  # notes, /feature, next-step.sh): review -> security -> qa -> ship.
+  # Next-phase walks graph order, so the graph IS the progression
+  # contract. required_before_ship ends up as ["review","security",
+  # "qa"] (graph-derived order), matching the legacy fallback in
+  # bin/next-step.sh; consumers that need set semantics work either
+  # way. An earlier form of this graph kept qa before security, which
+  # contradicted the public copy on every release surface — the
+  # reconcile-canonical-sprint-order PR aligned runtime to the docs.
+  local default_graph='[{"name":"think","depends_on":[]},{"name":"plan","depends_on":["think"]},{"name":"build","depends_on":["plan"]},{"name":"review","depends_on":["build"]},{"name":"security","depends_on":["build"]},{"name":"qa","depends_on":["build"]},{"name":"ship","depends_on":["review","security","qa"]}]'
   if [ -n "$config" ] && command -v jq >/dev/null 2>&1; then
     local graph
     graph=$(jq -c '.phase_graph // empty' "$config" 2>/dev/null)
@@ -250,7 +250,7 @@ nano_phase_graph_json() {
 # (developers do the work, no phase-complete call lands), so the helper
 # treats "build" as auto-satisfied for dependency checks unless the
 # caller passes it explicitly in completed. Without that escape hatch,
-# the default sprint graph (review/qa/security depend on build) would
+# the default sprint graph (review/security/qa depend on build) would
 # never advance.
 #
 # Arguments:
@@ -275,8 +275,8 @@ nano_phase_ready_from_graph() {
   #
   # "build" is auto-promoted into the satisfied set, but ONLY when its
   # own depends_on entries are all satisfied. Without that gate the
-  # default sprint graph (review/qa/security depend on build, build
-  # depends on plan) would report review/qa/security as ready right
+  # default sprint graph (review/security/qa depend on build, build
+  # depends on plan) would report review/security/qa as ready right
   # after /think completes, even though /plan has not run yet.
   echo "$graph" | jq -r \
     --argjson done "$completed" \
@@ -288,7 +288,7 @@ nano_phase_ready_from_graph() {
     # already completed AND build itself is not currently in_progress.
     # The in_progress check is the load-bearing piece: a caller can
     # record the build handoff with session.sh phase-start build, and
-    # treating that as satisfied would unblock review/qa/security
+    # treating that as satisfied would unblock review/security/qa
     # while build is still running. Codex caught the racy promotion
     # on the PR 4 sixth review pass. Treat a "build"-less graph as a
     # no-op for this step.

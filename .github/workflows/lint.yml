@@ -2653,7 +2653,7 @@ jobs:
           set -e
           fail=0
           for f in bin/save-artifact.sh bin/restore-context.sh bin/discard-sprint.sh; do
-            if grep -nE 'PHASES?="think plan review qa security ship"' "$f"; then
+            if grep -nE 'PHASES?="think plan review (qa security|security qa) ship"' "$f"; then
               echo "FAIL: $f still hardcodes the core phase list (use nano_all_phases)"
               fail=1
             fi

@@ -459,7 +459,7 @@ cmd_phase_complete() {
   # completed or started; next_phase is the first such phase and
   # ready_phases captures the full list so next-step.sh can surface
   # parallel options. The previous hardcoded case statement only knew
-  # about think/plan/build/review/qa/security/ship/compound and left
+  # about think/plan/build/review/security/qa/ship/compound and left
   # custom workflow stacks with next_phase=null forever.
   local next="" ready_json="[]"
   local completed_now

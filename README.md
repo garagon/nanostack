@@ -461,7 +461,7 @@ Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude
 
 **Tier 3: In-project.** Operations that only touch files inside the current git repo pass through. If the agent writes a bad file, you revert it. Version control is the safety net.
 
-**Tier 4: Phase-aware concurrency.** During read-only phases (review, qa, security), write operations are blocked. This prevents race conditions when multiple agents run in parallel. The agent reports findings instead of auto-fixing.
+**Tier 4: Phase-aware concurrency.** During read-only phases (review, security, qa), write operations are blocked. This prevents race conditions when multiple agents run in parallel. The agent reports findings instead of auto-fixing.
 
 **Tier 5: Phase gate.** When a sprint is active, `git commit` and `git push` are blocked until review, security, and qa artifacts exist and are fresher than the latest code change. This prevents the agent from skipping pipeline phases on simple tasks. Bypass with `NANOSTACK_SKIP_GATE=1` for non-sprint commits.
 

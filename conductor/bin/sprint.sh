@@ -44,8 +44,8 @@ require_safe_phase() {
   esac
 }
 
-# Default phases and dependency graph. Node order under review/qa/
-# security and ship.depends_on match bin/lib/phases.sh's default
+# Default phases and dependency graph. Node order under review/
+# security/qa and ship.depends_on match bin/lib/phases.sh's default
 # graph so a conductor sprint that mirrors into session.json does
 # not change next_phase ordering vs a session that came from
 # bin/session.sh init alone.
@@ -54,9 +54,9 @@ DEFAULT_PHASES='[
   {"name":"plan","depends_on":["think"]},
   {"name":"build","depends_on":["plan"]},
   {"name":"review","depends_on":["build"]},
-  {"name":"qa","depends_on":["build"]},
   {"name":"security","depends_on":["build"]},
-  {"name":"ship","depends_on":["review","qa","security"]}
+  {"name":"qa","depends_on":["build"]},
+  {"name":"ship","depends_on":["review","security","qa"]}
 ]'
 
 # Detect agent name. Identity must be stable within one process and unique

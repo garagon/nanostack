@@ -10,7 +10,7 @@ A phase belongs to one of three kinds:
 
 | Kind | Source | Notes |
 |---|---|---|
-| `core` | The immutable list `think plan review qa security ship`. | Built into Nanostack. Cannot be redefined. |
+| `core` | The immutable list `think plan review security qa ship`. | Built into Nanostack. Cannot be redefined. |
 | `custom` | `.custom_phases` array in `.nanostack/config.json` (project) or `~/.nanostack/config.json` (global). Custom names must match `^[a-z][a-z0-9-]*$`. | The registry rejects invalid names and silently drops attempts to override a core name. |
 | `unknown` | A phase the user mentions that is not in either list. | Lifecycle scripts treat this as an error. |
 

@@ -220,10 +220,11 @@ fi
 REQUIRED_BEFORE_SHIP_JSON='["review","security","qa"]'
 if [ "$HAS_GRAPH_AWARE_SESSION" = "1" ]; then
   # The graph snapshot inside session.json is authoritative. For the
-  # default sprint that yields ["review","security","qa"] (the legacy
-  # order, preserved by walking the graph in declared order); for a
-  # custom graph it returns the actual transitive chain ship depends
-  # on. Falls back to the legacy default if the jq filter fails.
+  # default sprint that yields ["review","security","qa"] (the
+  # canonical order, derived by walking the graph in declared order);
+  # for a custom graph it returns the actual transitive chain ship
+  # depends on. Falls back to the canonical default if the jq filter
+  # fails.
   #
   # The previous form used `unique`, which sorts in jq and produced
   # ["qa","review","security"]. Consumers that compared the array

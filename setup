@@ -445,7 +445,7 @@ alwaysApply: true
 You have access to nanostack skills. Read SKILL.md files in $SOURCE_DIR for instructions.
 
 Available: /think, /nano, /review, /qa, /security, /ship, /guard, /conductor, /compound, /feature, /nano-run, /nano-help
-Workflow: /think → /nano → build → /review → /qa → /security → /ship
+Workflow: /think → /nano → build → /review → /security → /qa → /ship
 Shortcuts: /think --autopilot (full sprint), /feature <description> (add to existing project)
 Start: /nano-run (first-time setup)
 CURSORRULE
@@ -643,7 +643,7 @@ if [ "$VERBOSE" -eq 1 ]; then
   w_security=$(skill_public_name "security")
   w_ship=$(skill_public_name "ship")
   w_guard=$(skill_public_name "guard")
-  echo "Workflow: /$w_think → /$w_nano → build → /$w_review → /$w_qa → /$w_security → /$w_ship"
+  echo "Workflow: /$w_think → /$w_nano → build → /$w_review → /$w_security → /$w_qa → /$w_ship"
   echo "Safety:   /$w_guard (activate on-demand)"
   echo "Start:    /nano-run (first-time setup)"
 fi
