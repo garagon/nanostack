@@ -396,7 +396,7 @@ Understand the landscape, then determine the mode.
 
 **If the user didn't provide an idea or problem** (e.g. they just said `/think` or `/think --autopilot` with no context), simply ask in your response: "What do you want to build?" Do NOT use `AskUserQuestion` for this. Just ask in plain text and wait for their reply.
 
-**If AUTOPILOT is active:** Do NOT ask clarifying questions. Work with the information provided. Default to Builder mode. If the description is clear enough to plan, skip the diagnostic questions, run a compressed Phase 4.5 (consider 2-3 approaches internally, pick one, record the discarded ones in `alternatives_considered` without asking the user), and go straight to Phase 5 (scope recommendation) with a brief that covers value prop, scope, starting point and risk. The user chose autopilot because they want speed, not a conversation; speed skips the dialogue, not the consideration of alternatives.
+**If AUTOPILOT is active:** Do NOT ask clarifying questions. Work with the information provided. Default to Builder mode. If the description is clear enough to plan, skip the diagnostic questions, run a compressed Phase 4.5 (consider 2-3 approaches internally, pick one, record the full set in `alternatives_considered` with the winner flagged `chosen: true`, without asking the user), and go straight to Phase 5 (scope recommendation) with a brief that covers value prop, scope, starting point and risk. The user chose autopilot because they want speed, not a conversation; speed skips the dialogue, not the consideration of alternatives.
 
 Determine the mode from the user's description:
 
