@@ -81,6 +81,12 @@ EOF-1'
   nh_assert_exit "arithmetic comparison allowed ((( count > 0 )))"   0 bash_hook '(( count > 0 ))'
   nh_assert_exit "escaped test comparison not redirection"          0 bash_hook '[ a \> b ]'
   nh_assert_exit "env -S inline code blocked"                       1 bash_hook "env -S \"python3 -c 'open(1)'\""
+  nh_assert_exit "punctuation heredoc delimiter, write after blocked" 1 bash_hook 'cat <<EOF!
+body
+EOF!
+printf x > out.txt'
+  nh_assert_exit "even backslashes keep redirection active"         1 bash_hook 'echo x \\> out.txt'
+  nh_assert_exit "single escaped backslash redirect stays inert"    0 bash_hook 'echo x \> out.txt'
 }
 
 # Cells: in-place editors and write utilities.

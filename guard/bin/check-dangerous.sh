@@ -398,11 +398,11 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
           CMD_ROQ=$(printf '%s' "$CMD_RON" | awk '
             {
               if (skip) { if ($0 ~ ("^[[:space:]]*" delim "[[:space:]]*$")) skip = 0; next }
-              if (match($0, /<<-?[[:space:]]*[\\'"'"'"]?[A-Za-z0-9_][A-Za-z0-9_.-]*/)) {
-                d = substr($0, RSTART, RLENGTH); gsub(/<<-?[[:space:]]*[\\'"'"'"]?/, "", d); delim = d; skip = 1
+              if (match($0, /<<-?[[:space:]]*[\\'"'"'"]?[^[:space:]<>|&;()]+/)) {
+                d = substr($0, RSTART, RLENGTH); gsub(/<<-?[[:space:]]*/, "", d); gsub(/[\\'"'"'"]/, "", d); delim = d; skip = 1
               }
               print
-            }' | sed -E 's/\\[<>]//g; s/\[\[[^]]*\]\]//g; s/\(\([^)]*\)\)//g' \
+            }' | sed -E 's/\\\\/@@BS@@/g; s/\\[<>]//g; s/@@BS@@/\\/g; s/\[\[[^]]*\]\]//g; s/\(\([^)]*\)\)//g' \
             | sed -E 's/[0-9]*>&[0-9]+//g')
           # fd dups (2>&1, >&2) were removed above, so every remaining
           # redirection (>, >>, &>, >&file, >|) targets a file -- even a
