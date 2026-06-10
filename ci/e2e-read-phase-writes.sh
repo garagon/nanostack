@@ -90,6 +90,8 @@ cell_inplace() {
   nh_assert_exit "plain read tool allowed"      0 bash_hook 'diff a.txt b.txt'
   nh_assert_exit "install utility at cmd pos blocked" 1 bash_hook 'install -m 0644 a b'
   nh_assert_exit "install as npm script name allowed" 0 bash_hook 'npm run install'
+  nh_assert_exit "patch --dry-run validation allowed" 0 bash_hook 'patch --dry-run < p.diff'
+  nh_assert_exit "real patch application blocked"     1 bash_hook 'patch -p1 < p.diff'
 }
 
 # Cells: inline interpreter code (the quoted body can write through any
@@ -176,6 +178,9 @@ cell_git_mutations() {
   nh_assert_exit "git worktree add blocked"           1 bash_hook 'git worktree add ../w2'
   nh_assert_exit "git apply --check is read-only"     0 bash_hook 'git apply --check patch.diff'
   nh_assert_exit "git apply (real) blocked"           1 bash_hook 'git apply patch.diff'
+  nh_assert_exit "git diff --output writes, blocked"  1 bash_hook 'git diff --output=patch.diff'
+  nh_assert_exit "git format-patch writes, blocked"   1 bash_hook 'git format-patch -1'
+  nh_assert_exit "git branch -r filter is a read"     0 bash_hook 'git branch -r origin/main'
   nh_assert_exit "git branch <name> blocked (ref creation)" 1 bash_hook 'git branch tmp'
   nh_assert_exit "git tag <name> blocked (ref creation)"    1 bash_hook 'git tag v1.0'
   nh_assert_exit "quoted ref name still blocks (git branch \"tmp\")" 1 bash_hook 'git branch "tmp"'

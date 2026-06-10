@@ -459,7 +459,16 @@ EOF
               for (i = 1; i <= NF; i++) {
                 b = basename($i)
                 if (!is_cmd_pos(i)) continue
-                if (b ~ /^(tee|truncate|ln|install|patch|dd)$/) { found = 1; exit }
+                if (b == "patch") {
+                  dr = 0
+                  for (k = i + 1; k <= NF; k++) {
+                    if ($k ~ /^(&&|\|\||;|\||&|\(|\))$/) break
+                    if ($k == "--dry-run" || $k == "-C" || $k == "--check") dr = 1
+                  }
+                  if (!dr) { found = 1; exit }
+                  continue
+                }
+                if (b ~ /^(tee|truncate|ln|install|dd)$/) { found = 1; exit }
                 if (b == "sed" || b == "perl" || b == "ruby") {
                   for (k = i + 1; k <= NF; k++) {
                     t = $k
@@ -816,6 +825,7 @@ EOF
                       if (t ~ /^--(delete|move|copy|edit-description|set-upstream-to|unset-upstream|force|create-reflog|annotate|sign)/) return "mutate"
                       if (t !~ /^--/ && t ~ ("^-[a-zA-Z]*" mutshort)) return "mutate"
                       if (t == "-l" || t == "--list") { listmode = 1; continue }
+                      if (!istag && (t == "-r" || t == "--remotes" || t == "-a" || t == "--all")) { listmode = 1; continue }
                       if (istag && t ~ /^-n[0-9]*$/) { listmode = 1; continue }
                       if (istag && (t == "-v" || t == "--verify")) { listmode = 1; continue }
                       if (t ~ /^--(contains|no-contains|merged|no-merged|points-at)/) { listmode = 1; continue }
@@ -850,6 +860,14 @@ EOF
                     return "mutate:apply"
                   }
                   if (gc ~ /^(checkout|switch|restore|am|merge|rebase|cherry-pick|revert|clean|pull)$/) return "mutate:" gc
+                  if (gc == "format-patch") return "mutate:" gc
+                  if (gc == "diff" || gc == "show" || gc == "log") {
+                    for (a = j + 1; a <= NF; a++) {
+                      if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
+                      if ($a == "-o" || $a == "--output" || $a ~ /^--output=/) return "mutate:" gc
+                    }
+                    return ""
+                  }
                   if (gc == "stash" || gc == "worktree") {
                     if ($(j + 1) == "list" || $(j + 1) == "show") return ""
                     return "mutate:" gc
