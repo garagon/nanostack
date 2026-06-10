@@ -134,6 +134,8 @@ PY'
   nh_assert_exit "env-wrapped inline code blocked"              1 bash_hook 'env FOO=1 python3 -c "open()"'
   nh_assert_exit "timeout-wrapped inline code blocked"          1 bash_hook 'timeout 5 python3 -c "open()"'
   nh_assert_exit "timeout with options wraps inline code"      1 bash_hook 'timeout --preserve-status 5 python3 -c "open()"'
+  nh_assert_exit "timeout -s with signal arg wraps code"      1 bash_hook 'timeout -s KILL 5 python3 -c "open()"'
+  nh_assert_exit "sudo -u with user arg wraps code"           1 bash_hook 'sudo -u nobody python3 -c "open()"'
   nh_assert_exit "env-assignment prefix inline code blocked"    1 bash_hook 'FOO=1 python3 -c "open()"'
   nh_assert_exit "attached perl -e code blocked"                1 bash_hook "perl -e'open F,\">x\"'"
   nh_assert_exit "pipe into wrapped interpreter blocked"        1 bash_hook 'echo code | env python3'
@@ -155,6 +157,8 @@ PY'
   nh_assert_exit "nested substitution redirection blocks"         1 bash_hook 'echo "$(printf x > $(pwd)/out.txt)"'
   nh_assert_exit "nested read substitution stays allowed"         0 bash_hook 'echo $(git rev-parse $(git branch --show-current))'
   nh_assert_exit "single-quoted substitution is inert"            0 bash_hook "grep -R '\$(git checkout main)' docs"
+  nh_assert_exit "escaped substitution is literal"                0 bash_hook 'grep "\\$(git checkout main)" docs'
+
 
 }
 
@@ -233,6 +237,7 @@ cell_package_managers() {
   nh_assert_exit "python -m pip install blocked"   1 bash_hook 'python -m pip install foo'
   nh_assert_exit "python -m pytest stays a read"   0 bash_hook 'python -m pytest'
   nh_assert_exit "python flags before -m pip blocked" 1 bash_hook 'python3 -u -m pip install foo'
+  nh_assert_exit "dotted pip version blocked"      1 bash_hook 'pip3.12 install foo'
   nh_assert_exit "npm config set blocked"          1 bash_hook 'npm config set registry x'
   nh_assert_exit "npm cache clean blocked"         1 bash_hook 'npm cache clean --force'
   nh_assert_exit "npm config get stays a read"     0 bash_hook 'npm config get registry'

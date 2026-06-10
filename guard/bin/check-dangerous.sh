@@ -369,7 +369,9 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
         # into a command, so unquote the -S argument first; the inner
         # command then sits at a command position for the classifiers.
         _SUB_BT=$(printf '\140')
+        _SUB_BS=$(printf '\134')
         CMD_SUB=$(printf '%s' "$CMD" \
+          | sed "s/${_SUB_BS}${_SUB_BS}[$]/X/g; s/${_SUB_BS}${_SUB_BS}${_SUB_BT}/X/g" \
           | sed "s/-S[[:space:]]*\"\([^\"]*\)\"/-S \1/g; s/-S[[:space:]]*'\([^']*\)'/-S \1/g" \
           | sed "s/${_SUB_BT}/ ( /g" \
           | sed "s/'\([-a-zA-Z0-9._/=]*\)'/\1/g" \
@@ -424,22 +426,34 @@ EOF
         # stream idioms stay usable.
         if [ -z "$RO_REASON" ] && printf '%s' "$CMD_SUB" | awk '
             function basename(s) { sub(/.*\//, "", s); return s }
-            function is_cmd_pos(i,    k, p, pb, qb, m) {
-              k = i - 1
-              while (k >= 1) {
-                p = $k
-                if (p ~ /^(\||\|\||&&|;|&|\()$/ || p ~ /[|;&(]$/) return 1
-                if (p ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { k--; continue }
-                pb = p; sub(/.*\//, "", pb)
-                if (pb ~ /^(env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs)$/) { k--; continue }
-                if (p ~ /^-/) { k--; continue }
-                m = k - 1
-                while (m >= 1 && $m ~ /^-/) m--
-                qb = (m >= 1) ? $m : ""; sub(/.*\//, "", qb)
-                if (qb ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k = m - 1; continue }
+            function is_cmd_pos(i,    bnd, j, t, tb) {
+              # Forward walk from the last operator boundary, consuming
+              # wrappers and their option-arguments (timeout -s KILL 5,
+              # sudo -u user) plus env-assignments; the token at i is a
+              # command position only if nothing else runs before it.
+              bnd = 1
+              for (j = i - 1; j >= 1; j--)
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/) { bnd = j + 1; break }
+              j = bnd
+              while (j < i) {
+                t = $j; tb = t; sub(/.*\//, "", tb)
+                if (t ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { j++; continue }
+                if (tb ~ /^(env|command|exec|nohup|setsid|watch|xargs|time)$/) { j++; continue }
+                if (tb ~ /^(sudo|doas)$/) {
+                  j++
+                  while (j < i && $j ~ /^-/) { if ($j ~ /^(-u|--user|-g|--group|-C|-p|-U|-r|-t|-h)$/) j++; j++ }
+                  continue
+                }
+                if (tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) {
+                  j++
+                  while (j < i && $j ~ /^-/) { if ($j ~ /^(-s|--signal|-k|--kill-after|--adjustment)$/) j++; j++ }
+                  if (j < i && $j !~ /^-/) j++
+                  continue
+                }
+                if (t ~ /^-/) { j++; continue }
                 return 0
               }
-              return 1
+              return (j == i) ? 1 : 0
             }
             {
               for (i = 1; i <= NF; i++) {
@@ -470,22 +484,34 @@ EOF
         #      allowed; only the mutating ones block.
         if [ -z "$RO_REASON" ] && printf '%s' "$CMD_SUB" | awk '
             function basename(s) { sub(/.*\//, "", s); return s }
-            function is_cmd_pos(i,    k, p, pb, qb, m) {
-              k = i - 1
-              while (k >= 1) {
-                p = $k
-                if (p ~ /^(\||\|\||&&|;|&|\()$/ || p ~ /[|;&(]$/) return 1
-                if (p ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { k--; continue }
-                pb = p; sub(/.*\//, "", pb)
-                if (pb ~ /^(env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs)$/) { k--; continue }
-                if (p ~ /^-/) { k--; continue }
-                m = k - 1
-                while (m >= 1 && $m ~ /^-/) m--
-                qb = (m >= 1) ? $m : ""; sub(/.*\//, "", qb)
-                if (qb ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k = m - 1; continue }
+            function is_cmd_pos(i,    bnd, j, t, tb) {
+              # Forward walk from the last operator boundary, consuming
+              # wrappers and their option-arguments (timeout -s KILL 5,
+              # sudo -u user) plus env-assignments; the token at i is a
+              # command position only if nothing else runs before it.
+              bnd = 1
+              for (j = i - 1; j >= 1; j--)
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/) { bnd = j + 1; break }
+              j = bnd
+              while (j < i) {
+                t = $j; tb = t; sub(/.*\//, "", tb)
+                if (t ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { j++; continue }
+                if (tb ~ /^(env|command|exec|nohup|setsid|watch|xargs|time)$/) { j++; continue }
+                if (tb ~ /^(sudo|doas)$/) {
+                  j++
+                  while (j < i && $j ~ /^-/) { if ($j ~ /^(-u|--user|-g|--group|-C|-p|-U|-r|-t|-h)$/) j++; j++ }
+                  continue
+                }
+                if (tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) {
+                  j++
+                  while (j < i && $j ~ /^-/) { if ($j ~ /^(-s|--signal|-k|--kill-after|--adjustment)$/) j++; j++ }
+                  if (j < i && $j !~ /^-/) j++
+                  continue
+                }
+                if (t ~ /^-/) { j++; continue }
                 return 0
               }
-              return 1
+              return (j == i) ? 1 : 0
             }
             function pm_scan(name, start,    k, t) {
               for (k = start; k <= NF; k++) {
@@ -504,7 +530,7 @@ EOF
                   if (t == "get" || t == "install" || t == "generate") return "mutate"
                   if (t == "mod") { if ($(k + 1) ~ /^(tidy|edit|vendor|download|init)$/) return "mutate"; return "" }
                   if (t ~ /^(test|build|run|vet|list|version|env|fmt|doc|tool)$/) return ""
-                } else if (name ~ /^pip3?$/) {
+                } else if (name ~ /^pip[0-9.]*$/) {
                   if (t ~ /^(install|uninstall|download)$/) return "mutate"
                   if (t ~ /^(list|show|freeze|check|config|search|help|inspect)$/) return ""
                 } else if (name == "cargo") {
@@ -534,7 +560,7 @@ EOF
                     if (pm_scan("pip", jj + 2) == "mutate") { found = 1; exit }
                   }
                 }
-                if (b ~ /^(npm|pnpm|yarn|go|pip|pip3|cargo|gem|bundle)$/ && is_cmd_pos(i)) {
+                if (b ~ /^(npm|pnpm|yarn|go|pip[0-9.]*|cargo|gem|bundle)$/ && is_cmd_pos(i)) {
                   if (pm_scan(b, i + 1) == "mutate") { found = 1; exit }
                 }
               }
@@ -556,7 +582,8 @@ EOF
           # recursion then re-extracts any nested substitution from each
           # body.
           _SQ=$(printf '\047')
-          SUBST_BODIES=$(printf '%s' "$CMD" | sed "s/${_SQ}[^${_SQ}]*${_SQ}/QUOTEDARG/g" | awk '
+          _BS=$(printf '\134')
+          SUBST_BODIES=$(printf '%s' "$CMD" | sed "s/${_BS}${_BS}[$]/X/g; s/${_BS}${_BS}${_SUB_BT}/X/g" | sed "s/${_SQ}[^${_SQ}]*${_SQ}/QUOTEDARG/g" | awk '
             {
               s = $0; n = length(s)
               for (i = 1; i <= n; i++) {
@@ -610,22 +637,34 @@ EOF
             # after a run of wrappers / env-assignments. Walk backward so
             # `env FOO=1 python3`, `timeout 5 python3`, and `FOO=1 sudo
             # python3` are recognised; `grep python3 ...` is not.
-            function is_cmd_pos(i,    k, p, pb, qb, m) {
-              k = i - 1
-              while (k >= 1) {
-                p = $k
-                if (p ~ /^(\||\|\||&&|;|&|\()$/ || p ~ /[|;&(]$/) return 1
-                if (p ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { k--; continue }
-                pb = p; sub(/.*\//, "", pb)
-                if (pb ~ /^(env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs)$/) { k--; continue }
-                if (p ~ /^-/) { k--; continue }
-                m = k - 1
-                while (m >= 1 && $m ~ /^-/) m--
-                qb = (m >= 1) ? $m : ""; sub(/.*\//, "", qb)
-                if (qb ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k = m - 1; continue }
+            function is_cmd_pos(i,    bnd, j, t, tb) {
+              # Forward walk from the last operator boundary, consuming
+              # wrappers and their option-arguments (timeout -s KILL 5,
+              # sudo -u user) plus env-assignments; the token at i is a
+              # command position only if nothing else runs before it.
+              bnd = 1
+              for (j = i - 1; j >= 1; j--)
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/) { bnd = j + 1; break }
+              j = bnd
+              while (j < i) {
+                t = $j; tb = t; sub(/.*\//, "", tb)
+                if (t ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { j++; continue }
+                if (tb ~ /^(env|command|exec|nohup|setsid|watch|xargs|time)$/) { j++; continue }
+                if (tb ~ /^(sudo|doas)$/) {
+                  j++
+                  while (j < i && $j ~ /^-/) { if ($j ~ /^(-u|--user|-g|--group|-C|-p|-U|-r|-t|-h)$/) j++; j++ }
+                  continue
+                }
+                if (tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) {
+                  j++
+                  while (j < i && $j ~ /^-/) { if ($j ~ /^(-s|--signal|-k|--kill-after|--adjustment)$/) j++; j++ }
+                  if (j < i && $j !~ /^-/) j++
+                  continue
+                }
+                if (t ~ /^-/) { j++; continue }
                 return 0
               }
-              return 1
+              return (j == i) ? 1 : 0
             }
             # Inline code can attach to the flag (`perl -e'code'` ->
             # token -eQUOTEDARG), so the code-flag tests match a prefix,
@@ -731,20 +770,30 @@ EOF
                 # Only a git token at a command position is an invocation;
                 # `printf git checkout` or `python3 process.py git ...`
                 # carry git as an argument and must not be classified.
-                function is_cmd_pos(i,    k, p, pb, qb, m) {
-                  k = i - 1
-                  while (k >= 1) {
-                    p = $k
-                    if (p ~ /^(\||\|\||&&|;|&|\()$/ || p ~ /[|;&(]$/) return 1
-                    if (p ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { k--; continue }
-                    pb = p; sub(/.*\//, "", pb)
-                    if (pb ~ /^(env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs)$/) { k--; continue }
-                    if (p ~ /^-/) { k--; continue }
-                    qb = (k >= 2) ? $(k - 1) : ""; sub(/.*\//, "", qb)
-                    if (qb ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k -= 2; continue }
+                function is_cmd_pos(i,    bnd, j, t, tb) {
+                  bnd = 1
+                  for (j = i - 1; j >= 1; j--)
+                    if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/) { bnd = j + 1; break }
+                  j = bnd
+                  while (j < i) {
+                    t = $j; tb = t; sub(/.*\//, "", tb)
+                    if (t ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { j++; continue }
+                    if (tb ~ /^(env|command|exec|nohup|setsid|watch|xargs|time)$/) { j++; continue }
+                    if (tb ~ /^(sudo|doas)$/) {
+                      j++
+                      while (j < i && $j ~ /^-/) { if ($j ~ /^(-u|--user|-g|--group|-C|-p|-U|-r|-t|-h)$/) j++; j++ }
+                      continue
+                    }
+                    if (tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) {
+                      j++
+                      while (j < i && $j ~ /^-/) { if ($j ~ /^(-s|--signal|-k|--kill-after|--adjustment)$/) j++; j++ }
+                      if (j < i && $j !~ /^-/) j++
+                      continue
+                    }
+                    if (t ~ /^-/) { j++; continue }
                     return 0
                   }
-                  return 1
+                  return (j == i) ? 1 : 0
                 }
                 # Classify branch/tag args: a bare ref name with no list
                 # flag creates a ref; delete/move/copy/annotate forms
