@@ -75,6 +75,9 @@ cell_inplace() {
   nh_assert_exit "sed --in-place=.bak blocked"          1 bash_hook 'sed --in-place=.bak s/a/b/ app.js'
   nh_assert_exit "sed -i after the script blocked"      1 bash_hook "sed -e 's/a/b/' -i file"
   nh_assert_exit "sed -e without -i stays allowed"     0 bash_hook "sed -e 's/a/b/' app.js"
+  nh_assert_exit "ruby -i in-place blocked"            1 bash_hook 'ruby -i -pe "x" file'
+  nh_assert_exit "ruby -pe stream stays allowed"       0 bash_hook "ruby -pe 'puts' file"
+
 
   nh_assert_exit "quoted -i flag still blocks (sed \"-i\")" 1 bash_hook 'sed "-i" s/a/b/ app.js'
 
@@ -170,6 +173,7 @@ cell_git_mutations() {
   nh_assert_exit "tag -n annotation listing is a read"       0 bash_hook 'git tag -n v1'
   nh_assert_exit "tag --contains is a read"                  0 bash_hook 'git tag --contains HEAD'
   nh_assert_exit "tag -a annotated create blocks"            1 bash_hook 'git tag -a v1 -m x'
+  nh_assert_exit "tag -v signature verify is a read"         0 bash_hook 'git tag -v v1.0'
 }
 
 # Cells: the block is phase-scoped, not global.
@@ -197,6 +201,10 @@ cell_package_managers() {
   nh_assert_exit "npm ls allowed"               0 bash_hook 'npm ls'
   nh_assert_exit "go mod tidy blocked"          1 bash_hook 'go mod tidy'
   nh_assert_exit "go mod graph is a read"       0 bash_hook 'go mod graph'
+  nh_assert_exit "pnpm --filter add blocked"    1 bash_hook 'pnpm --filter app add left-pad'
+  nh_assert_exit "yarn workspace add blocked"   1 bash_hook 'yarn workspace app add left-pad'
+  nh_assert_exit "pip -q install blocked"       1 bash_hook 'pip -q install foo'
+  nh_assert_exit "npm run <script> stays read"  0 bash_hook 'npm run add'
 }
 
 nh_cell phase-scoped   cell_phase_scoped

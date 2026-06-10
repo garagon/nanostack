@@ -388,17 +388,60 @@ EOF
         # operator for an in-place flag rather than requiring it right
         # after the leading options. `-i`/`--in-place` only ever means
         # in-place for these tools, so position does not matter.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed([[:space:]]+[^[:space:];&|]+)*[[:space:]]+(-[a-zA-Z0-9]*i[^[:space:]]*|--in-place(=[^[:space:]]*)?)([[:space:]]|$)|(^|[[:space:];&|(])perl([[:space:]]+[^[:space:];&|]+)*[[:space:]]+-[a-zA-Z0-9]*i[^[:space:]]*([[:space:]]|$)'; then
+        # sed/perl/ruby -i edit in place; ruby is also an interpreter
+        # below but its -i form mutates and must block while -pe/-ne
+        # stream idioms stay usable.
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])(sed|perl|ruby)([[:space:]]+[^[:space:];&|]+)*[[:space:]]+(-[a-zA-Z0-9]*i[^[:space:]]*|--in-place(=[^[:space:]]*)?)([[:space:]]|$)'; then
           RO_REASON="in-place edit or write utility"
         fi
 
         # (b2) Package-manager subcommands that write dependency trees or
-        #      lockfiles. The read subcommands a review/qa phase needs
-        #      (test, run, ls, list, view, audit, build, check, vet) stay
-        #      allowed; only the mutating ones block. `npm install` is
-        #      already caught by the install token above; this adds the
-        #      forms that do not name install (npm ci, yarn add, go get).
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(npm|pnpm|yarn)[[:space:]]+(ci|i|add|remove|rm|uninstall|un|update|up|upgrade|dedupe|prune|rebuild|link|unlink)([[:space:]]|$)|(^|[[:space:];&|(])go[[:space:]]+(get|install)([[:space:]]|$)|(^|[[:space:];&|(])go[[:space:]]+mod[[:space:]]+(tidy|edit|vendor|download|init)([[:space:]]|$)|(^|[[:space:];&|(])(pip|pip3)[[:space:]]+(install|uninstall|download)([[:space:]]|$)|(^|[[:space:];&|(])cargo[[:space:]]+(add|remove|install|update)([[:space:]]|$)|(^|[[:space:];&|(])(gem[[:space:]]+(install|uninstall|update)|bundle[[:space:]]+(install|update|add))([[:space:]]|$)'; then
+        #      lockfiles. An awk parser skips leading options and
+        #      workspace selectors (`pnpm --filter app add`, `yarn
+        #      workspace app add`) before classifying the subcommand, and
+        #      stops at script-runners (`npm run X`) so a script named
+        #      like a subcommand is not misread. Read subcommands a qa
+        #      phase needs (test, build, run, ls, vet, check) stay
+        #      allowed; only the mutating ones block.
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_SUB" | awk '
+            function basename(s) { sub(/.*\//, "", s); return s }
+            function pm_scan(name, start,    k, t) {
+              for (k = start; k <= NF; k++) {
+                t = $k
+                if (t ~ /^(&&|\|\||;|\||&|\(|\))$/) return ""
+                if (name ~ /^(npm|pnpm|yarn)$/) {
+                  if (t ~ /^(run|run-script|exec|test|start|ls|list|view|info|show|audit|outdated|why|search|ping|whoami|version|help|config|cache|dlx)$/) return ""
+                  if (t ~ /^(ci|i|add|remove|rm|uninstall|un|update|up|upgrade|dedupe|prune|rebuild|link|unlink|install|import)$/) return "mutate"
+                } else if (name == "go") {
+                  if (t == "get" || t == "install") return "mutate"
+                  if (t == "mod") { if ($(k + 1) ~ /^(tidy|edit|vendor|download|init)$/) return "mutate"; return "" }
+                  if (t ~ /^(test|build|run|vet|list|version|env|fmt|doc|tool|generate)$/) return ""
+                } else if (name ~ /^pip3?$/) {
+                  if (t ~ /^(install|uninstall|download)$/) return "mutate"
+                  if (t ~ /^(list|show|freeze|check|config|search|help|inspect)$/) return ""
+                } else if (name == "cargo") {
+                  if (t ~ /^(add|remove|install|update|uninstall)$/) return "mutate"
+                  if (t ~ /^(test|build|check|run|clippy|fmt|doc|tree|metadata|bench)$/) return ""
+                } else if (name == "gem") {
+                  if (t ~ /^(install|uninstall|update)$/) return "mutate"
+                  if (t ~ /^(list|search|info|which|env|help|contents)$/) return ""
+                } else if (name == "bundle") {
+                  if (t ~ /^(install|update|add)$/) return "mutate"
+                  if (t ~ /^(exec|show|list|info|check|help|config)$/) return ""
+                }
+              }
+              return ""
+            }
+            {
+              for (i = 1; i <= NF; i++) {
+                b = basename($i)
+                if (b ~ /^(npm|pnpm|yarn|go|pip|pip3|cargo|gem|bundle)$/ && (i == 1 || $(i - 1) ~ /[|;&(]$/ || $(i - 1) ~ /^(\(|;|\||&|&&|\|\|)$/)) {
+                  if (pm_scan(b, i + 1) == "mutate") { found = 1; exit }
+                }
+              }
+            }
+            END { exit(found ? 0 : 1) }
+          '; then
           RO_REASON="package-manager dependency write"
         fi
 
@@ -557,6 +600,7 @@ EOF
                       if (t !~ /^--/ && t ~ ("^-[a-zA-Z]*" mutshort)) return "mutate"
                       if (t == "-l" || t == "--list") { listmode = 1; continue }
                       if (istag && t ~ /^-n[0-9]*$/) { listmode = 1; continue }
+                      if (istag && (t == "-v" || t == "--verify")) { listmode = 1; continue }
                       if (t ~ /^--(contains|no-contains|merged|no-merged|points-at)/) { listmode = 1; continue }
                       # Output/format flags take a value; consume it so the
                       # value is not read as a new ref name. The = form
