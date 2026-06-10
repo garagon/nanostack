@@ -463,6 +463,8 @@ EOF
                   if (j < i && $j !~ /^-/ && tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) j++
                   continue
                 }
+                if (tb == "npx" || tb == "bunx") { j++; continue }
+                if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j == "--") j++; continue }
                 if (t ~ /^-/) { j++; continue }
                 return 0
               }
@@ -528,6 +530,8 @@ EOF
                   if (j < i && $j !~ /^-/ && tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) j++
                   continue
                 }
+                if (tb == "npx" || tb == "bunx") { j++; continue }
+                if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j == "--") j++; continue }
                 if (t ~ /^-/) { j++; continue }
                 return 0
               }
@@ -687,6 +691,8 @@ EOF
                   if (j < i && $j !~ /^-/ && tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) j++
                   continue
                 }
+                if (tb == "npx" || tb == "bunx") { j++; continue }
+                if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j == "--") j++; continue }
                 if (t ~ /^-/) { j++; continue }
                 return 0
               }
@@ -826,6 +832,8 @@ EOF
                       if (j < i && $j !~ /^-/ && tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) j++
                       continue
                     }
+                    if (tb == "npx" || tb == "bunx") { j++; continue }
+                    if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j == "--") j++; continue }
                     if (t ~ /^-/) { j++; continue }
                     return 0
                   }

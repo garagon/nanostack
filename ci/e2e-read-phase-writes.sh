@@ -281,6 +281,9 @@ cell_package_managers() {
   nh_assert_exit "npm config set blocked"          1 bash_hook 'npm config set registry x'
   nh_assert_exit "npm cache clean blocked"         1 bash_hook 'npm cache clean --force'
   nh_assert_exit "npm config get stays a read"     0 bash_hook 'npm config get registry'
+  nh_assert_exit "npm exec inline code blocked"    1 bash_hook 'npm exec sh -c "echo x > f"'
+  nh_assert_exit "npx inline code blocked"         1 bash_hook 'npx sh -c "echo x > f"'
+  nh_assert_exit "npx running a tool stays read"   0 bash_hook 'npx eslint .'
 }
 
 nh_cell phase-scoped   cell_phase_scoped
