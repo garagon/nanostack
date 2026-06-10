@@ -671,7 +671,23 @@ EOF
                 }
                 cmdpos = 0; i = k
               }
-            }' 2>/dev/null | sed "s/^[[:space:]]*//; s/^[\"${_SQ}]//; s/[\"${_SQ}]\$//" | tr -d "${_BS}" || true)
+            }' 2>/dev/null | awk '
+            # eval removes one level of quoting before re-parsing, so a
+            # quoted operator (eval echo x \47>\47 out) becomes an active
+            # redirection. Strip one quoting level here so the recursion
+            # sees the operators eval would expose; quotes nested inside
+            # another quote (grep "\47x > y\47") survive and stay inert.
+            {
+              s = $0; n = length(s); out = ""; i = 1
+              while (i <= n) {
+                c = substr(s, i, 1)
+                if (c == "\47") { i++; while (i <= n && substr(s, i, 1) != "\47") { out = out substr(s, i, 1); i++ } i++; continue }
+                if (c == "\42") { i++; while (i <= n && substr(s, i, 1) != "\42") { ch = substr(s, i, 1); if (ch == "\134" && i < n) { i++; out = out substr(s, i, 1); i++; continue } out = out ch; i++ } i++; continue }
+                if (c == "\134" && i < n) { i++; out = out substr(s, i, 1); i++; continue }
+                out = out c; i++
+              }
+              print out
+            }' 2>/dev/null || true)
           SUBST_BODIES=$(printf '%s\n%s' "$SUBST_BODIES" "$EVAL_BODIES")
           if [ -n "$SUBST_BODIES" ]; then
             while IFS= read -r _body; do
