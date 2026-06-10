@@ -109,6 +109,7 @@ EOF'
   nh_assert_exit "node --eval blocked (long form)"           1 bash_hook 'node --eval "fs.writeFileSync()"'
   nh_assert_exit "deno eval subcommand blocked"              1 bash_hook 'deno eval "Deno.writeTextFile()"'
   nh_assert_exit "perl numeric flag in-place blocked"        1 bash_hook 'perl -0777 -pi.bak rewrite.pl file'
+  nh_assert_exit "perl clustered -0pi.bak blocked"           1 bash_hook 'perl -0pi.bak rewrite.pl file'
   nh_assert_exit "pipe into bare interpreter blocked"        1 bash_hook 'echo "code" | node'
   nh_assert_exit "heredoc piped into python blocked"         1 bash_hook 'cat <<PY | python3
 open("x","w")
@@ -150,6 +151,9 @@ cell_git_mutations() {
   nh_assert_exit "branch --merged is a filtered read"        0 bash_hook 'git branch --merged main'
   nh_assert_exit "branch -v alone is a read"                 0 bash_hook 'git branch -v'
   nh_assert_exit "branch -a (all) is a read"                 0 bash_hook 'git branch -a'
+  nh_assert_exit "branch --format value is a read"           0 bash_hook "git branch --format '%(refname)'"
+  nh_assert_exit "branch -v && echo is a read"               0 bash_hook 'git branch -v && echo done'
+  nh_assert_exit "branch read then chained create blocks"    1 bash_hook 'git branch -v && git branch tmp'
   nh_assert_exit "chained read-then-mutate blocks"           1 bash_hook 'git diff && git checkout main'
   nh_assert_exit "chained with ; blocks the mutation"        1 bash_hook 'git status; git restore app.js'
   nh_assert_exit "tag -n annotation listing is a read"       0 bash_hook 'git tag -n v1'
@@ -180,6 +184,8 @@ cell_package_managers() {
   nh_assert_exit "go test allowed"              0 bash_hook 'go test ./...'
   nh_assert_exit "cargo build allowed"          0 bash_hook 'cargo build'
   nh_assert_exit "npm ls allowed"               0 bash_hook 'npm ls'
+  nh_assert_exit "go mod tidy blocked"          1 bash_hook 'go mod tidy'
+  nh_assert_exit "go mod graph is a read"       0 bash_hook 'go mod graph'
 }
 
 nh_cell phase-scoped   cell_phase_scoped

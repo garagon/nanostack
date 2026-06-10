@@ -372,7 +372,7 @@ EOF
         fi
 
         # (b) In-place editors and write utilities.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed[[:space:]]+(--?[a-zA-Z0-9-]+(=[^[:space:]]*)?[[:space:]]+)*(-[a-zA-Z]*i[^[:space:]]*|--in-place(=[^[:space:]]*)?)([[:space:]]|$)|(^|[[:space:];&|(])perl[[:space:]]+(--?[a-zA-Z0-9-]+(=[^[:space:]]*)?[[:space:]]+)*-[a-zA-Z]*i[^[:space:]]*([[:space:]]|$)'; then
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed[[:space:]]+(--?[a-zA-Z0-9-]+(=[^[:space:]]*)?[[:space:]]+)*(-[a-zA-Z]*i[^[:space:]]*|--in-place(=[^[:space:]]*)?)([[:space:]]|$)|(^|[[:space:];&|(])perl[[:space:]]+(--?[a-zA-Z0-9-]+(=[^[:space:]]*)?[[:space:]]+)*-[a-zA-Z0-9]*i[^[:space:]]*([[:space:]]|$)'; then
           RO_REASON="in-place edit or write utility"
         fi
 
@@ -382,7 +382,7 @@ EOF
         #      allowed; only the mutating ones block. `npm install` is
         #      already caught by the install token above; this adds the
         #      forms that do not name install (npm ci, yarn add, go get).
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(npm|pnpm|yarn)[[:space:]]+(ci|i|add|remove|rm|uninstall|un|update|up|upgrade|dedupe|prune|rebuild|link|unlink)([[:space:]]|$)|(^|[[:space:];&|(])go[[:space:]]+(get|install|mod)([[:space:]]|$)|(^|[[:space:];&|(])(pip|pip3)[[:space:]]+(install|uninstall|download)([[:space:]]|$)|(^|[[:space:];&|(])cargo[[:space:]]+(add|remove|install|update)([[:space:]]|$)|(^|[[:space:];&|(])(gem[[:space:]]+(install|uninstall|update)|bundle[[:space:]]+(install|update|add))([[:space:]]|$)'; then
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(npm|pnpm|yarn)[[:space:]]+(ci|i|add|remove|rm|uninstall|un|update|up|upgrade|dedupe|prune|rebuild|link|unlink)([[:space:]]|$)|(^|[[:space:];&|(])go[[:space:]]+(get|install)([[:space:]]|$)|(^|[[:space:];&|(])go[[:space:]]+mod[[:space:]]+(tidy|edit|vendor|download|init)([[:space:]]|$)|(^|[[:space:];&|(])(pip|pip3)[[:space:]]+(install|uninstall|download)([[:space:]]|$)|(^|[[:space:];&|(])cargo[[:space:]]+(add|remove|install|update)([[:space:]]|$)|(^|[[:space:];&|(])(gem[[:space:]]+(install|uninstall|update)|bundle[[:space:]]+(install|update|add))([[:space:]]|$)'; then
           RO_REASON="package-manager dependency write"
         fi
 
@@ -531,12 +531,19 @@ EOF
                   listmode = 0
                   for (k = start; k <= NF; k++) {
                     t = $k
+                    # A shell operator ends this invocation; a later git
+                    # in the chain is classified on its own pass.
+                    if (t ~ /^(&&|\|\||;|\||&|\(|\))$/ || t ~ /[|;&]$/) break
                     if (t ~ /^-/) {
                       if (t ~ /^--(delete|move|copy|edit-description|set-upstream-to|unset-upstream|force|create-reflog|annotate|sign)/) return "mutate"
                       if (t !~ /^--/ && t ~ ("^-[a-zA-Z]*" mutshort)) return "mutate"
                       if (t == "-l" || t == "--list") { listmode = 1; continue }
                       if (istag && t ~ /^-n[0-9]*$/) { listmode = 1; continue }
                       if (t ~ /^--(contains|no-contains|merged|no-merged|points-at)/) { listmode = 1; continue }
+                      # Output/format flags take a value; consume it so the
+                      # value is not read as a new ref name. The = form
+                      # carries its own value and consumes nothing.
+                      if (t == "--format" || t == "--sort" || t == "--color" || t == "--column" || t == "--abbrev" || t == "--points-at") { k++; continue }
                       continue
                     }
                     if (!listmode) return "mutate"
