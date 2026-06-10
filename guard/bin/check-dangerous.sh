@@ -352,11 +352,16 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
           | sed 's/"\([-a-zA-Z0-9._/=]*\)"/\1/g' \
           | sed "s/'[^']*'/QUOTEDARG/g; s/\"[^\"]*\"/QUOTEDARG/g")
         # CMD_SUB additionally turns command-substitution and backtick
-        # boundaries into a bare `(` token so an interpreter or git call
-        # nested in `$(...)` / backticks sits at a command position for
-        # the awk classifiers. (The redirection scan keeps using CMD_RON
-        # so arithmetic `$(( a > b ))` is still treated as a comparison.)
-        CMD_SUB=$(printf '%s' "$CMD_RON" | sed 's/[$]( / ( /g; s/[$](/ ( /g; s/`/ ( /g')
+        # boundaries into a bare `(` token, and pads shell operators with
+        # spaces, so an interpreter or git call nested in `$(...)` or
+        # written without spaces around operators (`git diff&&git
+        # checkout`) sits at its own command position for the
+        # whitespace-splitting awk classifiers. (The redirection scan
+        # keeps using CMD_RON so arithmetic `$(( a > b ))` stays a
+        # comparison and attached `>>file` is still seen as redirection.)
+        CMD_SUB=$(printf '%s' "$CMD_RON" \
+          | sed 's/[$]( / ( /g; s/[$](/ ( /g; s/`/ ( /g' \
+          | sed 's/&/ \& /g; s/|/ | /g; s/;/ ; /g; s/(/ ( /g; s/)/ ) /g')
 
         # (a) Output redirection to anything except /dev/*. Bare fd
         #     dups (>&2, 2>&1) have no path target and never match the
@@ -378,7 +383,12 @@ EOF
         fi
 
         # (b) In-place editors and write utilities.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed[[:space:]]+(--?[a-zA-Z0-9-]+(=[^[:space:]]*)?[[:space:]]+)*(-[a-zA-Z]*i[^[:space:]]*|--in-place(=[^[:space:]]*)?)([[:space:]]|$)|(^|[[:space:];&|(])perl[[:space:]]+(--?[a-zA-Z0-9-]+(=[^[:space:]]*)?[[:space:]]+)*-[a-zA-Z0-9]*i[^[:space:]]*([[:space:]]|$)'; then
+        # sed/perl -i can sit anywhere among the args (after the script
+        # in `sed -e '...' -i file`), so scan every arg up to the next
+        # operator for an in-place flag rather than requiring it right
+        # after the leading options. `-i`/`--in-place` only ever means
+        # in-place for these tools, so position does not matter.
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed([[:space:]]+[^[:space:];&|]+)*[[:space:]]+(-[a-zA-Z0-9]*i[^[:space:]]*|--in-place(=[^[:space:]]*)?)([[:space:]]|$)|(^|[[:space:];&|(])perl([[:space:]]+[^[:space:];&|]+)*[[:space:]]+-[a-zA-Z0-9]*i[^[:space:]]*([[:space:]]|$)'; then
           RO_REASON="in-place edit or write utility"
         fi
 

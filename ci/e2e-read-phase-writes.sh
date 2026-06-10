@@ -73,6 +73,9 @@ cell_inplace() {
   nh_assert_exit "sed -E -i blocked (option before -i)" 1 bash_hook "sed -E -i 's/a/b/' app.js"
   nh_assert_exit "sed -i.bak blocked (suffix form)"     1 bash_hook 'sed -i.bak s/a/b/ app.js'
   nh_assert_exit "sed --in-place=.bak blocked"          1 bash_hook 'sed --in-place=.bak s/a/b/ app.js'
+  nh_assert_exit "sed -i after the script blocked"      1 bash_hook "sed -e 's/a/b/' -i file"
+  nh_assert_exit "sed -e without -i stays allowed"     0 bash_hook "sed -e 's/a/b/' app.js"
+
   nh_assert_exit "quoted -i flag still blocks (sed \"-i\")" 1 bash_hook 'sed "-i" s/a/b/ app.js'
 
   nh_assert_exit "tee blocked"                  1 bash_hook 'tee log.txt'
@@ -160,6 +163,8 @@ cell_git_mutations() {
   nh_assert_exit "branch -v && echo is a read"               0 bash_hook 'git branch -v && echo done'
   nh_assert_exit "branch read then chained create blocks"    1 bash_hook 'git branch -v && git branch tmp'
   nh_assert_exit "git mutation in substitution blocks"       1 bash_hook 'echo $(git checkout main)'
+  nh_assert_exit "no-space && chained mutation blocks"       1 bash_hook 'git diff&&git checkout main'
+  nh_assert_exit "no-space ; chained mutation blocks"        1 bash_hook 'git status;git restore app.js'
   nh_assert_exit "chained read-then-mutate blocks"           1 bash_hook 'git diff && git checkout main'
   nh_assert_exit "chained with ; blocks the mutation"        1 bash_hook 'git status; git restore app.js'
   nh_assert_exit "tag -n annotation listing is a read"       0 bash_hook 'git tag -n v1'
