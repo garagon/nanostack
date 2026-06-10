@@ -152,6 +152,10 @@ PY'
   nh_assert_exit "piped env -i interpreter blocked"            1 bash_hook 'echo code | env -i python3'
   nh_assert_exit "process-sub into interpreter blocked"        1 bash_hook "python3 <(printf 'open(1)')"
   nh_assert_exit "piped bash -s stdin script blocked"         1 bash_hook "echo 'touch x' | bash -s arg"
+  nh_assert_exit "env -S split-string inline code blocked"    1 bash_hook "env -S \"python3 -c 'open(1)'\""
+  nh_assert_exit "quoted env -S split-string blocked"         1 bash_hook "env \"-S\" \"python3 -c 'open(1)'\""
+  nh_assert_exit "env --split-string inline code blocked"     1 bash_hook "env --split-string \"python3 -c 'open(1)'\""
+  nh_assert_exit "env -S wrapping a read stays allowed"       0 bash_hook "env -S 'npm test'"
 
   nh_assert_exit "stdin-from-procsub interpreter blocked"      1 bash_hook "python3 < <(printf 'open(1)')"
   nh_assert_exit "plain < file redirect stays allowed"        0 bash_hook 'python3 < script.py'
@@ -339,6 +343,9 @@ cell_package_managers() {
   nh_assert_exit "npm pkg set blocked"          1 bash_hook 'npm pkg set scripts.test=echo'
   nh_assert_exit "cargo init blocked"           1 bash_hook 'cargo init'
   nh_assert_exit "cargo fmt --check stays a read"   0 bash_hook 'cargo fmt --check'
+  nh_assert_exit "cargo fix rewrites source, blocked" 1 bash_hook 'cargo fix'
+  nh_assert_exit "cargo clippy --fix blocked"       1 bash_hook 'cargo clippy --fix'
+  nh_assert_exit "cargo clippy lint stays a read"   0 bash_hook 'cargo clippy'
 }
 
 nh_cell phase-scoped   cell_phase_scoped

@@ -374,6 +374,7 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
         CMD_SUB=$(printf '%s' "$CMD" \
           | sed "s/${_SUB_BS}${_SUB_BS}[$](/XX/g; s/${_SUB_BS}${_SUB_BS}[$]/X/g; s/${_SUB_BS}${_SUB_BS}${_SUB_BT}/X/g" \
           | sed "s/[$]\x27/\x27/g; s/[$]\"/\"/g" \
+          | sed "s/\"--split-string\"/-S/g; s/'--split-string'/-S/g; s/--split-string[ =]/-S /g; s/--split-string/-S/g; s/\"-S\"/-S/g; s/'-S'/-S/g" \
           | sed "s/-S[[:space:]]*\"\([^\"]*\)\"/-S \1/g; s/-S[[:space:]]*'\([^']*\)'/-S \1/g" \
           | sed "s/${_SUB_BT}/ ( /g" \
           | sed "s/'\([-a-zA-Z0-9._/=]*\)'/\1/g" \
@@ -564,9 +565,10 @@ EOF
                   if (t ~ /^(install|uninstall|download)$/) return "mutate"
                   if (t ~ /^(list|show|freeze|check|config|search|help|inspect)$/) return ""
                 } else if (name == "cargo") {
-                  if (t ~ /^(add|remove|install|update|uninstall|init|new|publish|generate-lockfile|vendor|yank)$/) return "mutate"
+                  if (t ~ /^(add|remove|install|update|uninstall|init|new|publish|generate-lockfile|vendor|yank|fix)$/) return "mutate"
                   if (t == "fmt") { for (a = k + 1; a <= NF; a++) { if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break; if ($a == "--check" || $a == "--dry-run") return "" } return "mutate" }
-                  if (t ~ /^(test|build|check|run|clippy|doc|tree|metadata|bench)$/) return ""
+                  if (t == "clippy") { for (a = k + 1; a <= NF; a++) { if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break; if ($a == "--fix") return "mutate" } return "" }
+                  if (t ~ /^(test|build|check|run|doc|tree|metadata|bench)$/) return ""
                 } else if (name == "gem") {
                   if (t ~ /^(install|uninstall|update)$/) return "mutate"
                   if (t ~ /^(list|search|info|which|env|help|contents)$/) return ""
