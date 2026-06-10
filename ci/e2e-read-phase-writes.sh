@@ -346,6 +346,8 @@ cell_package_managers() {
   nh_assert_exit "go env query stays a read"     0 bash_hook 'go env GOPATH'
   nh_assert_exit "pip config set blocked"        1 bash_hook 'pip config set global.index-url x'
   nh_assert_exit "pip config get stays a read"   0 bash_hook 'pip config get global.index-url'
+  nh_assert_exit "pip wheel writes artifacts, blocked" 1 bash_hook 'pip wheel foo'
+  nh_assert_exit "python -m pip wheel blocked"   1 bash_hook 'python -m pip wheel foo'
   nh_assert_exit "npm version bump blocked"     1 bash_hook 'npm version patch'
   nh_assert_exit "npm version (no arg) is read" 0 bash_hook 'npm version'
   nh_assert_exit "go generate blocked"          1 bash_hook 'go generate ./...'
