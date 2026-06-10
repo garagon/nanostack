@@ -138,6 +138,10 @@ PY'
   nh_assert_exit "combined shell flag blocks (sh -ec)"        1 bash_hook 'sh -ec "echo x > f"'
   nh_assert_exit "combined python flag blocks (python -bc)"   1 bash_hook 'python -bc "open()"'
   nh_assert_exit "perl stream loop stays allowed (-ne)"       0 bash_hook "perl -ne 'print' file"
+  nh_assert_exit "clustered perl -we inline code blocked"     1 bash_hook "perl -we 'open F,\">x\"'"
+  nh_assert_exit "clustered ruby -we inline code blocked"     1 bash_hook "ruby -we 'File.write(1,2)'"
+  nh_assert_exit "ruby -pe stream loop stays allowed"         0 bash_hook "ruby -pe 'puts' file"
+  nh_assert_exit "php -B begin inline code blocked"           1 bash_hook "php -B 'file_put_contents(1,2)'"
   nh_assert_exit "node --eval blocked (long form)"           1 bash_hook 'node --eval "fs.writeFileSync()"'
   nh_assert_exit "deno eval subcommand blocked"              1 bash_hook 'deno eval "Deno.writeTextFile()"'
   nh_assert_exit "perl numeric flag in-place blocked"        1 bash_hook 'perl -0777 -pi.bak rewrite.pl file'
@@ -220,6 +224,7 @@ cell_git_mutations() {
   nh_assert_exit "git remote -v set-url blocked" 1 bash_hook 'git remote -v set-url origin new'
   nh_assert_exit "git fetch writes refs, blocked" 1 bash_hook 'git fetch'
   nh_assert_exit "git fetch origin blocked"     1 bash_hook 'git fetch origin'
+  nh_assert_exit "git fetch --dry-run is a read" 0 bash_hook 'git fetch --dry-run'
   nh_assert_exit "git bisect start blocked"     1 bash_hook 'git bisect start'
   nh_assert_exit "git bisect log is a read"      0 bash_hook 'git bisect log'
   nh_assert_exit "git reflog expire blocked"    1 bash_hook 'git reflog expire --expire=now --all'

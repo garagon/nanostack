@@ -798,17 +798,21 @@ EOF
                   j++; continue
                 }
                 if (name == "perl") {
-                  if (t !~ /^--/ && t ~ /^-[eE]/) return 1
+                  # Clustered short flags: -e/-E is inline code, but -pe/-ne
+                  # keep the documented sed-like stream idiom allowed.
+                  if (t !~ /^--/ && t ~ /^-[A-Za-z]*[eE]/ && t !~ /[pn]/) return 1
                   if (t == "-I" || t == "-C") { j += 2; continue }
                   j++; continue
                 }
                 if (name == "ruby") {
-                  if (t !~ /^--/ && t ~ /^-e/) return 1
+                  # Ruby -E is an encoding flag, so only a clustered lower
+                  # -e (without the -ne/-pe stream loop) is inline code.
+                  if (t !~ /^--/ && t ~ /^-[A-Za-z]*e/ && t !~ /[pn]/) return 1
                   if (t == "-r" || t == "-I" || t == "-C" || t == "-E") { j += 2; continue }
                   j++; continue
                 }
                 if (name == "php") {
-                  if (t !~ /^--/ && t ~ /^-[rRF]/) return 1
+                  if (t !~ /^--/ && t ~ /^-[rRFBE]/) return 1
                   j++; continue
                 }
                 j++
@@ -1028,7 +1032,14 @@ EOF
                     if (classify_ref(j + 1, (gc == "tag")) == "mutate") return "mutate:" gc
                     return ""
                   }
-                  if (gc ~ /^(mv|rm|init|clone|fetch|gc|repack|prune|update-ref|update-index|checkout-index|notes|replace|filter-branch|filter-repo|lfs|fast-import|symbolic-ref)$/) return "mutate:" gc
+                  if (gc == "fetch") {
+                    for (a = j + 1; a <= NF; a++) {
+                      if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
+                      if ($a == "--dry-run") return ""
+                    }
+                    return "mutate:fetch"
+                  }
+                  if (gc ~ /^(mv|rm|init|clone|gc|repack|prune|update-ref|update-index|checkout-index|notes|replace|filter-branch|filter-repo|lfs|fast-import|symbolic-ref)$/) return "mutate:" gc
                   if (gc == "config") {
                     cr = 0; cpos = 0
                     for (a = j + 1; a <= NF; a++) {
