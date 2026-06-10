@@ -576,7 +576,8 @@ EOF
                   if (t ~ /^(list|search|info|which|env|help|contents)$/) return ""
                 } else if (name == "bundle") {
                   if (t ~ /^(install|update|add)$/) return "mutate"
-                  if (t ~ /^(exec|show|list|info|check|help|config)$/) return ""
+                  if (t == "config") { if ($(k + 1) ~ /^(set|unset)$/) return "mutate"; return "" }
+                  if (t ~ /^(exec|show|list|info|check|help)$/) return ""
                 }
               }
               return ""
@@ -641,9 +642,14 @@ EOF
                     }
                     i = j; continue
                   }
-                  depth = 1; j = i + 2; body = ""
+                  # Quote-aware paren balance: a ) inside double quotes is
+                  # data, not a substitution close, so printf ")" > out
+                  # does not truncate the body before the redirection.
+                  depth = 1; j = i + 2; body = ""; q = ""
                   while (j <= n && depth > 0) {
                     cj = substr(s, j, 1)
+                    if (q != "") { if (cj == q) q = ""; body = body cj; j++; continue }
+                    if (cj == "\"") { q = cj; body = body cj; j++; continue }
                     if (cj == "(") depth++
                     else if (cj == ")") { depth--; if (depth == 0) break }
                     body = body cj; j++

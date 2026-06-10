@@ -203,6 +203,8 @@ PY'
   nh_assert_exit "redirection inside substitution blocks"         1 bash_hook 'echo "$(printf x > out.txt)"'
   nh_assert_exit "git as a plain argument is not classified"      0 bash_hook 'printf git checkout'
   nh_assert_exit "nested substitution redirection blocks"         1 bash_hook 'echo "$(printf x > $(pwd)/out.txt)"'
+  nh_assert_exit "quoted paren in sub does not truncate write"    1 bash_hook 'echo "$(printf ")" > out.txt)"'
+  nh_assert_exit "quoted paren read substitution allowed"         0 bash_hook 'echo "$(printf ")")"'
   nh_assert_exit "nested read substitution stays allowed"         0 bash_hook 'echo $(git rev-parse $(git branch --show-current))'
   nh_assert_exit "single-quoted substitution is inert"            0 bash_hook "grep -R '\$(git checkout main)' docs"
   nh_assert_exit "escaped substitution is literal"                0 bash_hook 'grep "\$(git checkout main)" docs'
@@ -385,6 +387,8 @@ cell_package_managers() {
   nh_assert_exit "cargo clippy --fix blocked"       1 bash_hook 'cargo clippy --fix'
   nh_assert_exit "cargo clippy lint stays a read"   0 bash_hook 'cargo clippy'
   nh_assert_exit "cargo clean deletes target, blocked" 1 bash_hook 'cargo clean'
+  nh_assert_exit "bundle config set writes config, blocked" 1 bash_hook 'bundle config set path vendor/bundle'
+  nh_assert_exit "bundle config get stays a read"   0 bash_hook 'bundle config get path'
 }
 
 nh_cell phase-scoped   cell_phase_scoped
