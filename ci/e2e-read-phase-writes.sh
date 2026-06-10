@@ -91,6 +91,15 @@ cell_interpreters() {
   nh_assert_exit "script execution allowed"     0 bash_hook 'npx playwright test'
   nh_assert_exit "subcommand config flag allowed (pytest -c)" 0 bash_hook 'python -m pytest -c pytest.ini'
   nh_assert_exit "deno test config flag allowed"              0 bash_hook 'deno test -c deno.json'
+  nh_assert_exit "perl -i.bak as first flag blocked"          1 bash_hook "perl -i.bak -pe 's/a/b/' file"
+  nh_assert_exit "perl -pe stream transform allowed"          0 bash_hook "perl -pe 's/a/b/' file"
+  nh_assert_exit "stdin-fed python blocked (python3 - <<PY)"  1 bash_hook 'python3 - <<PY
+open("x","w")
+PY'
+  nh_assert_exit "heredoc-fed sh blocked (sh <<EOF)"          1 bash_hook 'sh <<EOF
+echo hi > f
+EOF'
+  nh_assert_exit "script execution with flag allowed"         0 bash_hook 'bash -x build.sh'
 }
 
 # Cells: git worktree mutations beyond add/commit/push/reset.

@@ -370,7 +370,7 @@ EOF
         fi
 
         # (b) In-place editors and write utilities.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed[[:space:]]+(--?[a-zA-Z-]+(=[^[:space:]]*)?[[:space:]]+)*(-[a-zA-Z]*i[^[:space:]]*|--in-place(=[^[:space:]]*)?)([[:space:]]|$)|(^|[[:space:];&|(])perl[[:space:]]+[^|;&]*[[:space:]]-[a-zA-Z]*i([[:space:]]|$)'; then
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed[[:space:]]+(--?[a-zA-Z-]+(=[^[:space:]]*)?[[:space:]]+)*(-[a-zA-Z]*i[^[:space:]]*|--in-place(=[^[:space:]]*)?)([[:space:]]|$)|(^|[[:space:];&|(])perl[[:space:]]+(--?[a-zA-Z-]+(=[^[:space:]]*)?[[:space:]]+)*-[a-zA-Z]*i[^[:space:]]*([[:space:]]|$)'; then
           RO_REASON="in-place edit or write utility"
         fi
 
@@ -382,6 +382,12 @@ EOF
         # first non-flag token (pytest) ends the interpreter's flags.
         if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)[[:space:]]+(-[^ec[:space:]][^[:space:]]*[[:space:]]+)*-(e|c)([[:space:]]|$)'; then
           RO_REASON="inline interpreter code"
+        fi
+        # Stdin-fed bodies are the same risk with different plumbing:
+        # `python3 - <<PY ... PY` and `sh <<EOF` execute code no
+        # pattern check can see.
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(-([[:space:]]|$)|<<)'; then
+          RO_REASON="stdin-fed interpreter code"
         fi
 
         # (d) Git worktree mutations beyond add/commit/push/reset. The
