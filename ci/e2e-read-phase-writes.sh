@@ -186,6 +186,9 @@ PY'
   nh_assert_exit "pipe into path-qualified wrapper blocked"     1 bash_hook 'echo code | /usr/bin/env python3'
   nh_assert_exit "substitution of read command stays allowed"   0 bash_hook 'echo $(git rev-parse HEAD)'
   nh_assert_exit "stdin pseudo-file is inline code"            1 bash_hook 'echo code | python3 /dev/stdin'
+  nh_assert_exit "fd-backed heredoc is inline code"          1 bash_hook 'python3 /dev/fd/3 3<<PY
+open("x","w")
+PY'
   nh_assert_exit "heredoc to /dev/stdin is inline code"        1 bash_hook 'python3 /dev/stdin <<PY
 open()
 PY'
@@ -197,6 +200,8 @@ PY'
   nh_assert_exit "nested read substitution stays allowed"         0 bash_hook 'echo $(git rev-parse $(git branch --show-current))'
   nh_assert_exit "single-quoted substitution is inert"            0 bash_hook "grep -R '\$(git checkout main)' docs"
   nh_assert_exit "escaped substitution is literal"                0 bash_hook 'grep "\\$(git checkout main)" docs'
+  nh_assert_exit "arithmetic comparison is not a redirect"        0 bash_hook 'echo $((5 > 3))'
+  nh_assert_exit "arithmetic alongside read substitution allowed" 0 bash_hook 'echo $((1+1)) $(git rev-parse HEAD)'
 
   nh_assert_exit "node combined -pe inline code blocked"          1 bash_hook 'node -pe "require(0).writeFileSync(1,2)"'
   nh_assert_exit "node -c syntax check stays allowed"             0 bash_hook 'node -c script.js'

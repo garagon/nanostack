@@ -622,6 +622,19 @@ EOF
               for (i = 1; i <= n; i++) {
                 c = substr(s, i, 1)
                 if (c == "$" && substr(s, i + 1, 1) == "(") {
+                  # Arithmetic expansion $((...)) starts with $(( and runs
+                  # no command, so balance the parens and skip it instead
+                  # of recursing on the inert comparison body.
+                  if (substr(s, i + 2, 1) == "(") {
+                    depth = 0; j = i + 1
+                    while (j <= n) {
+                      cj = substr(s, j, 1)
+                      if (cj == "(") depth++
+                      else if (cj == ")") { depth--; if (depth == 0) break }
+                      j++
+                    }
+                    i = j; continue
+                  }
                   depth = 1; j = i + 2; body = ""
                   while (j <= n && depth > 0) {
                     cj = substr(s, j, 1)
@@ -762,7 +775,7 @@ EOF
                 t = $j
                 # A lone dash, a heredoc, or an explicit stdin pseudo-file
                 # all run caller-supplied code from stdin.
-                if (t == "-" || t ~ /^<</ || t == "/dev/stdin" || t == "/dev/fd/0") return 1
+                if (t == "-" || t ~ /^<</ || t == "/dev/stdin" || t ~ /^\/dev\/fd\/[0-9]+$/) return 1
                 # Input process substitution feeds generated code: a `<`
                 # whose source is `<(...)` (after operator spacing: `<`
                 # then `(`, or `< <` then `(`) executes the inner output.
