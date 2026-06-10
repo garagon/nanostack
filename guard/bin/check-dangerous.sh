@@ -352,7 +352,7 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
         #     process substitution >(...) is an output pipe.
         if [ -z "$RO_REASON" ]; then
           CMD_ROQ=$(printf '%s' "$CMD" | sed "s/'[^']*'/QUOTEDARG/g; s/\"[^\"]*\"/QUOTEDARG/g")
-          RO_TARGETS=$(printf '%s' "$CMD_ROQ" | grep -oE '(&>>?|[0-9]*>>?)[[:space:]]*[^[:space:]&;|<>()]+' | sed -E 's/^(&>>?|[0-9]*>>?)[[:space:]]*//' || true)
+          RO_TARGETS=$(printf '%s' "$CMD_ROQ" | grep -oE '(&>>?|[0-9]*>>?\|?)[[:space:]]*[^[:space:]&;|<>()]+' | sed -E 's/^(&>>?|[0-9]*>>?\|?)[[:space:]]*//' || true)
           if [ -n "$RO_TARGETS" ]; then
             while IFS= read -r RO_TGT; do
               [ -z "$RO_TGT" ] && continue
@@ -371,7 +371,11 @@ EOF
 
         # (c) Inline interpreter code: a one-liner can write through any
         #     API, and its quoted body is invisible to pattern checks.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)[[:space:]]+([^|;&]*[[:space:]])?-(e|c)([[:space:]]|$)'; then
+        # The flag must sit among the interpreter's own leading flags:
+        # in `python -m pytest -c pytest.ini` the -c belongs to pytest
+        # (a config flag on a read), not to the interpreter, and the
+        # first non-flag token (pytest) ends the interpreter's flags.
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)[[:space:]]+(-[^ec[:space:]][^[:space:]]*[[:space:]]+)*-(e|c)([[:space:]]|$)'; then
           RO_REASON="inline interpreter code"
         fi
 

@@ -60,6 +60,7 @@ cell_redirection() {
   nh_assert_exit "quoted arrow is not redirection (awk \$3 > 5)"     0 bash_hook "awk '\$3 > 5' data.txt"
   nh_assert_exit "quoted redirection target blocked (> \"out.txt\")"  1 bash_hook 'printf x > "out.txt"'
   nh_assert_exit "single-quoted target blocked (>> 'notes.md')"      1 bash_hook "echo hi >> 'notes.md'"
+  nh_assert_exit "noclobber override blocked (>| out.txt)"           1 bash_hook 'printf x >| out.txt'
 }
 
 # Cells: in-place editors and write utilities.
@@ -81,6 +82,8 @@ cell_interpreters() {
   nh_assert_exit "sh -c blocked"                1 bash_hook 'sh -c "echo x > f"'
   nh_assert_exit "python --version allowed"     0 bash_hook 'python --version'
   nh_assert_exit "script execution allowed"     0 bash_hook 'npx playwright test'
+  nh_assert_exit "subcommand config flag allowed (pytest -c)" 0 bash_hook 'python -m pytest -c pytest.ini'
+  nh_assert_exit "deno test config flag allowed"              0 bash_hook 'deno test -c deno.json'
 }
 
 # Cells: git worktree mutations beyond add/commit/push/reset.
