@@ -380,7 +380,7 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
           | sed 's/"\([^"]*[$][^"]*\)"/\1/g' \
           | sed 's/"[^"]*"/QUOTEDARG/g' \
           | sed 's/[$]( / ( /g; s/[$](/ ( /g' \
-          | sed 's/&/ \& /g; s/|/ | /g; s/;/ ; /g; s/(/ ( /g; s/)/ ) /g')
+          | sed 's/&/ \& /g; s/|/ | /g; s/;/ ; /g; s/(/ ( /g; s/)/ ) /g; s/<</ << /g')
 
         # (a) Output redirection to anything except /dev/*. Bare fd
         #     dups (>&2, 2>&1) have no path target and never match the
@@ -438,16 +438,14 @@ EOF
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
                 if (t ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { j++; continue }
-                if (tb ~ /^(env|command|exec|nohup|setsid|watch|xargs|time)$/) { j++; continue }
-                if (tb ~ /^(sudo|doas)$/) {
+                if (tb ~ /^(command|exec|nohup|setsid|time)$/) { j++; continue }
+                if (tb ~ /^(env|sudo|doas|timeout|nice|stdbuf|ionice|chrt|watch|xargs)$/) {
                   j++
-                  while (j < i && $j ~ /^-/) { if ($j ~ /^(-u|--user|-g|--group|-C|-p|-U|-r|-t|-h)$/) j++; j++ }
-                  continue
-                }
-                if (tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) {
-                  j++
-                  while (j < i && $j ~ /^-/) { if ($j ~ /^(-s|--signal|-k|--kill-after|--adjustment)$/) j++; j++ }
-                  if (j < i && $j !~ /^-/) j++
+                  while (j < i && $j ~ /^-/) {
+                    if ($j ~ /^(-u|--unset|-C|--chdir|-g|--group|-p|-U|-r|-t|-h|--user|-s|--signal|-k|--kill-after|--adjustment|-n|--interval|-I|-P|-d|--delimiter|-E|--eofstr|-a|--arg-file|-L|--max-args|--max-procs|--replace)$/) j++
+                    j++
+                  }
+                  if (j < i && $j !~ /^-/ && tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) j++
                   continue
                 }
                 if (t ~ /^-/) { j++; continue }
@@ -505,16 +503,14 @@ EOF
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
                 if (t ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { j++; continue }
-                if (tb ~ /^(env|command|exec|nohup|setsid|watch|xargs|time)$/) { j++; continue }
-                if (tb ~ /^(sudo|doas)$/) {
+                if (tb ~ /^(command|exec|nohup|setsid|time)$/) { j++; continue }
+                if (tb ~ /^(env|sudo|doas|timeout|nice|stdbuf|ionice|chrt|watch|xargs)$/) {
                   j++
-                  while (j < i && $j ~ /^-/) { if ($j ~ /^(-u|--user|-g|--group|-C|-p|-U|-r|-t|-h)$/) j++; j++ }
-                  continue
-                }
-                if (tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) {
-                  j++
-                  while (j < i && $j ~ /^-/) { if ($j ~ /^(-s|--signal|-k|--kill-after|--adjustment)$/) j++; j++ }
-                  if (j < i && $j !~ /^-/) j++
+                  while (j < i && $j ~ /^-/) {
+                    if ($j ~ /^(-u|--unset|-C|--chdir|-g|--group|-p|-U|-r|-t|-h|--user|-s|--signal|-k|--kill-after|--adjustment|-n|--interval|-I|-P|-d|--delimiter|-E|--eofstr|-a|--arg-file|-L|--max-args|--max-procs|--replace)$/) j++
+                    j++
+                  }
+                  if (j < i && $j !~ /^-/ && tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) j++
                   continue
                 }
                 if (t ~ /^-/) { j++; continue }
@@ -658,16 +654,14 @@ EOF
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
                 if (t ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { j++; continue }
-                if (tb ~ /^(env|command|exec|nohup|setsid|watch|xargs|time)$/) { j++; continue }
-                if (tb ~ /^(sudo|doas)$/) {
+                if (tb ~ /^(command|exec|nohup|setsid|time)$/) { j++; continue }
+                if (tb ~ /^(env|sudo|doas|timeout|nice|stdbuf|ionice|chrt|watch|xargs)$/) {
                   j++
-                  while (j < i && $j ~ /^-/) { if ($j ~ /^(-u|--user|-g|--group|-C|-p|-U|-r|-t|-h)$/) j++; j++ }
-                  continue
-                }
-                if (tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) {
-                  j++
-                  while (j < i && $j ~ /^-/) { if ($j ~ /^(-s|--signal|-k|--kill-after|--adjustment)$/) j++; j++ }
-                  if (j < i && $j !~ /^-/) j++
+                  while (j < i && $j ~ /^-/) {
+                    if ($j ~ /^(-u|--unset|-C|--chdir|-g|--group|-p|-U|-r|-t|-h|--user|-s|--signal|-k|--kill-after|--adjustment|-n|--interval|-I|-P|-d|--delimiter|-E|--eofstr|-a|--arg-file|-L|--max-args|--max-procs|--replace)$/) j++
+                    j++
+                  }
+                  if (j < i && $j !~ /^-/ && tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) j++
                   continue
                 }
                 if (t ~ /^-/) { j++; continue }
@@ -787,16 +781,14 @@ EOF
                   while (j < i) {
                     t = $j; tb = t; sub(/.*\//, "", tb)
                     if (t ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { j++; continue }
-                    if (tb ~ /^(env|command|exec|nohup|setsid|watch|xargs|time)$/) { j++; continue }
-                    if (tb ~ /^(sudo|doas)$/) {
+                    if (tb ~ /^(command|exec|nohup|setsid|time)$/) { j++; continue }
+                    if (tb ~ /^(env|sudo|doas|timeout|nice|stdbuf|ionice|chrt|watch|xargs)$/) {
                       j++
-                      while (j < i && $j ~ /^-/) { if ($j ~ /^(-u|--user|-g|--group|-C|-p|-U|-r|-t|-h)$/) j++; j++ }
-                      continue
-                    }
-                    if (tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) {
-                      j++
-                      while (j < i && $j ~ /^-/) { if ($j ~ /^(-s|--signal|-k|--kill-after|--adjustment)$/) j++; j++ }
-                      if (j < i && $j !~ /^-/) j++
+                      while (j < i && $j ~ /^-/) {
+                        if ($j ~ /^(-u|--unset|-C|--chdir|-g|--group|-p|-U|-r|-t|-h|--user|-s|--signal|-k|--kill-after|--adjustment|-n|--interval|-I|-P|-d|--delimiter|-E|--eofstr|-a|--arg-file|-L|--max-args|--max-procs|--replace)$/) j++
+                        j++
+                      }
+                      if (j < i && $j !~ /^-/ && tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) j++
                       continue
                     }
                     if (t ~ /^-/) { j++; continue }

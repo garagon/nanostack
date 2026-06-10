@@ -113,6 +113,9 @@ PY'
   nh_assert_exit "heredoc-fed sh blocked (sh <<EOF)"          1 bash_hook 'sh <<EOF
 echo hi > f
 EOF'
+  nh_assert_exit "attached heredoc blocked (python3<<PY)"    1 bash_hook 'python3<<PY
+open()
+PY'
   nh_assert_exit "script execution with flag allowed"         0 bash_hook 'bash -x build.sh'
   nh_assert_exit "quoted -c flag still blocks (python3 \"-c\")" 1 bash_hook 'python3 "-c" "open()"'
   nh_assert_exit "combined shell flag blocks (bash -lc)"      1 bash_hook 'bash -lc "echo x > f"'
@@ -138,6 +141,9 @@ PY'
   nh_assert_exit "timeout with options wraps inline code"      1 bash_hook 'timeout --preserve-status 5 python3 -c "open()"'
   nh_assert_exit "timeout -s with signal arg wraps code"      1 bash_hook 'timeout -s KILL 5 python3 -c "open()"'
   nh_assert_exit "sudo -u with user arg wraps code"           1 bash_hook 'sudo -u nobody python3 -c "open()"'
+  nh_assert_exit "env -u with unset arg wraps code"           1 bash_hook 'env -u FOO python3 -c "open()"'
+  nh_assert_exit "watch -n interval wraps code"               1 bash_hook 'watch -n 1 python3 -c "open()"'
+  nh_assert_exit "env -u wrapping a read stays allowed"       0 bash_hook 'env -u FOO npm test'
   nh_assert_exit "env-assignment prefix inline code blocked"    1 bash_hook 'FOO=1 python3 -c "open()"'
   nh_assert_exit "attached perl -e code blocked"                1 bash_hook "perl -e'open F,\">x\"'"
   nh_assert_exit "pipe into wrapped interpreter blocked"        1 bash_hook 'echo code | env python3'
