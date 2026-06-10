@@ -447,7 +447,7 @@ EOF
               # command position only if nothing else runs before it.
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval") { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
               j = bnd
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
@@ -462,8 +462,8 @@ EOF
                   if (j < i && $j !~ /^-/ && tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) j++
                   continue
                 }
-                if (tb == "npx" || tb == "bunx") { j++; continue }
-                if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j == "--") j++; continue }
+                if (tb == "npx" || tb == "bunx") { j++; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package|--node-options|--node-arg)$/) j++; j++ } continue }
+                if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue }
                 if (t ~ /^-/) { j++; continue }
                 return 0
               }
@@ -514,7 +514,7 @@ EOF
               # command position only if nothing else runs before it.
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval") { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
               j = bnd
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
@@ -529,8 +529,8 @@ EOF
                   if (j < i && $j !~ /^-/ && tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) j++
                   continue
                 }
-                if (tb == "npx" || tb == "bunx") { j++; continue }
-                if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j == "--") j++; continue }
+                if (tb == "npx" || tb == "bunx") { j++; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package|--node-options|--node-arg)$/) j++; j++ } continue }
+                if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue }
                 if (t ~ /^-/) { j++; continue }
                 return 0
               }
@@ -678,7 +678,7 @@ EOF
               # command position only if nothing else runs before it.
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval") { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
               j = bnd
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
@@ -693,8 +693,8 @@ EOF
                   if (j < i && $j !~ /^-/ && tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) j++
                   continue
                 }
-                if (tb == "npx" || tb == "bunx") { j++; continue }
-                if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j == "--") j++; continue }
+                if (tb == "npx" || tb == "bunx") { j++; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package|--node-options|--node-arg)$/) j++; j++ } continue }
+                if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue }
                 if (t ~ /^-/) { j++; continue }
                 return 0
               }
@@ -764,7 +764,7 @@ EOF
             function is_piped(i,    bnd, j) {
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval") { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
               return (bnd >= 2 && $(bnd - 1) ~ /\|$/) ? 1 : 0
             }
             {
@@ -827,7 +827,7 @@ EOF
                 function is_cmd_pos(i,    bnd, j, t, tb) {
                   bnd = 1
                   for (j = i - 1; j >= 1; j--)
-                    if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval") { bnd = j + 1; break }
+                    if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
                   j = bnd
                   while (j < i) {
                     t = $j; tb = t; sub(/.*\//, "", tb)
@@ -842,8 +842,8 @@ EOF
                       if (j < i && $j !~ /^-/ && tb ~ /^(timeout|nice|stdbuf|ionice|chrt)$/) j++
                       continue
                     }
-                    if (tb == "npx" || tb == "bunx") { j++; continue }
-                    if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j == "--") j++; continue }
+                    if (tb == "npx" || tb == "bunx") { j++; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package|--node-options|--node-arg)$/) j++; j++ } continue }
+                    if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue }
                     if (t ~ /^-/) { j++; continue }
                     return 0
                   }
@@ -953,8 +953,20 @@ EOF
                     if (cpos >= 2) return "mutate:config"
                     return ""
                   }
-                  if (gc == "remote") { if ($(j + 1) == "" || $(j + 1) == "-v" || $(j + 1) == "show" || $(j + 1) == "get-url") return ""; return "mutate:remote" }
-                  if (gc == "submodule") { if ($(j + 1) == "" || $(j + 1) == "status" || $(j + 1) == "summary") return ""; return "mutate:submodule" }
+                  if (gc == "remote") {
+                    for (a = j + 1; a <= NF; a++) {
+                      if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
+                      if ($a ~ /^(add|remove|rm|rename|set-url|set-head|set-branches|prune|update)$/) return "mutate:remote"
+                    }
+                    return ""
+                  }
+                  if (gc == "submodule") {
+                    for (a = j + 1; a <= NF; a++) {
+                      if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
+                      if ($a ~ /^(add|update|init|sync|set-url|set-branch|deinit|absorbgitdirs)$/) return "mutate:submodule"
+                    }
+                    return ""
+                  }
                   return ""
                 }
                 {
