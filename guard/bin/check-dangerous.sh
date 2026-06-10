@@ -589,10 +589,13 @@ EOF
                 # with leading python options (`python3 -u -I -m pip`).
                 if (b ~ /^python[0-9.]*$/ && is_cmd_pos(i)) {
                   jj = i + 1
-                  while (jj <= NF && $jj ~ /^-/ && $jj != "-m" && $jj != "--module") {
+                  while (jj <= NF && $jj ~ /^-/ && $jj != "-m" && $jj != "--module" && $jj !~ /^-m./) {
                     if ($jj == "-W" || $jj == "-X" || $jj == "-Q" || $jj == "--check-hash-based-pycs") jj += 2; else jj++
                   }
-                  if (jj <= NF && ($jj == "-m" || $jj == "--module") && $(jj + 1) == "pip") {
+                  # Attached spelling: python3 -mpip install (module glued to -m).
+                  if (jj <= NF && $jj ~ /^-m./ && $jj !~ /^--/) {
+                    if (substr($jj, 3) == "pip" && pm_scan("pip", jj + 1) == "mutate") { found = 1; exit }
+                  } else if (jj <= NF && ($jj == "-m" || $jj == "--module") && $(jj + 1) == "pip") {
                     if (pm_scan("pip", jj + 2) == "mutate") { found = 1; exit }
                   }
                 }

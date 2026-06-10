@@ -368,6 +368,8 @@ cell_package_managers() {
   nh_assert_exit "wrapped npm ci blocked"       1 bash_hook '/usr/bin/env npm ci'
   nh_assert_exit "env-assignment pnpm add blocked" 1 bash_hook 'FOO=1 pnpm add x'
   nh_assert_exit "python -m pip install blocked"   1 bash_hook 'python -m pip install foo'
+  nh_assert_exit "attached -mpip install blocked"  1 bash_hook 'python3 -mpip install foo'
+  nh_assert_exit "attached -mpip list stays a read" 0 bash_hook 'python3 -mpip list'
   nh_assert_exit "python -m pytest stays a read"   0 bash_hook 'python -m pytest'
   nh_assert_exit "python flags before -m pip blocked" 1 bash_hook 'python3 -u -m pip install foo'
   nh_assert_exit "dotted pip version blocked"      1 bash_hook 'pip3.12 install foo'
