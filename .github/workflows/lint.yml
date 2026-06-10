@@ -3924,7 +3924,7 @@ jobs:
         run: ci/check-visual-artifact-public-copy.sh
 
   runtime-contracts:
-    name: Runtime contracts (graph-aware session + concurrency parity)
+    name: Runtime contracts (graph-aware session + concurrency parity + read-phase writes)
     # These two suites protect the runtime wiring most likely to break
     # silently: the graph-aware session lifecycle (phase_graph snapshot,
     # next_phase / ready_phases / required_before_ship derivation) and
@@ -3951,3 +3951,5 @@ jobs:
         run: ci/run-harness.sh --suite graph-aware-session
       - name: Run concurrency parity matrix
         run: ci/run-harness.sh --suite concurrency-parity
+      - name: Run read-phase write block matrix
+        run: ci/run-harness.sh --suite read-phase-writes

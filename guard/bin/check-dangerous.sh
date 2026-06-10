@@ -329,18 +329,67 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
 
       # Block writes during read-only phases
       if [ "$SKILL_CONC" = "read" ]; then
+        RO_REASON=""
         case "$CMD" in
           *rm\ *|*mv\ *|*cp\ *|*mkdir\ *|*touch\ *|*chmod\ *|*git\ add*|*git\ commit*|*git\ push*|*git\ reset*)
-            echo "BLOCKED [PHASE] Write operation during read-only phase '$CURRENT_PHASE'"
-            echo "Category: concurrency-safety"
-            echo "Command: $(redact_secrets "$CMD")"
-            echo ""
-            echo "Action: report this as a finding instead of auto-fixing. The current phase is read-only to prevent race conditions when multiple agents run in parallel."
-            echo "Bypass: complete the current phase first (\`bin/session.sh phase-complete $CURRENT_PHASE\`), or end the session if you're not in a sprint."
-            audit_trail_append blocked "PHASE-RO"
-            exit 1
+            RO_REASON="write command"
             ;;
         esac
+
+        # Mutation paths the utility list above cannot see (security
+        # review finding #3): output redirection, in-place editors,
+        # inline interpreter code, and git worktree mutations all write
+        # without naming a write utility. Detection runs on CMD_NOQ
+        # (quoted segments stripped, the same normalization the
+        # allowlist classifier uses) so `grep 'a->b' file` is never read
+        # as redirection. Allowlisted safe reads never reach this tier.
+
+        # (a) Output redirection to anything except /dev/*. Bare fd dups
+        #     (>&2, 2>&1) have no path target and never match the
+        #     extraction; process substitution >(...) is an output pipe.
+        if [ -z "$RO_REASON" ]; then
+          RO_TARGETS=$(printf '%s' "$CMD_NOQ" | grep -oE '(&>>?|[0-9]*>>?)[[:space:]]*[^[:space:]&;|<>()]+' | sed -E 's/^(&>>?|[0-9]*>>?)[[:space:]]*//' || true)
+          if [ -n "$RO_TARGETS" ]; then
+            while IFS= read -r RO_TGT; do
+              [ -z "$RO_TGT" ] && continue
+              case "$RO_TGT" in /dev/*) ;; *) RO_REASON="output redirection to '$RO_TGT'"; break ;; esac
+            done <<EOF
+$RO_TARGETS
+EOF
+          fi
+          case "$CMD_NOQ" in *'>('*) RO_REASON="process substitution output" ;; esac
+        fi
+
+        # (b) In-place editors and write utilities.
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed[[:space:]]+(-[a-zA-Z]*i|--in-place)|(^|[[:space:];&|(])perl[[:space:]]+[^|;&]*[[:space:]]-[a-zA-Z]*i([[:space:]]|$)'; then
+          RO_REASON="in-place edit or write utility"
+        fi
+
+        # (c) Inline interpreter code: a one-liner can write through any
+        #     API, and its quoted body is invisible to pattern checks.
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)[[:space:]]+([^|;&]*[[:space:]])?-(e|c)([[:space:]]|$)'; then
+          RO_REASON="inline interpreter code"
+        fi
+
+        # (d) Git worktree mutations beyond add/commit/push/reset.
+        if [ -z "$RO_REASON" ]; then
+          case "$CMD_NOQ" in
+            *git\ checkout*|*git\ restore*|*git\ stash*|*git\ apply*|*git\ merge*|*git\ rebase*|*git\ cherry-pick*|*git\ clean*)
+              RO_REASON="git worktree mutation"
+              ;;
+          esac
+        fi
+
+        if [ -n "$RO_REASON" ]; then
+          echo "BLOCKED [PHASE] Write operation during read-only phase '$CURRENT_PHASE' ($RO_REASON)"
+          echo "Category: concurrency-safety"
+          echo "Command: $(redact_secrets "$CMD")"
+          echo ""
+          echo "Action: report this as a finding instead of auto-fixing. The current phase is read-only to prevent race conditions when multiple agents run in parallel."
+          echo "Bypass: complete the current phase first (\`bin/session.sh phase-complete $CURRENT_PHASE\`), or end the session if you're not in a sprint."
+          audit_trail_append blocked "PHASE-RO"
+          exit 1
+        fi
       fi
     fi
   fi
