@@ -371,7 +371,7 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
         _SUB_BT=$(printf '\140')
         _SUB_BS=$(printf '\134')
         CMD_SUB=$(printf '%s' "$CMD" \
-          | sed "s/${_SUB_BS}${_SUB_BS}[$]/X/g; s/${_SUB_BS}${_SUB_BS}${_SUB_BT}/X/g" \
+          | sed "s/${_SUB_BS}${_SUB_BS}[$](/XX/g; s/${_SUB_BS}${_SUB_BS}[$]/X/g; s/${_SUB_BS}${_SUB_BS}${_SUB_BT}/X/g" \
           | sed "s/-S[[:space:]]*\"\([^\"]*\)\"/-S \1/g; s/-S[[:space:]]*'\([^']*\)'/-S \1/g" \
           | sed "s/${_SUB_BT}/ ( /g" \
           | sed "s/'\([-a-zA-Z0-9._/=]*\)'/\1/g" \
@@ -537,7 +537,7 @@ EOF
               for (k = start; k <= NF; k++) {
                 t = $k
                 if (t ~ /^(&&|\|\||;|\||&|\(|\))$/) return ""
-                if (name ~ /^(npm|pnpm|yarn)$/) {
+                if (name ~ /^(npm|pnpm|yarn|bun)$/) {
                   # config/cache/version are namespaces: the nested verb
                   # or argument decides. `npm version` alone prints; with
                   # a bump keyword or semver it writes package.json + tag.
@@ -580,7 +580,7 @@ EOF
                     if (pm_scan("pip", jj + 2) == "mutate") { found = 1; exit }
                   }
                 }
-                if (b ~ /^(npm|pnpm|yarn|go|pip[0-9.]*|cargo|gem|bundle)$/ && is_cmd_pos(i)) {
+                if (b ~ /^(npm|pnpm|yarn|bun|go|pip[0-9.]*|cargo|gem|bundle)$/ && is_cmd_pos(i)) {
                   if (pm_scan(b, i + 1) == "mutate") { found = 1; exit }
                 }
               }
@@ -603,7 +603,7 @@ EOF
           # body.
           _SQ=$(printf '\047')
           _BS=$(printf '\134')
-          SUBST_BODIES=$(printf '%s' "$CMD" | sed "s/${_BS}${_BS}[$]/X/g; s/${_BS}${_BS}${_SUB_BT}/X/g" | sed "s/${_SQ}[^${_SQ}]*${_SQ}/QUOTEDARG/g" | awk '
+          SUBST_BODIES=$(printf '%s' "$CMD" | sed "s/${_BS}${_BS}[$](/XX/g; s/${_BS}${_BS}[$]/X/g; s/${_BS}${_BS}${_SUB_BT}/X/g" | sed "s/${_SQ}[^${_SQ}]*${_SQ}/QUOTEDARG/g" | awk '
             {
               s = $0; n = length(s)
               for (i = 1; i <= n; i++) {
@@ -624,11 +624,15 @@ EOF
                 }
               }
             }' 2>/dev/null || true)
+          # `eval "..."` runs its argument as a command after the hook, so
+          # the quoted body is a command to recurse on, not inert text.
+          EVAL_BODIES=$(printf '%s' "$CMD" | grep -oE "(^|[[:space:];&|(])eval[[:space:]]+(\"[^\"]*\"|${_SQ}[^${_SQ}]*${_SQ})" 2>/dev/null | sed -E "s/.*eval[[:space:]]+.//; s/.\$//" || true)
+          SUBST_BODIES=$(printf '%s\n%s' "$SUBST_BODIES" "$EVAL_BODIES")
           if [ -n "$SUBST_BODIES" ]; then
             while IFS= read -r _body; do
               [ -z "$_body" ] && continue
               if ! NANOSTACK_GUARD_DEPTH=$(( ${NANOSTACK_GUARD_DEPTH:-0} + 1 )) "$0" "$_body" >/dev/null 2>&1; then
-                RO_REASON="write inside command substitution"
+                RO_REASON="write inside command substitution or eval"
                 break
               fi
             done <<EOF
