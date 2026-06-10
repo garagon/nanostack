@@ -541,6 +541,8 @@ EOF
                 t = $k
                 if (t ~ /^(&&|\|\||;|\||&|\(|\))$/) return ""
                 if (name ~ /^(npm|pnpm|yarn|bun)$/) {
+                  if (t == "--filter" || t == "-F" || t == "-w" || t == "--workspace" || t == "-C" || t == "--dir" || t == "--prefix" || t == "--cwd" || t == "--scope") { k++; continue }
+                  if (t == "workspace" || t == "workspaces") { k++; continue }
                   # config/cache/version are namespaces: the nested verb
                   # or argument decides. `npm version` alone prints; with
                   # a bump keyword or semver it writes package.json + tag.
@@ -726,6 +728,7 @@ EOF
                 if (name ~ /^(sh|bash|zsh|ksh|dash)$/) {
                   if (t !~ /^--/ && t ~ /^-[a-zA-Z]*c/) return 1
                   if (t == "-O" || t == "+O" || t == "--rcfile" || t == "--init-file") { j += 2; continue }
+                  if (t == "-s" || (t !~ /^--/ && t ~ /^-[a-zA-Z]*s/)) return 2
                   j++; continue
                 }
                 if (name ~ /^python/) {

@@ -151,6 +151,8 @@ PY'
   nh_assert_exit "piped interpreter with option-arg blocked"   1 bash_hook 'echo code | python3 -W ignore'
   nh_assert_exit "piped env -i interpreter blocked"            1 bash_hook 'echo code | env -i python3'
   nh_assert_exit "process-sub into interpreter blocked"        1 bash_hook "python3 <(printf 'open(1)')"
+  nh_assert_exit "piped bash -s stdin script blocked"         1 bash_hook "echo 'touch x' | bash -s arg"
+
   nh_assert_exit "stdin-from-procsub interpreter blocked"      1 bash_hook "python3 < <(printf 'open(1)')"
   nh_assert_exit "plain < file redirect stays allowed"        0 bash_hook 'python3 < script.py'
   nh_assert_exit "option-arg before -c still blocks (python -W)" 1 bash_hook 'python -W ignore -c "open()"'
@@ -291,6 +293,8 @@ cell_package_managers() {
   nh_assert_exit "go generate blocked"          1 bash_hook 'go generate ./...'
   nh_assert_exit "pnpm --filter add blocked"    1 bash_hook 'pnpm --filter app add left-pad'
   nh_assert_exit "yarn workspace add blocked"   1 bash_hook 'yarn workspace app add left-pad'
+  nh_assert_exit "pm selector named like read verb" 1 bash_hook 'pnpm --filter run add left-pad'
+  nh_assert_exit "pm selector then read stays read" 0 bash_hook 'pnpm --filter app test'
   nh_assert_exit "pip -q install blocked"       1 bash_hook 'pip -q install foo'
   nh_assert_exit "npm run <script> stays read"  0 bash_hook 'npm run add'
   nh_assert_exit "wrapped npm ci blocked"       1 bash_hook '/usr/bin/env npm ci'
