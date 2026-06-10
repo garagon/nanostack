@@ -58,6 +58,7 @@ cell_redirection() {
   nh_assert_exit "/dev/null redirection allowed"                     0 bash_hook 'true > /dev/null'
   nh_assert_exit "/dev escape via .. blocked"                        1 bash_hook 'printf x > /dev/../tmp/out'
   nh_assert_exit "bare fd dup allowed (npm test 2>&1)"               0 bash_hook 'npm test 2>&1'
+  nh_assert_exit "fd-closing redirect allowed (npm test 2>&-)"       0 bash_hook 'npm test 2>&-'
   nh_assert_exit "quoted arrow is not redirection (awk \$3 > 5)"     0 bash_hook "awk '\$3 > 5' data.txt"
   nh_assert_exit "quoted redirection target blocked (> \"out.txt\")"  1 bash_hook 'printf x > "out.txt"'
   nh_assert_exit "single-quoted target blocked (>> 'notes.md')"      1 bash_hook "echo hi >> 'notes.md'"
@@ -315,6 +316,9 @@ cell_git_mutations() {
   nh_assert_exit "case arm package write blocked"           1 bash_hook 'case x in x) npm ci;; esac'
   nh_assert_exit "case arm harmless stays allowed"          0 bash_hook 'case x in x) echo ok;; esac'
   nh_assert_exit "if/then harmless block stays allowed"     0 bash_hook 'if true; then echo ok; fi'
+  nh_assert_exit "if-condition git mutation blocked"        1 bash_hook 'if git checkout main; then echo x; fi'
+  nh_assert_exit "while-condition package write blocked"    1 bash_hook 'while npm ci; do echo x; done'
+  nh_assert_exit "if-condition read stays allowed"          0 bash_hook 'if git diff; then echo x; fi'
   nh_assert_exit "chained read-then-mutate blocks"           1 bash_hook 'git diff && git checkout main'
   nh_assert_exit "chained with ; blocks the mutation"        1 bash_hook 'git status; git restore app.js'
   nh_assert_exit "tag -n annotation listing is a read"       0 bash_hook 'git tag -n v1'
