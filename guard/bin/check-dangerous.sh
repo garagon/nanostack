@@ -941,7 +941,7 @@ EOF
                     if (classify_ref(j + 1, (gc == "tag")) == "mutate") return "mutate:" gc
                     return ""
                   }
-                  if (gc ~ /^(mv|rm|init|clone|gc|repack|prune|update-ref|update-index|notes|replace|filter-branch|filter-repo|lfs|fast-import|symbolic-ref)$/) return "mutate:" gc
+                  if (gc ~ /^(mv|rm|init|clone|fetch|gc|repack|prune|update-ref|update-index|notes|replace|filter-branch|filter-repo|lfs|fast-import|symbolic-ref)$/) return "mutate:" gc
                   if (gc == "config") {
                     cr = 0; cpos = 0
                     for (a = j + 1; a <= NF; a++) {

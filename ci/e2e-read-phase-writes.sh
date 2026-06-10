@@ -207,6 +207,8 @@ cell_git_mutations() {
   nh_assert_exit "git remote set-url blocked"   1 bash_hook 'git remote set-url origin x'
   nh_assert_exit "git remote -v is a read"      0 bash_hook 'git remote -v'
   nh_assert_exit "git remote -v set-url blocked" 1 bash_hook 'git remote -v set-url origin new'
+  nh_assert_exit "git fetch writes refs, blocked" 1 bash_hook 'git fetch'
+  nh_assert_exit "git fetch origin blocked"     1 bash_hook 'git fetch origin'
   nh_assert_exit "git submodule update blocked" 1 bash_hook 'git submodule update --init'
   nh_assert_exit "git submodule status is read" 0 bash_hook 'git submodule status'
   nh_assert_exit "git clean --dry-run is a read" 0 bash_hook 'git clean --dry-run'
