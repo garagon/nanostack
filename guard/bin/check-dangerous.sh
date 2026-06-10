@@ -492,15 +492,18 @@ EOF
                 t = $k
                 if (t ~ /^(&&|\|\||;|\||&|\(|\))$/) return ""
                 if (name ~ /^(npm|pnpm|yarn)$/) {
-                  # config/cache are namespaces: their nested verb decides.
+                  # config/cache/version are namespaces: the nested verb
+                  # or argument decides. `npm version` alone prints; with
+                  # a bump keyword or semver it writes package.json + tag.
                   if (t == "config") { if ($(k + 1) ~ /^(set|delete|rm|edit)$/) return "mutate"; return "" }
                   if (t == "cache") { if ($(k + 1) ~ /^(clean|rm|delete|add|prune)$/) return "mutate"; return "" }
-                  if (t ~ /^(run|run-script|exec|test|start|ls|list|view|info|show|audit|outdated|why|search|ping|whoami|version|help|dlx)$/) return ""
-                  if (t ~ /^(ci|i|add|remove|rm|uninstall|un|update|up|upgrade|dedupe|prune|rebuild|link|unlink|install|import)$/) return "mutate"
+                  if (t == "version") { if ($(k + 1) ~ /^(major|minor|patch|premajor|preminor|prepatch|prerelease|from-git)$/ || $(k + 1) ~ /^v?[0-9]/) return "mutate"; return "" }
+                  if (t ~ /^(run|run-script|exec|test|start|ls|list|view|info|show|audit|outdated|why|search|ping|whoami|help|dlx)$/) return ""
+                  if (t ~ /^(ci|i|add|remove|rm|uninstall|un|update|up|upgrade|dedupe|prune|rebuild|link|unlink|install|import|publish)$/) return "mutate"
                 } else if (name == "go") {
-                  if (t == "get" || t == "install") return "mutate"
+                  if (t == "get" || t == "install" || t == "generate") return "mutate"
                   if (t == "mod") { if ($(k + 1) ~ /^(tidy|edit|vendor|download|init)$/) return "mutate"; return "" }
-                  if (t ~ /^(test|build|run|vet|list|version|env|fmt|doc|tool|generate)$/) return ""
+                  if (t ~ /^(test|build|run|vet|list|version|env|fmt|doc|tool)$/) return ""
                 } else if (name ~ /^pip3?$/) {
                   if (t ~ /^(install|uninstall|download)$/) return "mutate"
                   if (t ~ /^(list|show|freeze|check|config|search|help|inspect)$/) return ""
@@ -552,7 +555,8 @@ EOF
           # body, not just the inner $(pwd)), plus backtick bodies. The
           # recursion then re-extracts any nested substitution from each
           # body.
-          SUBST_BODIES=$(printf '%s' "$CMD" | awk '
+          _SQ=$(printf '\047')
+          SUBST_BODIES=$(printf '%s' "$CMD" | sed "s/${_SQ}[^${_SQ}]*${_SQ}/QUOTEDARG/g" | awk '
             {
               s = $0; n = length(s)
               for (i = 1; i <= n; i++) {
@@ -778,7 +782,7 @@ EOF
                 }
                 # Classify one git invocation starting at the git token
                 # index gi. Returns "mutate:<sub>" or "" (read / n/a).
-                function classify_git(gi,    j, gc) {
+                function classify_git(gi,    j, gc, a) {
                   j = gi + 1
                   while (j <= NF) {
                     if ($j == "-C" || $j == "-c" || $j == "--exec-path" || $j == "--git-dir" || $j == "--work-tree" || $j == "--namespace") { j += 2; continue }
@@ -787,7 +791,16 @@ EOF
                   }
                   if (j > NF) return ""
                   gc = $j
-                  if (gc ~ /^(checkout|switch|restore|apply|am|merge|rebase|cherry-pick|revert|clean|pull)$/) return "mutate:" gc
+                  # git apply --check / --stat / --numstat / --summary
+                  # validate a patch without touching the worktree.
+                  if (gc == "apply") {
+                    for (a = j + 1; a <= NF; a++) {
+                      if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
+                      if ($a == "--check" || $a == "--stat" || $a == "--numstat" || $a == "--summary") return ""
+                    }
+                    return "mutate:apply"
+                  }
+                  if (gc ~ /^(checkout|switch|restore|am|merge|rebase|cherry-pick|revert|clean|pull)$/) return "mutate:" gc
                   if (gc == "stash" || gc == "worktree") {
                     if ($(j + 1) == "list" || $(j + 1) == "show") return ""
                     return "mutate:" gc

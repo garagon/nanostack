@@ -154,6 +154,8 @@ PY'
   nh_assert_exit "git as a plain argument is not classified"      0 bash_hook 'printf git checkout'
   nh_assert_exit "nested substitution redirection blocks"         1 bash_hook 'echo "$(printf x > $(pwd)/out.txt)"'
   nh_assert_exit "nested read substitution stays allowed"         0 bash_hook 'echo $(git rev-parse $(git branch --show-current))'
+  nh_assert_exit "single-quoted substitution is inert"            0 bash_hook "grep -R '\$(git checkout main)' docs"
+
 }
 
 # Cells: git worktree mutations beyond add/commit/push/reset.
@@ -168,6 +170,8 @@ cell_git_mutations() {
   nh_assert_exit "git stash show is a read, allowed"  0 bash_hook 'git stash show'
   nh_assert_exit "git worktree list is a read, allowed" 0 bash_hook 'git worktree list'
   nh_assert_exit "git worktree add blocked"           1 bash_hook 'git worktree add ../w2'
+  nh_assert_exit "git apply --check is read-only"     0 bash_hook 'git apply --check patch.diff'
+  nh_assert_exit "git apply (real) blocked"           1 bash_hook 'git apply patch.diff'
   nh_assert_exit "git branch <name> blocked (ref creation)" 1 bash_hook 'git branch tmp'
   nh_assert_exit "git tag <name> blocked (ref creation)"    1 bash_hook 'git tag v1.0'
   nh_assert_exit "quoted ref name still blocks (git branch \"tmp\")" 1 bash_hook 'git branch "tmp"'
@@ -217,6 +221,9 @@ cell_package_managers() {
   nh_assert_exit "npm ls allowed"               0 bash_hook 'npm ls'
   nh_assert_exit "go mod tidy blocked"          1 bash_hook 'go mod tidy'
   nh_assert_exit "go mod graph is a read"       0 bash_hook 'go mod graph'
+  nh_assert_exit "npm version bump blocked"     1 bash_hook 'npm version patch'
+  nh_assert_exit "npm version (no arg) is read" 0 bash_hook 'npm version'
+  nh_assert_exit "go generate blocked"          1 bash_hook 'go generate ./...'
   nh_assert_exit "pnpm --filter add blocked"    1 bash_hook 'pnpm --filter app add left-pad'
   nh_assert_exit "yarn workspace add blocked"   1 bash_hook 'yarn workspace app add left-pad'
   nh_assert_exit "pip -q install blocked"       1 bash_hook 'pip -q install foo'
