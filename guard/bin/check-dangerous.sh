@@ -716,13 +716,25 @@ EOF
                 }
                 j++
               }
-              return 0
+              # Reached the end with no script file, -m module, or code
+              # flag: a bare interpreter. Harmless interactively, but
+              # reading code from a pipe (return 2, checked by is_piped).
+              return 2
+            }
+            # True when the command at i is the receiving end of a pipe.
+            function is_piped(i,    bnd, j) {
+              bnd = 1
+              for (j = i - 1; j >= 1; j--)
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/) { bnd = j + 1; break }
+              return (bnd >= 2 && $(bnd - 1) ~ /\|$/) ? 1 : 0
             }
             {
               for (i = 1; i <= NF; i++) {
                 b = basename($i)
                 if (b ~ /^(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)$/ && is_cmd_pos(i)) {
-                  if (code(b, i)) { found = 1; exit }
+                  r = code(b, i)
+                  if (r == 1) { found = 1; exit }
+                  if (r == 2 && is_piped(i)) { found = 1; exit }
                 }
               }
             }
@@ -836,7 +848,11 @@ EOF
                 function classify_git(gi,    j, gc, a) {
                   j = gi + 1
                   while (j <= NF) {
-                    if ($j == "-C" || $j == "-c" || $j == "--exec-path" || $j == "--git-dir" || $j == "--work-tree" || $j == "--namespace") { j += 2; continue }
+                    # -c key=val / --config-env / --exec-path can inject an
+                    # alias, pager, or external helper that executes code,
+                    # so they are never a safe read (matching the allowlist).
+                    if ($j == "-c" || $j == "--config-env" || $j == "--exec-path" || $j ~ /^--exec-path=/ || $j ~ /^--config-env=/) return "mutate:config-injection"
+                    if ($j == "-C" || $j == "--git-dir" || $j == "--work-tree" || $j == "--namespace") { j += 2; continue }
                     if ($j ~ /^-/) { j++; continue }
                     break
                   }
@@ -857,6 +873,7 @@ EOF
                     for (a = j + 1; a <= NF; a++) {
                       if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
                       if ($a == "-o" || $a == "--output" || $a ~ /^--output=/) return "mutate:" gc
+                      if ($a == "--ext-diff") return "mutate:" gc
                     }
                     return ""
                   }
