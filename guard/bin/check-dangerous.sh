@@ -388,14 +388,29 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
         #     pipe. [[ ... ]] and (( ... )) are comparison contexts
         #     where > is not a redirection; drop them before scanning.
         if [ -z "$RO_REASON" ]; then
-          # Escaped \> / \< (e.g. POSIX `[ a \> b ]` or `test a \> b`)
-          # are string-comparison arguments, not redirections; drop them
-          # along with the [[ ]] / (( )) comparison contexts.
-          CMD_ROQ=$(printf '%s' "$CMD_RON" | sed -E 's/\\[<>]//g; s/\[\[[^]]*\]\]//g; s/\(\([^)]*\)\)//g')
-          RO_TARGETS=$(printf '%s' "$CMD_ROQ" | grep -oE '(&>>?|[0-9]*>>?\|?)[[:space:]]*[^[:space:]&;|<>()]+' | sed -E 's/^(&>>?|[0-9]*>>?\|?)[[:space:]]*//' || true)
+          # Drop heredoc bodies (their text is data, not shell syntax, so
+          # `cat <<EOF\n a > b \nEOF` is not a redirection), then the
+          # escaped \> / \< (POSIX `[ a \> b ]`) and the [[ ]] / (( ))
+          # comparison contexts.
+          CMD_ROQ=$(printf '%s' "$CMD_RON" | awk '
+            {
+              if (skip) { if ($0 ~ ("^[[:space:]]*" delim "[[:space:]]*$")) skip = 0; next }
+              if (match($0, /<<-?[[:space:]]*[A-Za-z_][A-Za-z0-9_]*/)) {
+                d = substr($0, RSTART, RLENGTH); gsub(/<<-?[[:space:]]*/, "", d); delim = d; skip = 1
+              }
+              print
+            }' | sed -E 's/\\[<>]//g; s/\[\[[^]]*\]\]//g; s/\(\([^)]*\)\)//g')
+          # >& file / >&file redirect stdout+stderr to a file; >&2 is an
+          # fd dup. Match both the &>/fd forms and >&, then drop targets
+          # that are bare fd numbers below.
+          RO_TARGETS=$(printf '%s' "$CMD_ROQ" | grep -oE '(&>>?|[0-9]*>>?\|?|>&)[[:space:]]*[^[:space:]&;|<>()]+' | sed -E 's/^(&>>?|[0-9]*>>?\|?|>&)[[:space:]]*//' || true)
           if [ -n "$RO_TARGETS" ]; then
             while IFS= read -r RO_TGT; do
               [ -z "$RO_TGT" ] && continue
+              # A bare fd number after >& is a dup (>&2), not a file.
+              case "$RO_TGT" in
+                [0-9]) continue ;;
+              esac
               # Only genuine device sinks are exempt; a target that walks
               # out of /dev via `..` (e.g. /dev/../tmp/out) writes a real
               # file and is not exempt.
