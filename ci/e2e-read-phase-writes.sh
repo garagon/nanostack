@@ -131,6 +131,12 @@ cell_git_mutations() {
   nh_assert_exit "branch --contains is a filtered read"      0 bash_hook 'git branch --contains HEAD'
   nh_assert_exit "branch --merged is a filtered read"        0 bash_hook 'git branch --merged main'
   nh_assert_exit "branch -v alone is a read"                 0 bash_hook 'git branch -v'
+  nh_assert_exit "branch -a (all) is a read"                 0 bash_hook 'git branch -a'
+  nh_assert_exit "chained read-then-mutate blocks"           1 bash_hook 'git diff && git checkout main'
+  nh_assert_exit "chained with ; blocks the mutation"        1 bash_hook 'git status; git restore app.js'
+  nh_assert_exit "tag -n annotation listing is a read"       0 bash_hook 'git tag -n v1'
+  nh_assert_exit "tag --contains is a read"                  0 bash_hook 'git tag --contains HEAD'
+  nh_assert_exit "tag -a annotated create blocks"            1 bash_hook 'git tag -a v1 -m x'
 }
 
 # Cells: the block is phase-scoped, not global.

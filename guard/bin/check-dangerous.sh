@@ -429,43 +429,61 @@ EOF
           case "$CMD_RON" in
             *git\ *)
               GIT_VERDICT=$(printf '%s' "$CMD_RON" | awk '
-                function classify_branch(start, istag,    k, t, listmode) {
+                # Classify branch/tag args: a bare ref name with no list
+                # flag creates a ref; delete/move/copy/annotate forms
+                # mutate; list and filter flags (and the positional they
+                # take) are reads. Tag adds -n (annotation listing).
+                function classify_ref(start, istag,    k, t, listmode, mutshort) {
+                  # Mutating short-flag letters differ: for branch d/D/m/M
+                  # /c/C/f/u (delete/move/copy/force/upstream); for tag
+                  # a/s/d/f/F/u/m (annotate/sign/delete/force/file/local
+                  # -user/message). -a and -r are READS for branch (all
+                  # /remotes) but -a CREATES for tag (annotated).
+                  mutshort = istag ? "[adfFum]" : "[dDmMcCfu]"
                   listmode = 0
                   for (k = start; k <= NF; k++) {
                     t = $k
                     if (t ~ /^-/) {
-                      # delete / move / copy / edit / upstream / annotate
-                      # forms mutate; short clusters carry the letter.
-                      if (t ~ /^--(delete|move|copy|edit-description|set-upstream-to|unset-upstream|force|create-reflog)/) return "mutate"
-                      if (t ~ /^-[a-zA-Z]*[dDmMcCsfu]/ && t !~ /^--/) return "mutate"
+                      if (t ~ /^--(delete|move|copy|edit-description|set-upstream-to|unset-upstream|force|create-reflog|annotate|sign)/) return "mutate"
+                      if (t !~ /^--/ && t ~ ("^-[a-zA-Z]*" mutshort)) return "mutate"
                       if (t == "-l" || t == "--list") { listmode = 1; continue }
-                      # read filters that consume the next positional.
-                      if (t ~ /^--(contains|no-contains|merged|no-merged|points-at)$/) { k++; continue }
+                      if (istag && t ~ /^-n[0-9]*$/) { listmode = 1; continue }
+                      if (t ~ /^--(contains|no-contains|merged|no-merged|points-at)/) { listmode = 1; continue }
                       continue
                     }
-                    # a bare positional ref name (not a list pattern) = create
                     if (!listmode) return "mutate"
                   }
                   return "read"
                 }
+                # Classify one git invocation starting at the git token
+                # index gi. Returns "mutate:<sub>" or "" (read / n/a).
+                function classify_git(gi,    j, gc) {
+                  j = gi + 1
+                  while (j <= NF) {
+                    if ($j == "-C" || $j == "-c" || $j == "--exec-path" || $j == "--git-dir" || $j == "--work-tree" || $j == "--namespace") { j += 2; continue }
+                    if ($j ~ /^-/) { j++; continue }
+                    break
+                  }
+                  if (j > NF) return ""
+                  gc = $j
+                  if (gc ~ /^(checkout|switch|restore|apply|am|merge|rebase|cherry-pick|revert|clean|pull)$/) return "mutate:" gc
+                  if (gc == "stash" || gc == "worktree") {
+                    if ($(j + 1) == "list" || $(j + 1) == "show") return ""
+                    return "mutate:" gc
+                  }
+                  if (gc == "branch" || gc == "tag") {
+                    if (classify_ref(j + 1, (gc == "tag")) == "mutate") return "mutate:" gc
+                    return ""
+                  }
+                  return ""
+                }
                 {
+                  # Scan EVERY git invocation: a chained read then mutate
+                  # (`git diff && git checkout main`) must still block.
                   for (i = 1; i <= NF; i++) {
                     if ($i == "git" || $i ~ /\/git$/) {
-                      j = i + 1
-                      while (j <= NF) {
-                        if ($j == "-C" || $j == "-c" || $j == "--exec-path" || $j == "--git-dir" || $j == "--work-tree" || $j == "--namespace") { j += 2; continue }
-                        if ($j ~ /^-/) { j++; continue }
-                        break
-                      }
-                      if (j > NF) { print "read"; exit }
-                      gc = $j
-                      if (gc ~ /^(checkout|switch|restore|apply|am|merge|rebase|cherry-pick|revert|clean|pull)$/) { print "mutate:" gc; exit }
-                      if (gc == "stash" || gc == "worktree") {
-                        if ($(j + 1) == "list" || $(j + 1) == "show") { print "read"; exit }
-                        print "mutate:" gc; exit
-                      }
-                      if (gc == "branch" || gc == "tag") { print classify_branch(j + 1, (gc == "tag")) ":" gc; exit }
-                      print "read"; exit
+                      r = classify_git(i)
+                      if (r != "") { print r; exit }
                     }
                   }
                   print "read"
