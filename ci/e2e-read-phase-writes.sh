@@ -108,6 +108,13 @@ EOF'
   nh_assert_exit "perl stream loop stays allowed (-ne)"       0 bash_hook "perl -ne 'print' file"
   nh_assert_exit "node --eval blocked (long form)"           1 bash_hook 'node --eval "fs.writeFileSync()"'
   nh_assert_exit "deno eval subcommand blocked"              1 bash_hook 'deno eval "Deno.writeTextFile()"'
+  nh_assert_exit "perl numeric flag in-place blocked"        1 bash_hook 'perl -0777 -pi.bak rewrite.pl file'
+  nh_assert_exit "pipe into bare interpreter blocked"        1 bash_hook 'echo "code" | node'
+  nh_assert_exit "heredoc piped into python blocked"         1 bash_hook 'cat <<PY | python3
+open("x","w")
+PY'
+  nh_assert_exit "pipe into interpreter with script allowed" 0 bash_hook 'cat data.csv | python3 process.py'
+  nh_assert_exit "pipe into module mode allowed"             0 bash_hook 'cat x | python3 -m json.tool'
 }
 
 # Cells: git worktree mutations beyond add/commit/push/reset.

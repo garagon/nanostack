@@ -372,7 +372,7 @@ EOF
         fi
 
         # (b) In-place editors and write utilities.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed[[:space:]]+(--?[a-zA-Z-]+(=[^[:space:]]*)?[[:space:]]+)*(-[a-zA-Z]*i[^[:space:]]*|--in-place(=[^[:space:]]*)?)([[:space:]]|$)|(^|[[:space:];&|(])perl[[:space:]]+(--?[a-zA-Z-]+(=[^[:space:]]*)?[[:space:]]+)*-[a-zA-Z]*i[^[:space:]]*([[:space:]]|$)'; then
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed[[:space:]]+(--?[a-zA-Z0-9-]+(=[^[:space:]]*)?[[:space:]]+)*(-[a-zA-Z]*i[^[:space:]]*|--in-place(=[^[:space:]]*)?)([[:space:]]|$)|(^|[[:space:];&|(])perl[[:space:]]+(--?[a-zA-Z0-9-]+(=[^[:space:]]*)?[[:space:]]+)*-[a-zA-Z]*i[^[:space:]]*([[:space:]]|$)'; then
           RO_REASON="in-place edit or write utility"
         fi
 
@@ -413,6 +413,30 @@ EOF
         # pattern check can see.
         if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(-([[:space:]]|$)|<<)'; then
           RO_REASON="stdin-fed interpreter code"
+        fi
+        # Code piped into a BARE interpreter (no script file, no -m
+        # module): `cat <<EOF | python3`, `curl ... | sh`, `echo code |
+        # node` all execute the upstream output as code. A bare
+        # interpreter is the receiving end of a single pipe followed by
+        # only flags before the next operator or end. An interpreter with
+        # a script file or -m runs that and reads the pipe as data, so it
+        # stays allowed. Heredoc bodies are dropped first (they belong to
+        # the upstream command's stdin, not the interpreter's args) so a
+        # flattened body does not make the interpreter look non-bare.
+        if [ -z "$RO_REASON" ]; then
+          CMD_NOHD=$(printf '%s' "$CMD_RON" | awk '
+            {
+              if (skip) { if ($0 ~ ("^[[:space:]]*" delim "[[:space:]]*$")) skip = 0; next }
+              if (match($0, /<<-?[[:space:]]*[A-Za-z_][A-Za-z0-9_]*/)) {
+                d = substr($0, RSTART, RLENGTH)
+                gsub(/<<-?[[:space:]]*/, "", d)
+                delim = d; skip = 1
+              }
+              print
+            }' | tr '\n' ' ')
+          if printf '%s' "$CMD_NOHD" | grep -qE '[^|]\|[[:space:]]*(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)([[:space:]]+-[^[:space:]]+)*[[:space:]]*($|[|;&])'; then
+            RO_REASON="code piped into a bare interpreter"
+          fi
         fi
 
         # (d) Git worktree and ref mutations beyond add/commit/push/
