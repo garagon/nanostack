@@ -499,6 +499,10 @@ EOF
             {
               for (i = 1; i <= NF; i++) {
                 b = basename($i)
+                # `python -m pip install` is pip by another name.
+                if (b ~ /^python[0-9.]*$/ && is_cmd_pos(i) && $(i + 1) == "-m" && $(i + 2) == "pip") {
+                  if (pm_scan("pip", i + 3) == "mutate") { found = 1; exit }
+                }
                 if (b ~ /^(npm|pnpm|yarn|go|pip|pip3|cargo|gem|bundle)$/ && is_cmd_pos(i)) {
                   if (pm_scan(b, i + 1) == "mutate") { found = 1; exit }
                 }
@@ -507,6 +511,26 @@ EOF
             END { exit(found ? 0 : 1) }
           '; then
           RO_REASON="package-manager dependency write"
+        fi
+
+        # (b3) Active command substitutions execute even inside double
+        #      quotes, so a write hidden in `$(...)` / backticks runs.
+        #      Recurse the guard on each substitution body (depth-guarded)
+        #      so the same detectors apply; a body that blocks blocks the
+        #      whole command.
+        if [ -z "$RO_REASON" ] && [ "${NANOSTACK_GUARD_DEPTH:-0}" -lt 3 ]; then
+          SUBST_BODIES=$(printf '%s' "$CMD" | grep -oE '[$]\([^()]*\)|`[^`]*`' 2>/dev/null | sed 's/^[$](//; s/)$//; s/^`//; s/`$//' || true)
+          if [ -n "$SUBST_BODIES" ]; then
+            while IFS= read -r _body; do
+              [ -z "$_body" ] && continue
+              if ! NANOSTACK_GUARD_DEPTH=$(( ${NANOSTACK_GUARD_DEPTH:-0} + 1 )) "$0" "$_body" >/dev/null 2>&1; then
+                RO_REASON="write inside command substitution"
+                break
+              fi
+            done <<EOF
+$SUBST_BODIES
+EOF
+          fi
         fi
 
         # (c) Inline interpreter code. A one-liner can write through any
@@ -644,6 +668,25 @@ EOF
           case "$CMD_SUB" in
             *git\ *)
               GIT_VERDICT=$(printf '%s' "$CMD_SUB" | awk '
+                function basename(s) { sub(/.*\//, "", s); return s }
+                # Only a git token at a command position is an invocation;
+                # `printf git checkout` or `python3 process.py git ...`
+                # carry git as an argument and must not be classified.
+                function is_cmd_pos(i,    k, p, pb, qb) {
+                  k = i - 1
+                  while (k >= 1) {
+                    p = $k
+                    if (p ~ /^(\||\|\||&&|;|&|\()$/ || p ~ /[|;&(]$/) return 1
+                    if (p ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { k--; continue }
+                    pb = p; sub(/.*\//, "", pb)
+                    if (pb ~ /^(env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs)$/) { k--; continue }
+                    if (p ~ /^-/) { k--; continue }
+                    qb = (k >= 2) ? $(k - 1) : ""; sub(/.*\//, "", qb)
+                    if (qb ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k -= 2; continue }
+                    return 0
+                  }
+                  return 1
+                }
                 # Classify branch/tag args: a bare ref name with no list
                 # flag creates a ref; delete/move/copy/annotate forms
                 # mutate; list and filter flags (and the positional they
@@ -704,7 +747,7 @@ EOF
                   # Scan EVERY git invocation: a chained read then mutate
                   # (`git diff && git checkout main`) must still block.
                   for (i = 1; i <= NF; i++) {
-                    if ($i == "git" || $i ~ /\/git$/) {
+                    if ((basename($i) == "git") && is_cmd_pos(i)) {
                       r = classify_git(i)
                       if (r != "") { print r; exit }
                     }

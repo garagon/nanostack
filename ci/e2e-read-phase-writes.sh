@@ -146,6 +146,8 @@ open()
 PY'
   nh_assert_exit "double-quoted substitution inline code blocks"  1 bash_hook 'echo "$(python3 -c '"'"'open(1)'"'"')"'
   nh_assert_exit "double-quoted git mutation blocks"              1 bash_hook 'echo "$(git checkout main)"'
+  nh_assert_exit "redirection inside substitution blocks"         1 bash_hook 'echo "$(printf x > out.txt)"'
+  nh_assert_exit "git as a plain argument is not classified"      0 bash_hook 'printf git checkout'
 }
 
 # Cells: git worktree mutations beyond add/commit/push/reset.
@@ -215,6 +217,8 @@ cell_package_managers() {
   nh_assert_exit "npm run <script> stays read"  0 bash_hook 'npm run add'
   nh_assert_exit "wrapped npm ci blocked"       1 bash_hook '/usr/bin/env npm ci'
   nh_assert_exit "env-assignment pnpm add blocked" 1 bash_hook 'FOO=1 pnpm add x'
+  nh_assert_exit "python -m pip install blocked"   1 bash_hook 'python -m pip install foo'
+  nh_assert_exit "python -m pytest stays a read"   0 bash_hook 'python -m pytest'
 }
 
 nh_cell phase-scoped   cell_phase_scoped
