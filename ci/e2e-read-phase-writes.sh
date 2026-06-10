@@ -193,6 +193,12 @@ cell_git_mutations() {
   nh_assert_exit "git restore blocked"          1 bash_hook 'git restore app.js'
   nh_assert_exit "git switch blocked"           1 bash_hook 'git switch -c tmp'
   nh_assert_exit "git clean -fd blocked"        1 bash_hook 'git clean -fd'
+  nh_assert_exit "git config set blocked"       1 bash_hook 'git config user.name x'
+  nh_assert_exit "git config --get is a read"   0 bash_hook 'git config --get user.name'
+  nh_assert_exit "git remote set-url blocked"   1 bash_hook 'git remote set-url origin x'
+  nh_assert_exit "git remote -v is a read"      0 bash_hook 'git remote -v'
+  nh_assert_exit "git submodule update blocked" 1 bash_hook 'git submodule update --init'
+  nh_assert_exit "git submodule status is read" 0 bash_hook 'git submodule status'
   nh_assert_exit "git clean --dry-run is a read" 0 bash_hook 'git clean --dry-run'
   nh_assert_exit "clustered git clean -nfd is dry-run" 0 bash_hook 'git clean -nfd'
   nh_assert_exit "tab-separated git mutation blocked" 1 bash_hook "$(printf 'git\tcheckout main')"
@@ -289,6 +295,9 @@ cell_package_managers() {
   nh_assert_exit "npx inline code blocked"         1 bash_hook 'npx sh -c "echo x > f"'
   nh_assert_exit "npx running a tool stays read"   0 bash_hook 'npx eslint .'
   nh_assert_exit "go fmt rewrites source, blocked"  1 bash_hook 'go fmt ./...'
+  nh_assert_exit "npm init blocked"             1 bash_hook 'npm init -y'
+  nh_assert_exit "npm pkg set blocked"          1 bash_hook 'npm pkg set scripts.test=echo'
+  nh_assert_exit "cargo init blocked"           1 bash_hook 'cargo init'
   nh_assert_exit "cargo fmt --check stays a read"   0 bash_hook 'cargo fmt --check'
 }
 

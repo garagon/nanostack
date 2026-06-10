@@ -550,6 +550,8 @@ EOF
                   if (t == "config") { if ($(k + 1) ~ /^(set|delete|rm|edit)$/) return "mutate"; return "" }
                   if (t == "cache") { if ($(k + 1) ~ /^(clean|rm|delete|add|prune)$/) return "mutate"; return "" }
                   if (t == "version") { if ($(k + 1) ~ /^(major|minor|patch|premajor|preminor|prepatch|prerelease|from-git)$/ || $(k + 1) ~ /^v?[0-9]/) return "mutate"; return "" }
+                  if (t == "pkg") { if ($(k + 1) ~ /^(set|delete|rm)$/) return "mutate"; return "" }
+                  if (t ~ /^(init|create|pack|publish)$/) return "mutate"
                   if (t ~ /^(run|run-script|exec|test|start|ls|list|view|info|show|audit|outdated|why|search|ping|whoami|help|dlx)$/) return ""
                   if (t ~ /^(ci|i|add|remove|rm|uninstall|un|update|up|upgrade|dedupe|prune|rebuild|link|unlink|install|import|publish)$/) return "mutate"
                 } else if (name == "go") {
@@ -560,7 +562,7 @@ EOF
                   if (t ~ /^(install|uninstall|download)$/) return "mutate"
                   if (t ~ /^(list|show|freeze|check|config|search|help|inspect)$/) return ""
                 } else if (name == "cargo") {
-                  if (t ~ /^(add|remove|install|update|uninstall)$/) return "mutate"
+                  if (t ~ /^(add|remove|install|update|uninstall|init|new|publish|generate-lockfile|vendor|yank)$/) return "mutate"
                   if (t == "fmt") { for (a = k + 1; a <= NF; a++) { if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break; if ($a == "--check" || $a == "--dry-run") return "" } return "mutate" }
                   if (t ~ /^(test|build|check|run|clippy|doc|tree|metadata|bench)$/) return ""
                 } else if (name == "gem") {
@@ -931,6 +933,10 @@ EOF
                     if (classify_ref(j + 1, (gc == "tag")) == "mutate") return "mutate:" gc
                     return ""
                   }
+                  if (gc ~ /^(mv|rm|init|clone|gc|repack|prune|update-ref|update-index|notes|replace|filter-branch|filter-repo|lfs|fast-import|symbolic-ref)$/) return "mutate:" gc
+                  if (gc == "config") { if ($(j + 1) ~ /^(--get|--get-all|--get-regexp|--list|-l|--get-urlmatch|--name-only)$/ || $(j + 1) == "") return ""; return "mutate:config" }
+                  if (gc == "remote") { if ($(j + 1) == "" || $(j + 1) == "-v" || $(j + 1) == "show" || $(j + 1) == "get-url") return ""; return "mutate:remote" }
+                  if (gc == "submodule") { if ($(j + 1) == "" || $(j + 1) == "status" || $(j + 1) == "summary") return ""; return "mutate:submodule" }
                   return ""
                 }
                 {
