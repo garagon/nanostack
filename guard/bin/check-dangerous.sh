@@ -464,6 +464,7 @@ EOF
                 }
                 if (tb == "npx" || tb == "bunx") { j++; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package|--node-options|--node-arg)$/) j++; j++ } continue }
                 if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue }
+                if (tb ~ /^(bundle|bundler)$/ && $(j + 1) == "exec") { j += 2; continue }
                 if (t ~ /^-/) { j++; continue }
                 return 0
               }
@@ -531,6 +532,7 @@ EOF
                 }
                 if (tb == "npx" || tb == "bunx") { j++; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package|--node-options|--node-arg)$/) j++; j++ } continue }
                 if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue }
+                if (tb ~ /^(bundle|bundler)$/ && $(j + 1) == "exec") { j += 2; continue }
                 if (t ~ /^-/) { j++; continue }
                 return 0
               }
@@ -697,6 +699,7 @@ EOF
                 }
                 if (tb == "npx" || tb == "bunx") { j++; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package|--node-options|--node-arg)$/) j++; j++ } continue }
                 if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue }
+                if (tb ~ /^(bundle|bundler)$/ && $(j + 1) == "exec") { j += 2; continue }
                 if (t ~ /^-/) { j++; continue }
                 return 0
               }
@@ -738,18 +741,23 @@ EOF
                   j++; continue
                 }
                 if (name == "node" || name == "bun") {
-                  if (t !~ /^--/ && t ~ /^-e/) return 1
-                  if (t == "--eval" || t ~ /^--eval=/ || t == "--print" || t == "--exec" || t == "-p") return 1
                   if (t == "-r" || t == "--require" || t == "-C" || t == "--conditions" || t == "--loader" || t == "--experimental-loader" || t == "--import") { j += 2; continue }
+                  if (t !~ /^--/ && t ~ /^-[a-zA-Z]*[ep]/) return 1
+                  if (t == "--eval" || t ~ /^--eval=/ || t == "--print" || t == "--exec") return 1
                   j++; continue
                 }
                 if (name == "deno") {
                   if ((t !~ /^--/ && t ~ /^-e/) || t == "--eval" || t ~ /^--eval=/) return 1
                   j++; continue
                 }
-                if (name == "perl" || name == "ruby") {
+                if (name == "perl") {
                   if (t !~ /^--/ && t ~ /^-[eE]/) return 1
-                  if (t == "-r" || t == "-I" || t == "-C" || t == "-K" || t == "-T") { j += 2; continue }
+                  if (t == "-I" || t == "-C") { j += 2; continue }
+                  j++; continue
+                }
+                if (name == "ruby") {
+                  if (t !~ /^--/ && t ~ /^-e/) return 1
+                  if (t == "-r" || t == "-I" || t == "-C" || t == "-E") { j += 2; continue }
                   j++; continue
                 }
                 if (name == "php") {
@@ -847,6 +855,7 @@ EOF
                     }
                     if (tb == "npx" || tb == "bunx") { j++; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package|--node-options|--node-arg)$/) j++; j++ } continue }
                     if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue }
+                    if (tb ~ /^(bundle|bundler)$/ && $(j + 1) == "exec") { j += 2; continue }
                     if (t ~ /^-/) { j++; continue }
                     return 0
                   }
@@ -937,11 +946,22 @@ EOF
                     if ($(j + 1) == "list" || $(j + 1) == "show") return ""
                     return "mutate:" gc
                   }
+                  if (gc == "sparse-checkout") {
+                    if ($(j + 1) == "list") return ""
+                    return "mutate:" gc
+                  }
+                  if (gc == "archive") {
+                    for (a = j + 1; a <= NF; a++) {
+                      if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
+                      if ($a == "-o" || $a == "--output" || $a ~ /^--output=/) return "mutate:" gc
+                    }
+                    return ""
+                  }
                   if (gc == "branch" || gc == "tag") {
                     if (classify_ref(j + 1, (gc == "tag")) == "mutate") return "mutate:" gc
                     return ""
                   }
-                  if (gc ~ /^(mv|rm|init|clone|fetch|gc|repack|prune|update-ref|update-index|notes|replace|filter-branch|filter-repo|lfs|fast-import|symbolic-ref)$/) return "mutate:" gc
+                  if (gc ~ /^(mv|rm|init|clone|fetch|gc|repack|prune|update-ref|update-index|checkout-index|notes|replace|filter-branch|filter-repo|lfs|fast-import|symbolic-ref)$/) return "mutate:" gc
                   if (gc == "config") {
                     cr = 0; cpos = 0
                     for (a = j + 1; a <= NF; a++) {

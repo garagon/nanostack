@@ -190,7 +190,14 @@ PY'
   nh_assert_exit "single-quoted substitution is inert"            0 bash_hook "grep -R '\$(git checkout main)' docs"
   nh_assert_exit "escaped substitution is literal"                0 bash_hook 'grep "\\$(git checkout main)" docs'
 
-
+  nh_assert_exit "node combined -pe inline code blocked"          1 bash_hook 'node -pe "require(0).writeFileSync(1,2)"'
+  nh_assert_exit "node -c syntax check stays allowed"             0 bash_hook 'node -c script.js'
+  nh_assert_exit "ruby -E encoding before script allowed"         0 bash_hook 'ruby -E UTF-8 script.rb'
+  nh_assert_exit "ruby attached -E encoding allowed"              0 bash_hook 'ruby -EUTF-8:UTF-8 script.rb'
+  nh_assert_exit "bundle exec inline ruby code blocked"           1 bash_hook "bundle exec ruby -e 'File.write(1,2)'"
+  nh_assert_exit "bundle exec gem install blocked"                1 bash_hook 'bundle exec gem install rake'
+  nh_assert_exit "bundle exec sed in-place blocked"               1 bash_hook 'bundle exec sed -i s/a/b/ file'
+  nh_assert_exit "bundle exec running a test stays allowed"       0 bash_hook 'bundle exec rspec'
 }
 
 # Cells: git worktree mutations beyond add/commit/push/reset.
@@ -209,6 +216,11 @@ cell_git_mutations() {
   nh_assert_exit "git remote -v set-url blocked" 1 bash_hook 'git remote -v set-url origin new'
   nh_assert_exit "git fetch writes refs, blocked" 1 bash_hook 'git fetch'
   nh_assert_exit "git fetch origin blocked"     1 bash_hook 'git fetch origin'
+  nh_assert_exit "git checkout-index blocked"   1 bash_hook 'git checkout-index -a -f'
+  nh_assert_exit "git sparse-checkout set blocked" 1 bash_hook 'git sparse-checkout set src'
+  nh_assert_exit "git sparse-checkout list is a read" 0 bash_hook 'git sparse-checkout list'
+  nh_assert_exit "git archive --output blocked" 1 bash_hook 'git archive --output=out.tar HEAD'
+  nh_assert_exit "git archive to stdout is a read" 0 bash_hook 'git archive HEAD'
   nh_assert_exit "git submodule update blocked" 1 bash_hook 'git submodule update --init'
   nh_assert_exit "git submodule status is read" 0 bash_hook 'git submodule status'
   nh_assert_exit "git clean --dry-run is a read" 0 bash_hook 'git clean --dry-run'
