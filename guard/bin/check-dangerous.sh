@@ -714,6 +714,14 @@ EOF
                 # A lone dash, a heredoc, or an explicit stdin pseudo-file
                 # all run caller-supplied code from stdin.
                 if (t == "-" || t ~ /^<</ || t == "/dev/stdin" || t == "/dev/fd/0") return 1
+                # Input process substitution feeds generated code: a `<`
+                # whose source is `<(...)` (after operator spacing: `<`
+                # then `(`, or `< <` then `(`) executes the inner output.
+                # A plain `< file` redirect is a reviewable file (bare).
+                if (t == "<" || t == "<(") {
+                  if ($(j + 1) == "(" || t == "<(" || ($(j + 1) == "<" && $(j + 2) == "(")) return 1
+                  return 2
+                }
                 if (t !~ /^-/) {
                   if ((name == "deno" || name == "bun") && t == "eval") return 1
                   return 0

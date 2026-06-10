@@ -148,6 +148,9 @@ PY'
   nh_assert_exit "pipe into module mode allowed"             0 bash_hook 'cat x | python3 -m json.tool'
   nh_assert_exit "piped interpreter with option-arg blocked"   1 bash_hook 'echo code | python3 -W ignore'
   nh_assert_exit "piped env -i interpreter blocked"            1 bash_hook 'echo code | env -i python3'
+  nh_assert_exit "process-sub into interpreter blocked"        1 bash_hook "python3 <(printf 'open(1)')"
+  nh_assert_exit "stdin-from-procsub interpreter blocked"      1 bash_hook "python3 < <(printf 'open(1)')"
+  nh_assert_exit "plain < file redirect stays allowed"        0 bash_hook 'python3 < script.py'
   nh_assert_exit "option-arg before -c still blocks (python -W)" 1 bash_hook 'python -W ignore -c "open()"'
   nh_assert_exit "option-arg before -e still blocks (node -r)"   1 bash_hook 'node -r ./hook -e "fs()"'
   nh_assert_exit "interpreter name as grep arg not misread"      0 bash_hook 'grep python3 -c file'
