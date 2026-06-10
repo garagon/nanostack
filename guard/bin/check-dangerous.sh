@@ -354,7 +354,9 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
           # Quoted /dev paths are unquoted first so `> "/dev/null"`
           # keeps its /dev/* exemption; every other quoted segment
           # becomes a placeholder.
-          CMD_ROQ=$(printf '%s' "$CMD" | sed "s|'\(/dev/[^']*\)'|\1|g" | sed 's|"\(/dev/[^"]*\)"|\1|g' | sed "s/'[^']*'/QUOTEDARG/g; s/\"[^\"]*\"/QUOTEDARG/g")
+          # [[ ... ]] and (( ... )) are comparison contexts where > is
+          # not a redirection; drop them before scanning.
+          CMD_ROQ=$(printf '%s' "$CMD" | sed "s|'\(/dev/[^']*\)'|\1|g" | sed 's|"\(/dev/[^"]*\)"|\1|g' | sed "s/'[^']*'/QUOTEDARG/g; s/\"[^\"]*\"/QUOTEDARG/g" | sed -E 's/\[\[[^]]*\]\]//g; s/\(\([^)]*\)\)//g')
           RO_TARGETS=$(printf '%s' "$CMD_ROQ" | grep -oE '(&>>?|[0-9]*>>?\|?)[[:space:]]*[^[:space:]&;|<>()]+' | sed -E 's/^(&>>?|[0-9]*>>?\|?)[[:space:]]*//' || true)
           if [ -n "$RO_TARGETS" ]; then
             while IFS= read -r RO_TGT; do
@@ -368,7 +370,7 @@ EOF
         fi
 
         # (b) In-place editors and write utilities.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed[[:space:]]+(-[a-zA-Z]*i|--in-place)|(^|[[:space:];&|(])perl[[:space:]]+[^|;&]*[[:space:]]-[a-zA-Z]*i([[:space:]]|$)'; then
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*(-[a-zA-Z]*i([[:space:]]|$)|--in-place)|(^|[[:space:];&|(])perl[[:space:]]+[^|;&]*[[:space:]]-[a-zA-Z]*i([[:space:]]|$)'; then
           RO_REASON="in-place edit or write utility"
         fi
 

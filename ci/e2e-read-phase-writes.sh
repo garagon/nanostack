@@ -62,12 +62,16 @@ cell_redirection() {
   nh_assert_exit "single-quoted target blocked (>> 'notes.md')"      1 bash_hook "echo hi >> 'notes.md'"
   nh_assert_exit "noclobber override blocked (>| out.txt)"           1 bash_hook 'printf x >| out.txt'
   nh_assert_exit "quoted /dev/null stays allowed"                    0 bash_hook 'true > "/dev/null"'
+  nh_assert_exit "bash comparison is not redirection ([[ 5 > 3 ]])"  0 bash_hook '[[ 5 > 3 ]]'
+  nh_assert_exit "arithmetic comparison allowed ((( count > 0 )))"   0 bash_hook '(( count > 0 ))'
 }
 
 # Cells: in-place editors and write utilities.
 cell_inplace() {
   set_phase security
   nh_assert_exit "sed -i blocked"               1 bash_hook 'sed -i s/a/b/ app.js'
+  nh_assert_exit "sed -E -i blocked (option before -i)" 1 bash_hook "sed -E -i 's/a/b/' app.js"
+
   nh_assert_exit "tee blocked"                  1 bash_hook 'tee log.txt'
   nh_assert_exit "npm install blocked"          1 bash_hook 'npm install left-pad'
   nh_assert_exit "sed without -i allowed"       0 bash_hook 'sed -n 1,5p app.js'
