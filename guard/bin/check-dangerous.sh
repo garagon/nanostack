@@ -339,24 +339,26 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
         # Mutation paths the utility list above cannot see (security
         # review finding #3): output redirection, in-place editors,
         # inline interpreter code, and git worktree mutations all write
-        # without naming a write utility. Detection normalizes quoted
-        # segments first so `grep 'a->b' file` is never read as
-        # redirection. Allowlisted safe reads never reach this tier.
+        # without naming a write utility. Detection runs on a shared
+        # normalization (CMD_RON): quoting must not change the verdict,
+        # so simple quoted tokens are UNQUOTED ("-c" is the same flag
+        # as -c, "tmp" the same ref, "out.txt" the same target,
+        # "/dev/null" the same exemption), while quoted segments with
+        # spaces or shell metacharacters (code bodies, `grep 'a->b'`
+        # patterns) become an inert placeholder. Allowlisted safe reads
+        # never reach this tier.
+        CMD_RON=$(printf '%s' "$CMD" \
+          | sed "s/'\([-a-zA-Z0-9._/=]*\)'/\1/g" \
+          | sed 's/"\([-a-zA-Z0-9._/=]*\)"/\1/g' \
+          | sed "s/'[^']*'/QUOTEDARG/g; s/\"[^\"]*\"/QUOTEDARG/g")
 
-        # (a) Output redirection to anything except /dev/*. Quoted
-        #     segments are REPLACED with a placeholder, not deleted:
-        #     deleting them would erase a quoted target (`> "out.txt"`)
-        #     and let the write through, while an arrow inside quotes
-        #     still disappears either way. Bare fd dups (>&2, 2>&1)
-        #     have no path target and never match the extraction;
-        #     process substitution >(...) is an output pipe.
+        # (a) Output redirection to anything except /dev/*. Bare fd
+        #     dups (>&2, 2>&1) have no path target and never match the
+        #     extraction; process substitution >(...) is an output
+        #     pipe. [[ ... ]] and (( ... )) are comparison contexts
+        #     where > is not a redirection; drop them before scanning.
         if [ -z "$RO_REASON" ]; then
-          # Quoted /dev paths are unquoted first so `> "/dev/null"`
-          # keeps its /dev/* exemption; every other quoted segment
-          # becomes a placeholder.
-          # [[ ... ]] and (( ... )) are comparison contexts where > is
-          # not a redirection; drop them before scanning.
-          CMD_ROQ=$(printf '%s' "$CMD" | sed "s|'\(/dev/[^']*\)'|\1|g" | sed 's|"\(/dev/[^"]*\)"|\1|g' | sed "s/'[^']*'/QUOTEDARG/g; s/\"[^\"]*\"/QUOTEDARG/g" | sed -E 's/\[\[[^]]*\]\]//g; s/\(\([^)]*\)\)//g')
+          CMD_ROQ=$(printf '%s' "$CMD_RON" | sed -E 's/\[\[[^]]*\]\]//g; s/\(\([^)]*\)\)//g')
           RO_TARGETS=$(printf '%s' "$CMD_ROQ" | grep -oE '(&>>?|[0-9]*>>?\|?)[[:space:]]*[^[:space:]&;|<>()]+' | sed -E 's/^(&>>?|[0-9]*>>?\|?)[[:space:]]*//' || true)
           if [ -n "$RO_TARGETS" ]; then
             while IFS= read -r RO_TGT; do
@@ -370,7 +372,7 @@ EOF
         fi
 
         # (b) In-place editors and write utilities.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed[[:space:]]+(--?[a-zA-Z-]+(=[^[:space:]]*)?[[:space:]]+)*(-[a-zA-Z]*i[^[:space:]]*|--in-place(=[^[:space:]]*)?)([[:space:]]|$)|(^|[[:space:];&|(])perl[[:space:]]+(--?[a-zA-Z-]+(=[^[:space:]]*)?[[:space:]]+)*-[a-zA-Z]*i[^[:space:]]*([[:space:]]|$)'; then
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed[[:space:]]+(--?[a-zA-Z-]+(=[^[:space:]]*)?[[:space:]]+)*(-[a-zA-Z]*i[^[:space:]]*|--in-place(=[^[:space:]]*)?)([[:space:]]|$)|(^|[[:space:];&|(])perl[[:space:]]+(--?[a-zA-Z-]+(=[^[:space:]]*)?[[:space:]]+)*-[a-zA-Z]*i[^[:space:]]*([[:space:]]|$)'; then
           RO_REASON="in-place edit or write utility"
         fi
 
@@ -380,13 +382,13 @@ EOF
         # in `python -m pytest -c pytest.ini` the -c belongs to pytest
         # (a config flag on a read), not to the interpreter, and the
         # first non-flag token (pytest) ends the interpreter's flags.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)[[:space:]]+(-[^ec[:space:]][^[:space:]]*[[:space:]]+)*-(e|c)([[:space:]]|$)'; then
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)[[:space:]]+(-[^ec[:space:]][^[:space:]]*[[:space:]]+)*-(e|c)([[:space:]]|$)'; then
           RO_REASON="inline interpreter code"
         fi
         # Stdin-fed bodies are the same risk with different plumbing:
         # `python3 - <<PY ... PY` and `sh <<EOF` execute code no
         # pattern check can see.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(-([[:space:]]|$)|<<)'; then
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(-([[:space:]]|$)|<<)'; then
           RO_REASON="stdin-fed interpreter code"
         fi
 
@@ -396,9 +398,9 @@ EOF
         #     and must not match `merge`, while `git switch -c tmp`
         #     mutates and must.
         if [ -z "$RO_REASON" ]; then
-          case "$CMD_NOQ" in
+          case "$CMD_RON" in
             *git\ *)
-              GIT_SUBPAIR=$(printf '%s' "$CMD_NOQ" | awk '{
+              GIT_SUBPAIR=$(printf '%s' "$CMD_RON" | awk '{
                 for (i = 1; i <= NF; i++) {
                   if ($i == "git" || $i ~ /\/git$/) {
                     for (j = i + 1; j <= NF; j++) {
