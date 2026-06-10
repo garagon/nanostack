@@ -351,7 +351,10 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
         #     have no path target and never match the extraction;
         #     process substitution >(...) is an output pipe.
         if [ -z "$RO_REASON" ]; then
-          CMD_ROQ=$(printf '%s' "$CMD" | sed "s/'[^']*'/QUOTEDARG/g; s/\"[^\"]*\"/QUOTEDARG/g")
+          # Quoted /dev paths are unquoted first so `> "/dev/null"`
+          # keeps its /dev/* exemption; every other quoted segment
+          # becomes a placeholder.
+          CMD_ROQ=$(printf '%s' "$CMD" | sed "s|'\(/dev/[^']*\)'|\1|g" | sed 's|"\(/dev/[^"]*\)"|\1|g' | sed "s/'[^']*'/QUOTEDARG/g; s/\"[^\"]*\"/QUOTEDARG/g")
           RO_TARGETS=$(printf '%s' "$CMD_ROQ" | grep -oE '(&>>?|[0-9]*>>?\|?)[[:space:]]*[^[:space:]&;|<>()]+' | sed -E 's/^(&>>?|[0-9]*>>?\|?)[[:space:]]*//' || true)
           if [ -n "$RO_TARGETS" ]; then
             while IFS= read -r RO_TGT; do
@@ -387,20 +390,31 @@ EOF
         if [ -z "$RO_REASON" ]; then
           case "$CMD_NOQ" in
             *git\ *)
-              GIT_SUB=$(printf '%s' "$CMD_NOQ" | awk '{
+              GIT_SUBPAIR=$(printf '%s' "$CMD_NOQ" | awk '{
                 for (i = 1; i <= NF; i++) {
                   if ($i == "git" || $i ~ /\/git$/) {
                     for (j = i + 1; j <= NF; j++) {
                       if ($j == "-C" || $j == "-c" || $j == "--exec-path" || $j == "--git-dir" || $j == "--work-tree" || $j == "--namespace") { j++; continue }
                       if ($j ~ /^-/) continue
-                      print $j; exit
+                      print $j, $(j + 1); exit
                     }
                   }
                 }
               }' || true)
+              GIT_SUB="${GIT_SUBPAIR%% *}"
+              GIT_SUB2="${GIT_SUBPAIR#* }"
+              [ "$GIT_SUB2" = "$GIT_SUBPAIR" ] && GIT_SUB2=""
               case "$GIT_SUB" in
-                checkout|switch|restore|stash|apply|am|merge|rebase|cherry-pick|revert|clean|pull|worktree)
+                checkout|switch|restore|apply|am|merge|rebase|cherry-pick|revert|clean|pull)
                   RO_REASON="git worktree mutation (git $GIT_SUB)"
+                  ;;
+                stash|worktree)
+                  # Read-only inspection forms stay usable during
+                  # review/security diagnostics.
+                  case "$GIT_SUB2" in
+                    list|show) ;;
+                    *) RO_REASON="git worktree mutation (git $GIT_SUB)" ;;
+                  esac
                   ;;
               esac
               ;;

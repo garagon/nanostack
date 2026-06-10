@@ -61,6 +61,7 @@ cell_redirection() {
   nh_assert_exit "quoted redirection target blocked (> \"out.txt\")"  1 bash_hook 'printf x > "out.txt"'
   nh_assert_exit "single-quoted target blocked (>> 'notes.md')"      1 bash_hook "echo hi >> 'notes.md'"
   nh_assert_exit "noclobber override blocked (>| out.txt)"           1 bash_hook 'printf x >| out.txt'
+  nh_assert_exit "quoted /dev/null stays allowed"                    0 bash_hook 'true > "/dev/null"'
 }
 
 # Cells: in-place editors and write utilities.
@@ -95,6 +96,9 @@ cell_git_mutations() {
   nh_assert_exit "git stash list allowed"       0 bash_hook 'git stash list'
   nh_assert_exit "git diff allowed"             0 bash_hook 'git diff'
   nh_assert_exit "git merge-base is a read, allowed" 0 bash_hook 'git merge-base main HEAD'
+  nh_assert_exit "git stash show is a read, allowed"  0 bash_hook 'git stash show'
+  nh_assert_exit "git worktree list is a read, allowed" 0 bash_hook 'git worktree list'
+  nh_assert_exit "git worktree add blocked"           1 bash_hook 'git worktree add ../w2'
 }
 
 # Cells: the block is phase-scoped, not global.
