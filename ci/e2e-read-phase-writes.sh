@@ -130,6 +130,8 @@ open()
 PY'
   nh_assert_exit "script execution with flag allowed"         0 bash_hook 'bash -x build.sh'
   nh_assert_exit "quoted -c flag still blocks (python3 \"-c\")" 1 bash_hook 'python3 "-c" "open()"'
+  nh_assert_exit "ANSI-C quoted -c still blocks"             1 bash_hook "python3 \$'-c' 'open(1)'"
+
   nh_assert_exit "combined shell flag blocks (bash -lc)"      1 bash_hook 'bash -lc "echo x > f"'
   nh_assert_exit "combined shell flag blocks (sh -ec)"        1 bash_hook 'sh -ec "echo x > f"'
   nh_assert_exit "combined python flag blocks (python -bc)"   1 bash_hook 'python -bc "open()"'
@@ -192,6 +194,7 @@ cell_git_mutations() {
   nh_assert_exit "git switch blocked"           1 bash_hook 'git switch -c tmp'
   nh_assert_exit "git clean -fd blocked"        1 bash_hook 'git clean -fd'
   nh_assert_exit "git clean --dry-run is a read" 0 bash_hook 'git clean --dry-run'
+  nh_assert_exit "clustered git clean -nfd is dry-run" 0 bash_hook 'git clean -nfd'
   nh_assert_exit "tab-separated git mutation blocked" 1 bash_hook "$(printf 'git\tcheckout main')"
 
   nh_assert_exit "git stash list allowed"       0 bash_hook 'git stash list'

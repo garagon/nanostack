@@ -348,6 +348,7 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
         # patterns) become an inert placeholder. Allowlisted safe reads
         # never reach this tier.
         CMD_RON=$(printf '%s' "$CMD" \
+          | sed "s/[$]\x27/\x27/g" \
           | sed "s/'\([-a-zA-Z0-9._/=]*\)'/\1/g" \
           | sed 's/"\([-a-zA-Z0-9._/=]*\)"/\1/g' \
           | sed "s/'[^']*'/QUOTEDARG/g; s/\"[^\"]*\"/QUOTEDARG/g")
@@ -372,6 +373,7 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
         _SUB_BS=$(printf '\134')
         CMD_SUB=$(printf '%s' "$CMD" \
           | sed "s/${_SUB_BS}${_SUB_BS}[$](/XX/g; s/${_SUB_BS}${_SUB_BS}[$]/X/g; s/${_SUB_BS}${_SUB_BS}${_SUB_BT}/X/g" \
+          | sed "s/[$]\x27/\x27/g; s/[$]\"/\"/g" \
           | sed "s/-S[[:space:]]*\"\([^\"]*\)\"/-S \1/g; s/-S[[:space:]]*'\([^']*\)'/-S \1/g" \
           | sed "s/${_SUB_BT}/ ( /g" \
           | sed "s/'\([-a-zA-Z0-9._/=]*\)'/\1/g" \
@@ -907,7 +909,7 @@ EOF
                   if (gc == "clean") {
                     for (a = j + 1; a <= NF; a++) {
                       if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
-                      if ($a == "-n" || $a == "--dry-run") return ""
+                      if ($a == "--dry-run" || ($a !~ /^--/ && $a ~ /^-[a-z]*n/)) return ""
                     }
                     return "mutate:clean"
                   }
