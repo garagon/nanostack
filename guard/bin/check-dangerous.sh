@@ -405,6 +405,21 @@ EOF
         #      allowed; only the mutating ones block.
         if [ -z "$RO_REASON" ] && printf '%s' "$CMD_SUB" | awk '
             function basename(s) { sub(/.*\//, "", s); return s }
+            function is_cmd_pos(i,    k, p, pb, qb) {
+              k = i - 1
+              while (k >= 1) {
+                p = $k
+                if (p ~ /^(\||\|\||&&|;|&|\()$/ || p ~ /[|;&(]$/) return 1
+                if (p ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { k--; continue }
+                pb = p; sub(/.*\//, "", pb)
+                if (pb ~ /^(env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs)$/) { k--; continue }
+                if (p ~ /^-/) { k--; continue }
+                qb = (k >= 2) ? $(k - 1) : ""; sub(/.*\//, "", qb)
+                if (qb ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k -= 2; continue }
+                return 0
+              }
+              return 1
+            }
             function pm_scan(name, start,    k, t) {
               for (k = start; k <= NF; k++) {
                 t = $k
@@ -435,7 +450,7 @@ EOF
             {
               for (i = 1; i <= NF; i++) {
                 b = basename($i)
-                if (b ~ /^(npm|pnpm|yarn|go|pip|pip3|cargo|gem|bundle)$/ && (i == 1 || $(i - 1) ~ /[|;&(]$/ || $(i - 1) ~ /^(\(|;|\||&|&&|\|\|)$/)) {
+                if (b ~ /^(npm|pnpm|yarn|go|pip|pip3|cargo|gem|bundle)$/ && is_cmd_pos(i)) {
                   if (pm_scan(b, i + 1) == "mutate") { found = 1; exit }
                 }
               }
@@ -488,7 +503,9 @@ EOF
               j = gi + 1
               while (j <= NF) {
                 t = $j
-                if (t == "-" || t ~ /^<</) return 1
+                # A lone dash, a heredoc, or an explicit stdin pseudo-file
+                # all run caller-supplied code from stdin.
+                if (t == "-" || t ~ /^<</ || t == "/dev/stdin" || t == "/dev/fd/0") return 1
                 if (t !~ /^-/) {
                   if ((name == "deno" || name == "bun") && t == "eval") return 1
                   return 0

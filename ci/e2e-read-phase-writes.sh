@@ -138,6 +138,10 @@ PY'
   nh_assert_exit "path-qualified env wrapper blocked"           1 bash_hook '/usr/bin/env python3 -c "open()"'
   nh_assert_exit "pipe into path-qualified wrapper blocked"     1 bash_hook 'echo code | /usr/bin/env python3'
   nh_assert_exit "substitution of read command stays allowed"   0 bash_hook 'echo $(git rev-parse HEAD)'
+  nh_assert_exit "stdin pseudo-file is inline code"            1 bash_hook 'echo code | python3 /dev/stdin'
+  nh_assert_exit "heredoc to /dev/stdin is inline code"        1 bash_hook 'python3 /dev/stdin <<PY
+open()
+PY'
 }
 
 # Cells: git worktree mutations beyond add/commit/push/reset.
@@ -205,6 +209,8 @@ cell_package_managers() {
   nh_assert_exit "yarn workspace add blocked"   1 bash_hook 'yarn workspace app add left-pad'
   nh_assert_exit "pip -q install blocked"       1 bash_hook 'pip -q install foo'
   nh_assert_exit "npm run <script> stays read"  0 bash_hook 'npm run add'
+  nh_assert_exit "wrapped npm ci blocked"       1 bash_hook '/usr/bin/env npm ci'
+  nh_assert_exit "env-assignment pnpm add blocked" 1 bash_hook 'FOO=1 pnpm add x'
 }
 
 nh_cell phase-scoped   cell_phase_scoped
