@@ -351,16 +351,29 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
           | sed "s/'\([-a-zA-Z0-9._/=]*\)'/\1/g" \
           | sed 's/"\([-a-zA-Z0-9._/=]*\)"/\1/g' \
           | sed "s/'[^']*'/QUOTEDARG/g; s/\"[^\"]*\"/QUOTEDARG/g")
-        # CMD_SUB additionally turns command-substitution and backtick
-        # boundaries into a bare `(` token, and pads shell operators with
-        # spaces, so an interpreter or git call nested in `$(...)` or
-        # written without spaces around operators (`git diff&&git
-        # checkout`) sits at its own command position for the
-        # whitespace-splitting awk classifiers. (The redirection scan
-        # keeps using CMD_RON so arithmetic `$(( a > b ))` stays a
-        # comparison and attached `>>file` is still seen as redirection.)
-        CMD_SUB=$(printf '%s' "$CMD_RON" \
-          | sed 's/[$]( / ( /g; s/[$](/ ( /g; s/`/ ( /g' \
+        # CMD_SUB is the normalization the awk classifiers (interpreter,
+        # git, package-manager) consume. It is built from CMD, not
+        # CMD_RON, because command substitution stays ACTIVE inside
+        # double quotes (`echo "$(git checkout main)"` runs the
+        # checkout), so a double-quoted segment is only collapsed to an
+        # inert placeholder when it has no `$` or backtick; otherwise its
+        # quotes are stripped and the inner command survives. Single
+        # quotes always disable substitution, so single-quoted bodies
+        # collapse. Substitution and backtick boundaries become a bare
+        # `(` token, and shell operators are space-padded, so a command
+        # nested in `$(...)` or written without spaces around operators
+        # (`git diff&&git checkout`) sits at its own command position.
+        # The redirection scan keeps using CMD_RON, where literal `>`
+        # inside double quotes stays hidden.
+        _SUB_BT=$(printf '\140')
+        CMD_SUB=$(printf '%s' "$CMD" \
+          | sed "s/${_SUB_BT}/ ( /g" \
+          | sed "s/'\([-a-zA-Z0-9._/=]*\)'/\1/g" \
+          | sed 's/"\([-a-zA-Z0-9._/=]*\)"/\1/g' \
+          | sed "s/'[^']*'/QUOTEDARG/g" \
+          | sed 's/"\([^"]*[$][^"]*\)"/\1/g' \
+          | sed 's/"[^"]*"/QUOTEDARG/g' \
+          | sed 's/[$]( / ( /g; s/[$](/ ( /g' \
           | sed 's/&/ \& /g; s/|/ | /g; s/;/ ; /g; s/(/ ( /g; s/)/ ) /g')
 
         # (a) Output redirection to anything except /dev/*. Bare fd
@@ -388,10 +401,46 @@ EOF
         # operator for an in-place flag rather than requiring it right
         # after the leading options. `-i`/`--in-place` only ever means
         # in-place for these tools, so position does not matter.
-        # sed/perl/ruby -i edit in place; ruby is also an interpreter
-        # below but its -i form mutates and must block while -pe/-ne
+        # Write utilities (tee/truncate/ln/install/patch/dd) and the
+        # in-place editors (sed/perl/ruby -i) must be the INVOKED command,
+        # not an argument: `npm run install` and `printf install` are not
+        # the install utility. is_cmd_pos anchors the match to a command
+        # position (start, after an operator, or after a wrapper). ruby
+        # is also an interpreter below; its -i form mutates while -pe/-ne
         # stream idioms stay usable.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])(sed|perl|ruby)([[:space:]]+[^[:space:];&|]+)*[[:space:]]+(-[a-zA-Z0-9]*i[^[:space:]]*|--in-place(=[^[:space:]]*)?)([[:space:]]|$)'; then
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_SUB" | awk '
+            function basename(s) { sub(/.*\//, "", s); return s }
+            function is_cmd_pos(i,    k, p, pb, qb) {
+              k = i - 1
+              while (k >= 1) {
+                p = $k
+                if (p ~ /^(\||\|\||&&|;|&|\()$/ || p ~ /[|;&(]$/) return 1
+                if (p ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { k--; continue }
+                pb = p; sub(/.*\//, "", pb)
+                if (pb ~ /^(env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs)$/) { k--; continue }
+                if (p ~ /^-/) { k--; continue }
+                qb = (k >= 2) ? $(k - 1) : ""; sub(/.*\//, "", qb)
+                if (qb ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k -= 2; continue }
+                return 0
+              }
+              return 1
+            }
+            {
+              for (i = 1; i <= NF; i++) {
+                b = basename($i)
+                if (!is_cmd_pos(i)) continue
+                if (b ~ /^(tee|truncate|ln|install|patch|dd)$/) { found = 1; exit }
+                if (b == "sed" || b == "perl" || b == "ruby") {
+                  for (k = i + 1; k <= NF; k++) {
+                    t = $k
+                    if (t ~ /^(&&|\|\||;|\||&|\(|\))$/) break
+                    if ((t !~ /^--/ && t ~ /^-[a-zA-Z0-9]*i[^[:space:]]*$/) || t ~ /^--in-place/) { found = 1; exit }
+                  }
+                }
+              }
+            }
+            END { exit(found ? 0 : 1) }
+          '; then
           RO_REASON="in-place edit or write utility"
         fi
 

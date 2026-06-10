@@ -85,6 +85,8 @@ cell_inplace() {
   nh_assert_exit "npm install blocked"          1 bash_hook 'npm install left-pad'
   nh_assert_exit "sed without -i allowed"       0 bash_hook 'sed -n 1,5p app.js'
   nh_assert_exit "plain read tool allowed"      0 bash_hook 'diff a.txt b.txt'
+  nh_assert_exit "install utility at cmd pos blocked" 1 bash_hook 'install -m 0644 a b'
+  nh_assert_exit "install as npm script name allowed" 0 bash_hook 'npm run install'
 }
 
 # Cells: inline interpreter code (the quoted body can write through any
@@ -142,6 +144,8 @@ PY'
   nh_assert_exit "heredoc to /dev/stdin is inline code"        1 bash_hook 'python3 /dev/stdin <<PY
 open()
 PY'
+  nh_assert_exit "double-quoted substitution inline code blocks"  1 bash_hook 'echo "$(python3 -c '"'"'open(1)'"'"')"'
+  nh_assert_exit "double-quoted git mutation blocks"              1 bash_hook 'echo "$(git checkout main)"'
 }
 
 # Cells: git worktree mutations beyond add/commit/push/reset.
