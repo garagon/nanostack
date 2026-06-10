@@ -378,11 +378,28 @@ EOF
 
         # (c) Inline interpreter code: a one-liner can write through any
         #     API, and its quoted body is invisible to pattern checks.
-        # The flag must sit among the interpreter's own leading flags:
-        # in `python -m pytest -c pytest.ini` the -c belongs to pytest
-        # (a config flag on a read), not to the interpreter, and the
-        # first non-flag token (pytest) ends the interpreter's flags.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)[[:space:]]+(-[^ec[:space:]][^[:space:]]*[[:space:]]+)*-(e|c)([[:space:]]|$)'; then
+        # The code flag must sit among the interpreter's OWN leading
+        # flags: in `python -m pytest -c pytest.ini` the -c belongs to
+        # pytest (a config flag on a read), not to the interpreter, and
+        # the first non-flag token (pytest) ends the interpreter's
+        # flags. A "leading flag" here is a single-dash cluster with no
+        # code letter; the run stops at the first non-flag token.
+        #
+        # Shells and python pass code via -c, and the letter may be
+        # combined into a cluster (`bash -lc`, `sh -ec`, `python -bc`).
+        # A leading cluster CONTAINING c is therefore code. The safe-run
+        # pattern `-[^c[:space:]]*[[:space:]]+` deliberately cannot match
+        # a cluster with c (it stops at the c), so `-lc` is never eaten
+        # as a benign flag.
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(bash|sh|zsh|ksh|dash|python[0-9.]*)[[:space:]]+(-[^c[:space:]]*[[:space:]]+)*-[^[:space:]]*c[^[:space:]]*([[:space:]]|$)'; then
+          RO_REASON="inline interpreter code"
+        fi
+        # The -e scripting languages (node/deno/bun/perl/ruby/php) keep
+        # the standalone-flag check: `node -e`, `perl -e`, `ruby -e`
+        # block, while the read-leaning stream idioms `perl -pe`/`-ne`
+        # (code combined behind a print/loop flag) stay usable — their
+        # write risk is -i, caught by tier (b).
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(node|deno|bun|ruby|perl|php)[[:space:]]+(-[^ec[:space:]][^[:space:]]*[[:space:]]+)*-(e|c)([[:space:]]|$)'; then
           RO_REASON="inline interpreter code"
         fi
         # Stdin-fed bodies are the same risk with different plumbing:
