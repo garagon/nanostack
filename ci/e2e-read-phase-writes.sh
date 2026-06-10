@@ -273,6 +273,8 @@ cell_git_mutations() {
   nh_assert_exit "unquoted eval git mutation blocked"        1 bash_hook 'eval git checkout main'
   nh_assert_exit "unquoted eval redirection blocked"         1 bash_hook 'eval printf x \> out.txt'
   nh_assert_exit "eval body after separator blocked"         1 bash_hook 'eval "echo ok; git checkout main"'
+  nh_assert_exit "eval word inside awk program is inert"      0 bash_hook 'awk '\''{ print "foo eval printf x > out" }'\'' data.txt'
+  nh_assert_exit "eval word inside grep pattern is inert"     0 bash_hook "grep -R 'eval printf x > out' docs"
   nh_assert_exit "escaped bare substitution not executed"    0 bash_hook 'echo \$(git checkout main)'
   nh_assert_exit "no-space && chained mutation blocks"       1 bash_hook 'git diff&&git checkout main'
   nh_assert_exit "no-space ; chained mutation blocks"        1 bash_hook 'git status;git restore app.js'

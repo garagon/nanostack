@@ -643,7 +643,35 @@ EOF
           # the remainder after `eval` (quoted or not), strip surrounding
           # quotes, and unescape one backslash level so `eval printf x \>
           # out` recurses as `printf x > out`.
-          EVAL_BODIES=$(printf '%s' "$CMD" | grep -oE "(^|[[:space:];&|(])eval[[:space:]]+(\"[^\"]*\"|${_SQ}[^${_SQ}]*${_SQ}|[^;|&]*)" 2>/dev/null | sed -E "s/.*eval[[:space:]]+//" | sed "s/^[\"${_SQ}]//; s/[\"${_SQ}]\$//" | tr -d "${_BS}" || true)
+          # Quote-aware: only `eval` appearing OUTSIDE quotes at a command
+          # position (start or after an operator) is the shell builtin; an
+          # `eval` inside single/double quotes is inert data (e.g. an awk
+          # program that prints the word "eval"), so it is skipped.
+          EVAL_BODIES=$(printf '%s' "$CMD" | awk '
+            {
+              s = $0; n = length(s); i = 1; cmdpos = 1
+              while (i <= n) {
+                c = substr(s, i, 1)
+                if (c == "\47") { j = i + 1; while (j <= n && substr(s, j, 1) != "\47") j++; i = j + 1; cmdpos = 0; continue }
+                if (c == "\42") { j = i + 1; while (j <= n && substr(s, j, 1) != "\42") j++; i = j + 1; cmdpos = 0; continue }
+                if (c ~ /[;|&(){}]/ || c == "\n") { cmdpos = 1; i++; continue }
+                if (c == " " || c == "\t") { i++; continue }
+                w = ""; k = i
+                while (k <= n) { ck = substr(s, k, 1); if (ck == " " || ck == "\t" || ck == "\n" || ck ~ /[;|&(){}\47\42]/) break; w = w ck; k++ }
+                if (w == "eval" && cmdpos) {
+                  body = ""; m = k; bq = ""
+                  while (m <= n) {
+                    cm = substr(s, m, 1)
+                    if (bq != "") { if (cm == bq) bq = ""; body = body cm; m++; continue }
+                    if (cm == "\47" || cm == "\42") { bq = cm; body = body cm; m++; continue }
+                    if (cm == ";" || cm == "|" || cm == "&") break
+                    body = body cm; m++
+                  }
+                  print body; i = m; cmdpos = 1; continue
+                }
+                cmdpos = 0; i = k
+              }
+            }' 2>/dev/null | sed "s/^[[:space:]]*//; s/^[\"${_SQ}]//; s/[\"${_SQ}]\$//" | tr -d "${_BS}" || true)
           SUBST_BODIES=$(printf '%s\n%s' "$SUBST_BODIES" "$EVAL_BODIES")
           if [ -n "$SUBST_BODIES" ]; then
             while IFS= read -r _body; do
