@@ -395,8 +395,8 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
           CMD_ROQ=$(printf '%s' "$CMD_RON" | awk '
             {
               if (skip) { if ($0 ~ ("^[[:space:]]*" delim "[[:space:]]*$")) skip = 0; next }
-              if (match($0, /<<-?[[:space:]]*[A-Za-z_][A-Za-z0-9_]*/)) {
-                d = substr($0, RSTART, RLENGTH); gsub(/<<-?[[:space:]]*/, "", d); delim = d; skip = 1
+              if (match($0, /<<-?[[:space:]]*[\\'"'"'"]?[A-Za-z_][A-Za-z0-9_]*/)) {
+                d = substr($0, RSTART, RLENGTH); gsub(/<<-?[[:space:]]*[\\'"'"'"]?/, "", d); delim = d; skip = 1
               }
               print
             }' | sed -E 's/\\[<>]//g; s/\[\[[^]]*\]\]//g; s/\(\([^)]*\)\)//g')
@@ -448,7 +448,7 @@ EOF
               # command position only if nothing else runs before it.
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/) { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/) { bnd = j + 1; break }
               j = bnd
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
@@ -513,7 +513,7 @@ EOF
               # command position only if nothing else runs before it.
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/) { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/) { bnd = j + 1; break }
               j = bnd
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
@@ -664,7 +664,7 @@ EOF
               # command position only if nothing else runs before it.
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/) { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/) { bnd = j + 1; break }
               j = bnd
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
@@ -740,7 +740,7 @@ EOF
             function is_piped(i,    bnd, j) {
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/) { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/) { bnd = j + 1; break }
               return (bnd >= 2 && $(bnd - 1) ~ /\|$/) ? 1 : 0
             }
             {
@@ -770,9 +770,9 @@ EOF
           CMD_NOHD=$(printf '%s' "$CMD_RON" | awk '
             {
               if (skip) { if ($0 ~ ("^[[:space:]]*" delim "[[:space:]]*$")) skip = 0; next }
-              if (match($0, /<<-?[[:space:]]*[A-Za-z_][A-Za-z0-9_]*/)) {
+              if (match($0, /<<-?[[:space:]]*[\\'"'"'"]?[A-Za-z_][A-Za-z0-9_]*/)) {
                 d = substr($0, RSTART, RLENGTH)
-                gsub(/<<-?[[:space:]]*/, "", d)
+                gsub(/<<-?[[:space:]]*[\\'"'"'"]?/, "", d)
                 delim = d; skip = 1
               }
               print
@@ -803,7 +803,7 @@ EOF
                 function is_cmd_pos(i,    bnd, j, t, tb) {
                   bnd = 1
                   for (j = i - 1; j >= 1; j--)
-                    if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/) { bnd = j + 1; break }
+                    if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/) { bnd = j + 1; break }
                   j = bnd
                   while (j < i) {
                     t = $j; tb = t; sub(/.*\//, "", tb)

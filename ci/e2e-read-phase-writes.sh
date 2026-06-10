@@ -68,6 +68,10 @@ cell_redirection() {
   nh_assert_exit "heredoc body containing > is not redirection"      0 bash_hook 'cat <<EOF
 this is text > out
 EOF'
+  nh_assert_exit "find -exec inline code blocked"                   1 bash_hook "find . -exec sh -c 'echo x > f' ;"
+  nh_assert_exit "escaped heredoc delimiter body ignored"           0 bash_hook 'cat <<\EOF
+a > b
+EOF'
   nh_assert_exit "bash comparison is not redirection ([[ 5 > 3 ]])"  0 bash_hook '[[ 5 > 3 ]]'
   nh_assert_exit "arithmetic comparison allowed ((( count > 0 )))"   0 bash_hook '(( count > 0 ))'
   nh_assert_exit "escaped test comparison not redirection"          0 bash_hook '[ a \> b ]'
@@ -215,6 +219,7 @@ cell_git_mutations() {
   nh_assert_exit "branch -v && echo is a read"               0 bash_hook 'git branch -v && echo done'
   nh_assert_exit "branch read then chained create blocks"    1 bash_hook 'git branch -v && git branch tmp'
   nh_assert_exit "git mutation in substitution blocks"       1 bash_hook 'echo $(git checkout main)'
+  nh_assert_exit "find -exec git mutation blocked"           1 bash_hook 'find . -exec git checkout main \;'
   nh_assert_exit "no-space && chained mutation blocks"       1 bash_hook 'git diff&&git checkout main'
   nh_assert_exit "no-space ; chained mutation blocks"        1 bash_hook 'git status;git restore app.js'
   nh_assert_exit "chained read-then-mutate blocks"           1 bash_hook 'git diff && git checkout main'
