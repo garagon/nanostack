@@ -227,6 +227,7 @@ cell_git_mutations() {
   nh_assert_exit "eval harmless body stays allowed"          0 bash_hook 'eval "echo hello"'
   nh_assert_exit "unquoted eval git mutation blocked"        1 bash_hook 'eval git checkout main'
   nh_assert_exit "unquoted eval redirection blocked"         1 bash_hook 'eval printf x \> out.txt'
+  nh_assert_exit "eval body after separator blocked"         1 bash_hook 'eval "echo ok; git checkout main"'
   nh_assert_exit "escaped bare substitution not executed"    0 bash_hook 'echo \$(git checkout main)'
   nh_assert_exit "no-space && chained mutation blocks"       1 bash_hook 'git diff&&git checkout main'
   nh_assert_exit "no-space ; chained mutation blocks"        1 bash_hook 'git status;git restore app.js'
@@ -284,6 +285,8 @@ cell_package_managers() {
   nh_assert_exit "npm exec inline code blocked"    1 bash_hook 'npm exec sh -c "echo x > f"'
   nh_assert_exit "npx inline code blocked"         1 bash_hook 'npx sh -c "echo x > f"'
   nh_assert_exit "npx running a tool stays read"   0 bash_hook 'npx eslint .'
+  nh_assert_exit "go fmt rewrites source, blocked"  1 bash_hook 'go fmt ./...'
+  nh_assert_exit "cargo fmt --check stays a read"   0 bash_hook 'cargo fmt --check'
 }
 
 nh_cell phase-scoped   cell_phase_scoped

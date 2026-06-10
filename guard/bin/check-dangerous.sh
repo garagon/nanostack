@@ -537,7 +537,7 @@ EOF
               }
               return (j == i) ? 1 : 0
             }
-            function pm_scan(name, start,    k, t) {
+            function pm_scan(name, start,    k, t, a) {
               for (k = start; k <= NF; k++) {
                 t = $k
                 if (t ~ /^(&&|\|\||;|\||&|\(|\))$/) return ""
@@ -551,15 +551,16 @@ EOF
                   if (t ~ /^(run|run-script|exec|test|start|ls|list|view|info|show|audit|outdated|why|search|ping|whoami|help|dlx)$/) return ""
                   if (t ~ /^(ci|i|add|remove|rm|uninstall|un|update|up|upgrade|dedupe|prune|rebuild|link|unlink|install|import|publish)$/) return "mutate"
                 } else if (name == "go") {
-                  if (t == "get" || t == "install" || t == "generate") return "mutate"
+                  if (t == "get" || t == "install" || t == "generate" || t == "fmt") return "mutate"
                   if (t == "mod") { if ($(k + 1) ~ /^(tidy|edit|vendor|download|init)$/) return "mutate"; return "" }
-                  if (t ~ /^(test|build|run|vet|list|version|env|fmt|doc|tool)$/) return ""
+                  if (t ~ /^(test|build|run|vet|list|version|env|doc|tool)$/) return ""
                 } else if (name ~ /^pip[0-9.]*$/) {
                   if (t ~ /^(install|uninstall|download)$/) return "mutate"
                   if (t ~ /^(list|show|freeze|check|config|search|help|inspect)$/) return ""
                 } else if (name == "cargo") {
                   if (t ~ /^(add|remove|install|update|uninstall)$/) return "mutate"
-                  if (t ~ /^(test|build|check|run|clippy|fmt|doc|tree|metadata|bench)$/) return ""
+                  if (t == "fmt") { for (a = k + 1; a <= NF; a++) { if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break; if ($a == "--check" || $a == "--dry-run") return "" } return "mutate" }
+                  if (t ~ /^(test|build|check|run|clippy|doc|tree|metadata|bench)$/) return ""
                 } else if (name == "gem") {
                   if (t ~ /^(install|uninstall|update)$/) return "mutate"
                   if (t ~ /^(list|search|info|which|env|help|contents)$/) return ""
@@ -634,7 +635,7 @@ EOF
           # the remainder after `eval` (quoted or not), strip surrounding
           # quotes, and unescape one backslash level so `eval printf x \>
           # out` recurses as `printf x > out`.
-          EVAL_BODIES=$(printf '%s' "$CMD" | grep -oE "(^|[[:space:];&|(])eval[[:space:]]+[^;|&]*" 2>/dev/null | sed -E "s/.*eval[[:space:]]+//" | sed "s/^[\"${_SQ}]//; s/[\"${_SQ}]\$//" | tr -d "${_BS}" || true)
+          EVAL_BODIES=$(printf '%s' "$CMD" | grep -oE "(^|[[:space:];&|(])eval[[:space:]]+(\"[^\"]*\"|${_SQ}[^${_SQ}]*${_SQ}|[^;|&]*)" 2>/dev/null | sed -E "s/.*eval[[:space:]]+//" | sed "s/^[\"${_SQ}]//; s/[\"${_SQ}]\$//" | tr -d "${_BS}" || true)
           SUBST_BODIES=$(printf '%s\n%s' "$SUBST_BODIES" "$EVAL_BODIES")
           if [ -n "$SUBST_BODIES" ]; then
             while IFS= read -r _body; do
