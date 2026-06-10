@@ -401,18 +401,15 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
                 d = substr($0, RSTART, RLENGTH); gsub(/<<-?[[:space:]]*[\\'"'"'"]?/, "", d); delim = d; skip = 1
               }
               print
-            }' | sed -E 's/\\[<>]//g; s/\[\[[^]]*\]\]//g; s/\(\([^)]*\)\)//g')
-          # >& file / >&file redirect stdout+stderr to a file; >&2 is an
-          # fd dup. Match both the &>/fd forms and >&, then drop targets
-          # that are bare fd numbers below.
+            }' | sed -E 's/\\[<>]//g; s/\[\[[^]]*\]\]//g; s/\(\([^)]*\)\)//g' \
+            | sed -E 's/[0-9]*>&[0-9]+//g')
+          # fd dups (2>&1, >&2) were removed above, so every remaining
+          # redirection (>, >>, &>, >&file, >|) targets a file -- even a
+          # numeric filename like `> 1`.
           RO_TARGETS=$(printf '%s' "$CMD_ROQ" | grep -oE '(&>>?|[0-9]*>>?\|?|>&)[[:space:]]*[^[:space:]&;|<>()]+' | sed -E 's/^(&>>?|[0-9]*>>?\|?|>&)[[:space:]]*//' || true)
           if [ -n "$RO_TARGETS" ]; then
             while IFS= read -r RO_TGT; do
               [ -z "$RO_TGT" ] && continue
-              # A bare fd number after >& is a dup (>&2), not a file.
-              case "$RO_TGT" in
-                [0-9]) continue ;;
-              esac
               # Only genuine device sinks are exempt; a target that walks
               # out of /dev via `..` (e.g. /dev/../tmp/out) writes a real
               # file and is not exempt.

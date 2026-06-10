@@ -65,6 +65,8 @@ cell_redirection() {
   nh_assert_exit "quoted /dev/null stays allowed"                    0 bash_hook 'true > "/dev/null"'
   nh_assert_exit ">& file redirection blocked"                       1 bash_hook 'echo hi >& out'
   nh_assert_exit ">&2 fd dup stays allowed"                          0 bash_hook 'echo hi >&2'
+  nh_assert_exit "numeric filename redirection blocked"             1 bash_hook 'printf x > 1'
+  nh_assert_exit "2> numeric filename blocked"                      1 bash_hook 'cmd 2> 1'
   nh_assert_exit "heredoc body containing > is not redirection"      0 bash_hook 'cat <<EOF
 this is text > out
 EOF'
