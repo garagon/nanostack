@@ -394,7 +394,14 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
           if [ -n "$RO_TARGETS" ]; then
             while IFS= read -r RO_TGT; do
               [ -z "$RO_TGT" ] && continue
-              case "$RO_TGT" in /dev/*) ;; *) RO_REASON="output redirection to '$RO_TGT'"; break ;; esac
+              # Only genuine device sinks are exempt; a target that walks
+              # out of /dev via `..` (e.g. /dev/../tmp/out) writes a real
+              # file and is not exempt.
+              case "$RO_TGT" in
+                */../*|*/..) RO_REASON="output redirection to '$RO_TGT'"; break ;;
+                /dev/null|/dev/stdout|/dev/stderr|/dev/zero|/dev/fd/[0-9]*|/dev/std[a-z]*) ;;
+                *) RO_REASON="output redirection to '$RO_TGT'"; break ;;
+              esac
             done <<EOF
 $RO_TARGETS
 EOF
@@ -417,7 +424,7 @@ EOF
         # stream idioms stay usable.
         if [ -z "$RO_REASON" ] && printf '%s' "$CMD_SUB" | awk '
             function basename(s) { sub(/.*\//, "", s); return s }
-            function is_cmd_pos(i,    k, p, pb, qb) {
+            function is_cmd_pos(i,    k, p, pb, qb, m) {
               k = i - 1
               while (k >= 1) {
                 p = $k
@@ -426,8 +433,10 @@ EOF
                 pb = p; sub(/.*\//, "", pb)
                 if (pb ~ /^(env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs)$/) { k--; continue }
                 if (p ~ /^-/) { k--; continue }
-                qb = (k >= 2) ? $(k - 1) : ""; sub(/.*\//, "", qb)
-                if (qb ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k -= 2; continue }
+                m = k - 1
+                while (m >= 1 && $m ~ /^-/) m--
+                qb = (m >= 1) ? $m : ""; sub(/.*\//, "", qb)
+                if (qb ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k = m - 1; continue }
                 return 0
               }
               return 1
@@ -461,7 +470,7 @@ EOF
         #      allowed; only the mutating ones block.
         if [ -z "$RO_REASON" ] && printf '%s' "$CMD_SUB" | awk '
             function basename(s) { sub(/.*\//, "", s); return s }
-            function is_cmd_pos(i,    k, p, pb, qb) {
+            function is_cmd_pos(i,    k, p, pb, qb, m) {
               k = i - 1
               while (k >= 1) {
                 p = $k
@@ -470,8 +479,10 @@ EOF
                 pb = p; sub(/.*\//, "", pb)
                 if (pb ~ /^(env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs)$/) { k--; continue }
                 if (p ~ /^-/) { k--; continue }
-                qb = (k >= 2) ? $(k - 1) : ""; sub(/.*\//, "", qb)
-                if (qb ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k -= 2; continue }
+                m = k - 1
+                while (m >= 1 && $m ~ /^-/) m--
+                qb = (m >= 1) ? $m : ""; sub(/.*\//, "", qb)
+                if (qb ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k = m - 1; continue }
                 return 0
               }
               return 1
@@ -509,9 +520,16 @@ EOF
             {
               for (i = 1; i <= NF; i++) {
                 b = basename($i)
-                # `python -m pip install` is pip by another name.
-                if (b ~ /^python[0-9.]*$/ && is_cmd_pos(i) && $(i + 1) == "-m" && $(i + 2) == "pip") {
-                  if (pm_scan("pip", i + 3) == "mutate") { found = 1; exit }
+                # `python -m pip install` is pip by another name, even
+                # with leading python options (`python3 -u -I -m pip`).
+                if (b ~ /^python[0-9.]*$/ && is_cmd_pos(i)) {
+                  jj = i + 1
+                  while (jj <= NF && $jj ~ /^-/ && $jj != "-m" && $jj != "--module") {
+                    if ($jj == "-W" || $jj == "-X" || $jj == "-Q" || $jj == "--check-hash-based-pycs") jj += 2; else jj++
+                  }
+                  if (jj <= NF && ($jj == "-m" || $jj == "--module") && $(jj + 1) == "pip") {
+                    if (pm_scan("pip", jj + 2) == "mutate") { found = 1; exit }
+                  }
                 }
                 if (b ~ /^(npm|pnpm|yarn|go|pip|pip3|cargo|gem|bundle)$/ && is_cmd_pos(i)) {
                   if (pm_scan(b, i + 1) == "mutate") { found = 1; exit }
@@ -588,7 +606,7 @@ EOF
             # after a run of wrappers / env-assignments. Walk backward so
             # `env FOO=1 python3`, `timeout 5 python3`, and `FOO=1 sudo
             # python3` are recognised; `grep python3 ...` is not.
-            function is_cmd_pos(i,    k, p, pb, qb) {
+            function is_cmd_pos(i,    k, p, pb, qb, m) {
               k = i - 1
               while (k >= 1) {
                 p = $k
@@ -597,8 +615,10 @@ EOF
                 pb = p; sub(/.*\//, "", pb)
                 if (pb ~ /^(env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs)$/) { k--; continue }
                 if (p ~ /^-/) { k--; continue }
-                qb = (k >= 2) ? $(k - 1) : ""; sub(/.*\//, "", qb)
-                if (qb ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k -= 2; continue }
+                m = k - 1
+                while (m >= 1 && $m ~ /^-/) m--
+                qb = (m >= 1) ? $m : ""; sub(/.*\//, "", qb)
+                if (qb ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k = m - 1; continue }
                 return 0
               }
               return 1
@@ -707,7 +727,7 @@ EOF
                 # Only a git token at a command position is an invocation;
                 # `printf git checkout` or `python3 process.py git ...`
                 # carry git as an argument and must not be classified.
-                function is_cmd_pos(i,    k, p, pb, qb) {
+                function is_cmd_pos(i,    k, p, pb, qb, m) {
                   k = i - 1
                   while (k >= 1) {
                     p = $k

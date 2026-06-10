@@ -56,6 +56,7 @@ cell_redirection() {
   nh_assert_exit "truncate redirection blocked (printf x > out.txt)" 1 bash_hook 'printf x > out.txt'
   nh_assert_exit "stderr-to-file blocked (cmd 2> err.log)"           1 bash_hook 'diff a.txt b.txt 2> err.log'
   nh_assert_exit "/dev/null redirection allowed"                     0 bash_hook 'true > /dev/null'
+  nh_assert_exit "/dev escape via .. blocked"                        1 bash_hook 'printf x > /dev/../tmp/out'
   nh_assert_exit "bare fd dup allowed (npm test 2>&1)"               0 bash_hook 'npm test 2>&1'
   nh_assert_exit "quoted arrow is not redirection (awk \$3 > 5)"     0 bash_hook "awk '\$3 > 5' data.txt"
   nh_assert_exit "quoted redirection target blocked (> \"out.txt\")"  1 bash_hook 'printf x > "out.txt"'
@@ -132,6 +133,7 @@ PY'
   nh_assert_exit "php -r inline code blocked"                    1 bash_hook 'php -r "file_put_contents()"'
   nh_assert_exit "env-wrapped inline code blocked"              1 bash_hook 'env FOO=1 python3 -c "open()"'
   nh_assert_exit "timeout-wrapped inline code blocked"          1 bash_hook 'timeout 5 python3 -c "open()"'
+  nh_assert_exit "timeout with options wraps inline code"      1 bash_hook 'timeout --preserve-status 5 python3 -c "open()"'
   nh_assert_exit "env-assignment prefix inline code blocked"    1 bash_hook 'FOO=1 python3 -c "open()"'
   nh_assert_exit "attached perl -e code blocked"                1 bash_hook "perl -e'open F,\">x\"'"
   nh_assert_exit "pipe into wrapped interpreter blocked"        1 bash_hook 'echo code | env python3'
@@ -223,6 +225,7 @@ cell_package_managers() {
   nh_assert_exit "env-assignment pnpm add blocked" 1 bash_hook 'FOO=1 pnpm add x'
   nh_assert_exit "python -m pip install blocked"   1 bash_hook 'python -m pip install foo'
   nh_assert_exit "python -m pytest stays a read"   0 bash_hook 'python -m pytest'
+  nh_assert_exit "python flags before -m pip blocked" 1 bash_hook 'python3 -u -m pip install foo'
   nh_assert_exit "npm config set blocked"          1 bash_hook 'npm config set registry x'
   nh_assert_exit "npm cache clean blocked"         1 bash_hook 'npm cache clean --force'
   nh_assert_exit "npm config get stays a read"     0 bash_hook 'npm config get registry'
