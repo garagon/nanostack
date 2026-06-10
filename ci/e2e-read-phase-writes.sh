@@ -115,6 +115,10 @@ open("x","w")
 PY'
   nh_assert_exit "pipe into interpreter with script allowed" 0 bash_hook 'cat data.csv | python3 process.py'
   nh_assert_exit "pipe into module mode allowed"             0 bash_hook 'cat x | python3 -m json.tool'
+  nh_assert_exit "option-arg before -c still blocks (python -W)" 1 bash_hook 'python -W ignore -c "open()"'
+  nh_assert_exit "option-arg before -e still blocks (node -r)"   1 bash_hook 'node -r ./hook -e "fs()"'
+  nh_assert_exit "interpreter name as grep arg not misread"      0 bash_hook 'grep python3 -c file'
+  nh_assert_exit "php -r inline code blocked"                    1 bash_hook 'php -r "file_put_contents()"'
 }
 
 # Cells: git worktree mutations beyond add/commit/push/reset.
@@ -158,6 +162,20 @@ nh_cell redirection    cell_redirection
 nh_cell inplace        cell_inplace
 nh_cell interpreters   cell_interpreters
 nh_cell git-mutations  cell_git_mutations
+# Cells: package-manager dependency writes block; read subcommands stay.
+cell_package_managers() {
+  set_phase qa
+  nh_assert_exit "npm ci blocked"               1 bash_hook 'npm ci'
+  nh_assert_exit "yarn add blocked"             1 bash_hook 'yarn add left-pad'
+  nh_assert_exit "go get blocked"               1 bash_hook 'go get ./...'
+  nh_assert_exit "pip install blocked"          1 bash_hook 'pip install foo'
+  nh_assert_exit "npm test allowed"             0 bash_hook 'npm test'
+  nh_assert_exit "go test allowed"              0 bash_hook 'go test ./...'
+  nh_assert_exit "cargo build allowed"          0 bash_hook 'cargo build'
+  nh_assert_exit "npm ls allowed"               0 bash_hook 'npm ls'
+}
+
 nh_cell phase-scoped   cell_phase_scoped
+nh_cell package-managers cell_package_managers
 
 nh_summary

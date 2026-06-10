@@ -376,43 +376,93 @@ EOF
           RO_REASON="in-place edit or write utility"
         fi
 
-        # (c) Inline interpreter code: a one-liner can write through any
-        #     API, and its quoted body is invisible to pattern checks.
-        # The code flag must sit among the interpreter's OWN leading
-        # flags: in `python -m pytest -c pytest.ini` the -c belongs to
-        # pytest (a config flag on a read), not to the interpreter, and
-        # the first non-flag token (pytest) ends the interpreter's
-        # flags. A "leading flag" here is a single-dash cluster with no
-        # code letter; the run stops at the first non-flag token.
-        #
-        # Shells and python pass code via -c, and the letter may be
-        # combined into a cluster (`bash -lc`, `sh -ec`, `python -bc`).
-        # A leading cluster CONTAINING c is therefore code. The safe-run
-        # pattern `-[^c[:space:]]*[[:space:]]+` deliberately cannot match
-        # a cluster with c (it stops at the c), so `-lc` is never eaten
-        # as a benign flag.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(bash|sh|zsh|ksh|dash|python[0-9.]*)[[:space:]]+(-[^c[:space:]]*[[:space:]]+)*-[^[:space:]]*c[^[:space:]]*([[:space:]]|$)'; then
-          RO_REASON="inline interpreter code"
+        # (b2) Package-manager subcommands that write dependency trees or
+        #      lockfiles. The read subcommands a review/qa phase needs
+        #      (test, run, ls, list, view, audit, build, check, vet) stay
+        #      allowed; only the mutating ones block. `npm install` is
+        #      already caught by the install token above; this adds the
+        #      forms that do not name install (npm ci, yarn add, go get).
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(npm|pnpm|yarn)[[:space:]]+(ci|i|add|remove|rm|uninstall|un|update|up|upgrade|dedupe|prune|rebuild|link|unlink)([[:space:]]|$)|(^|[[:space:];&|(])go[[:space:]]+(get|install|mod)([[:space:]]|$)|(^|[[:space:];&|(])(pip|pip3)[[:space:]]+(install|uninstall|download)([[:space:]]|$)|(^|[[:space:];&|(])cargo[[:space:]]+(add|remove|install|update)([[:space:]]|$)|(^|[[:space:];&|(])(gem[[:space:]]+(install|uninstall|update)|bundle[[:space:]]+(install|update|add))([[:space:]]|$)'; then
+          RO_REASON="package-manager dependency write"
         fi
-        # The -e scripting languages (node/deno/bun/perl/ruby/php) keep
-        # the standalone-flag check: `node -e`, `perl -e`, `ruby -e`
-        # block, while the read-leaning stream idioms `perl -pe`/`-ne`
-        # (code combined behind a print/loop flag) stay usable — their
-        # write risk is -i, caught by tier (b).
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(node|deno|bun|ruby|perl|php)[[:space:]]+(-[^ec[:space:]][^[:space:]]*[[:space:]]+)*-(e|c)([[:space:]]|$)'; then
+
+        # (c) Inline interpreter code. A one-liner can write through any
+        #     API, and its quoted body is a placeholder by now, so the
+        #     flags decide. The parser walks each interpreter's OWN
+        #     option run, consuming option-arguments (`python -W ignore`,
+        #     `node -r ./hook`) so a value is never mistaken for the
+        #     script boundary, and stops at `-m module`, a bare script
+        #     file, or a subcommand. Inside that run, the code entry
+        #     point (`-c` for shells/python, `-e`/`--eval`/`-p` for
+        #     node, `eval` subcommand for deno/bun, `-r` for php, a lone
+        #     `-` or `<<` for stdin) means inline code. perl/ruby keep
+        #     the stream idioms `-pe`/`-ne` usable: only a standalone
+        #     `-e` is code there. Interpreters are only classified at a
+        #     command position (start, after an operator, or after a
+        #     wrapper) so `grep python3 -c file` (count) is not misread.
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | awk '
+            function basename(s) { sub(/.*\//, "", s); return s }
+            function is_cmd_pos(i,    p) {
+              if (i == 1) return 1
+              p = $(i - 1)
+              if (p ~ /^(\||\|\||&&|;|&|\()$/) return 1
+              if (p ~ /[|;&(]$/) return 1
+              if (p ~ /^(env|xargs|time|timeout|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch)$/) return 1
+              return 0
+            }
+            function code(name, gi,    j, t) {
+              j = gi + 1
+              while (j <= NF) {
+                t = $j
+                if (t == "-" || t ~ /^<</) return 1
+                if (t !~ /^-/) {
+                  if ((name == "deno" || name == "bun") && t == "eval") return 1
+                  return 0
+                }
+                if (name ~ /^(sh|bash|zsh|ksh|dash)$/) {
+                  if (t !~ /^--/ && t ~ /^-[a-zA-Z]*c/) return 1
+                  if (t == "-O" || t == "+O" || t == "--rcfile" || t == "--init-file") { j += 2; continue }
+                  j++; continue
+                }
+                if (name ~ /^python/) {
+                  if (t == "-m" || t == "--module") return 0
+                  if (t !~ /^--/ && t ~ /^-[a-zA-Z]*c/) return 1
+                  if (t == "-W" || t == "-X" || t == "-Q" || t == "--check-hash-based-pycs") { j += 2; continue }
+                  j++; continue
+                }
+                if (name == "node" || name == "bun") {
+                  if (t == "-e" || t == "--eval" || t == "-p" || t == "--print" || t == "--exec") return 1
+                  if (t == "-r" || t == "--require" || t == "-C" || t == "--conditions" || t == "--loader" || t == "--experimental-loader" || t == "--import") { j += 2; continue }
+                  j++; continue
+                }
+                if (name == "deno") {
+                  if (t == "-e" || t == "--eval") return 1
+                  j++; continue
+                }
+                if (name == "perl" || name == "ruby") {
+                  if (t == "-e" || t == "-E") return 1
+                  if (t == "-r" || t == "-I" || t == "-C" || t == "-K" || t == "-T") { j += 2; continue }
+                  j++; continue
+                }
+                if (name == "php") {
+                  if (t == "-r" || t == "-R" || t == "-F") return 1
+                  j++; continue
+                }
+                j++
+              }
+              return 0
+            }
+            {
+              for (i = 1; i <= NF; i++) {
+                b = basename($i)
+                if (b ~ /^(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)$/ && is_cmd_pos(i)) {
+                  if (code(b, i)) { found = 1; exit }
+                }
+              }
+            }
+            END { exit(found ? 0 : 1) }
+          '; then
           RO_REASON="inline interpreter code"
-        fi
-        # Long-form eval entry points: `node --eval`, `node --print`,
-        # `deno eval`, `bun --eval`. These evaluate inline code the same
-        # as -e, so they block during a read-only phase.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(node|deno|bun|ruby|perl|php)[[:space:]]+(-[^[:space:]]*[[:space:]]+)*(--eval|--exec|--print)([[:space:]]|=|$)|(^|[[:space:];&|(])(deno|bun)[[:space:]]+eval([[:space:]]|$)'; then
-          RO_REASON="inline interpreter code"
-        fi
-        # Stdin-fed bodies are the same risk with different plumbing:
-        # `python3 - <<PY ... PY` and `sh <<EOF` execute code no
-        # pattern check can see.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(-([[:space:]]|$)|<<)'; then
-          RO_REASON="stdin-fed interpreter code"
         fi
         # Code piped into a BARE interpreter (no script file, no -m
         # module): `cat <<EOF | python3`, `curl ... | sh`, `echo code |
