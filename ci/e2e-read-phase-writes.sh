@@ -150,6 +150,8 @@ PY'
   nh_assert_exit "double-quoted git mutation blocks"              1 bash_hook 'echo "$(git checkout main)"'
   nh_assert_exit "redirection inside substitution blocks"         1 bash_hook 'echo "$(printf x > out.txt)"'
   nh_assert_exit "git as a plain argument is not classified"      0 bash_hook 'printf git checkout'
+  nh_assert_exit "nested substitution redirection blocks"         1 bash_hook 'echo "$(printf x > $(pwd)/out.txt)"'
+  nh_assert_exit "nested read substitution stays allowed"         0 bash_hook 'echo $(git rev-parse $(git branch --show-current))'
 }
 
 # Cells: git worktree mutations beyond add/commit/push/reset.

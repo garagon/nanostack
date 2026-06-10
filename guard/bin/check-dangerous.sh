@@ -529,7 +529,32 @@ EOF
         #      so the same detectors apply; a body that blocks blocks the
         #      whole command.
         if [ -z "$RO_REASON" ] && [ "${NANOSTACK_GUARD_DEPTH:-0}" -lt 3 ]; then
-          SUBST_BODIES=$(printf '%s' "$CMD" | grep -oE '[$]\([^()]*\)|`[^`]*`' 2>/dev/null | sed 's/^[$](//; s/)$//; s/^`//; s/`$//' || true)
+          # Extract each top-level $(...) body with paren balance (so a
+          # nested `$(printf x > $(pwd)/out.txt)` yields the whole outer
+          # body, not just the inner $(pwd)), plus backtick bodies. The
+          # recursion then re-extracts any nested substitution from each
+          # body.
+          SUBST_BODIES=$(printf '%s' "$CMD" | awk '
+            {
+              s = $0; n = length(s)
+              for (i = 1; i <= n; i++) {
+                c = substr(s, i, 1)
+                if (c == "$" && substr(s, i + 1, 1) == "(") {
+                  depth = 1; j = i + 2; body = ""
+                  while (j <= n && depth > 0) {
+                    cj = substr(s, j, 1)
+                    if (cj == "(") depth++
+                    else if (cj == ")") { depth--; if (depth == 0) break }
+                    body = body cj; j++
+                  }
+                  print body; i = j
+                } else if (c == "`") {
+                  j = i + 1; body = ""
+                  while (j <= n && substr(s, j, 1) != "`") { body = body substr(s, j, 1); j++ }
+                  print body; i = j
+                }
+              }
+            }' 2>/dev/null || true)
           if [ -n "$SUBST_BODIES" ]; then
             while IFS= read -r _body; do
               [ -z "$_body" ] && continue
