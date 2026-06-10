@@ -72,6 +72,9 @@ EOF'
   nh_assert_exit "escaped heredoc delimiter body ignored"           0 bash_hook 'cat <<\EOF
 a > b
 EOF'
+  nh_assert_exit "non-word heredoc delimiter body ignored"          0 bash_hook 'cat <<EOF-1
+a > b
+EOF-1'
   nh_assert_exit "bash comparison is not redirection ([[ 5 > 3 ]])"  0 bash_hook '[[ 5 > 3 ]]'
   nh_assert_exit "arithmetic comparison allowed ((( count > 0 )))"   0 bash_hook '(( count > 0 ))'
   nh_assert_exit "escaped test comparison not redirection"          0 bash_hook '[ a \> b ]'
@@ -222,6 +225,8 @@ cell_git_mutations() {
   nh_assert_exit "find -exec git mutation blocked"           1 bash_hook 'find . -exec git checkout main \;'
   nh_assert_exit "eval body git mutation blocked"            1 bash_hook 'eval "git checkout main"'
   nh_assert_exit "eval harmless body stays allowed"          0 bash_hook 'eval "echo hello"'
+  nh_assert_exit "unquoted eval git mutation blocked"        1 bash_hook 'eval git checkout main'
+  nh_assert_exit "unquoted eval redirection blocked"         1 bash_hook 'eval printf x \> out.txt'
   nh_assert_exit "escaped bare substitution not executed"    0 bash_hook 'echo \$(git checkout main)'
   nh_assert_exit "no-space && chained mutation blocks"       1 bash_hook 'git diff&&git checkout main'
   nh_assert_exit "no-space ; chained mutation blocks"        1 bash_hook 'git status;git restore app.js'

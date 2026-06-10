@@ -395,7 +395,7 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
           CMD_ROQ=$(printf '%s' "$CMD_RON" | awk '
             {
               if (skip) { if ($0 ~ ("^[[:space:]]*" delim "[[:space:]]*$")) skip = 0; next }
-              if (match($0, /<<-?[[:space:]]*[\\'"'"'"]?[A-Za-z_][A-Za-z0-9_]*/)) {
+              if (match($0, /<<-?[[:space:]]*[\\'"'"'"]?[A-Za-z0-9_][A-Za-z0-9_.-]*/)) {
                 d = substr($0, RSTART, RLENGTH); gsub(/<<-?[[:space:]]*[\\'"'"'"]?/, "", d); delim = d; skip = 1
               }
               print
@@ -448,7 +448,7 @@ EOF
               # command position only if nothing else runs before it.
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/) { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval") { bnd = j + 1; break }
               j = bnd
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
@@ -513,7 +513,7 @@ EOF
               # command position only if nothing else runs before it.
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/) { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval") { bnd = j + 1; break }
               j = bnd
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
@@ -626,7 +626,11 @@ EOF
             }' 2>/dev/null || true)
           # `eval "..."` runs its argument as a command after the hook, so
           # the quoted body is a command to recurse on, not inert text.
-          EVAL_BODIES=$(printf '%s' "$CMD" | grep -oE "(^|[[:space:];&|(])eval[[:space:]]+(\"[^\"]*\"|${_SQ}[^${_SQ}]*${_SQ})" 2>/dev/null | sed -E "s/.*eval[[:space:]]+.//; s/.\$//" || true)
+          # eval runs its argument after one round of unescaping; grab
+          # the remainder after `eval` (quoted or not), strip surrounding
+          # quotes, and unescape one backslash level so `eval printf x \>
+          # out` recurses as `printf x > out`.
+          EVAL_BODIES=$(printf '%s' "$CMD" | grep -oE "(^|[[:space:];&|(])eval[[:space:]]+[^;|&]*" 2>/dev/null | sed -E "s/.*eval[[:space:]]+//" | sed "s/^[\"${_SQ}]//; s/[\"${_SQ}]\$//" | tr -d "${_BS}" || true)
           SUBST_BODIES=$(printf '%s\n%s' "$SUBST_BODIES" "$EVAL_BODIES")
           if [ -n "$SUBST_BODIES" ]; then
             while IFS= read -r _body; do
@@ -668,7 +672,7 @@ EOF
               # command position only if nothing else runs before it.
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/) { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval") { bnd = j + 1; break }
               j = bnd
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
@@ -744,7 +748,7 @@ EOF
             function is_piped(i,    bnd, j) {
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/) { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval") { bnd = j + 1; break }
               return (bnd >= 2 && $(bnd - 1) ~ /\|$/) ? 1 : 0
             }
             {
@@ -774,7 +778,7 @@ EOF
           CMD_NOHD=$(printf '%s' "$CMD_RON" | awk '
             {
               if (skip) { if ($0 ~ ("^[[:space:]]*" delim "[[:space:]]*$")) skip = 0; next }
-              if (match($0, /<<-?[[:space:]]*[\\'"'"'"]?[A-Za-z_][A-Za-z0-9_]*/)) {
+              if (match($0, /<<-?[[:space:]]*[\\'"'"'"]?[A-Za-z0-9_][A-Za-z0-9_.-]*/)) {
                 d = substr($0, RSTART, RLENGTH)
                 gsub(/<<-?[[:space:]]*[\\'"'"'"]?/, "", d)
                 delim = d; skip = 1
@@ -807,7 +811,7 @@ EOF
                 function is_cmd_pos(i,    bnd, j, t, tb) {
                   bnd = 1
                   for (j = i - 1; j >= 1; j--)
-                    if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/) { bnd = j + 1; break }
+                    if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval") { bnd = j + 1; break }
                   j = bnd
                   while (j < i) {
                     t = $j; tb = t; sub(/.*\//, "", tb)
