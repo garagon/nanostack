@@ -198,6 +198,8 @@ cell_git_mutations() {
   nh_assert_exit "git clean -fd blocked"        1 bash_hook 'git clean -fd'
   nh_assert_exit "git config set blocked"       1 bash_hook 'git config user.name x'
   nh_assert_exit "git config --get is a read"   0 bash_hook 'git config --get user.name'
+  nh_assert_exit "scoped config read allowed"   0 bash_hook 'git config --global --get user.email'
+  nh_assert_exit "config key value is a write"  1 bash_hook 'git config --global user.email a@b'
   nh_assert_exit "git remote set-url blocked"   1 bash_hook 'git remote set-url origin x'
   nh_assert_exit "git remote -v is a read"      0 bash_hook 'git remote -v'
   nh_assert_exit "git submodule update blocked" 1 bash_hook 'git submodule update --init'

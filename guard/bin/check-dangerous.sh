@@ -889,7 +889,7 @@ EOF
                 }
                 # Classify one git invocation starting at the git token
                 # index gi. Returns "mutate:<sub>" or "" (read / n/a).
-                function classify_git(gi,    j, gc, a, hc, ha) {
+                function classify_git(gi,    j, gc, a, hc, ha, cr, cpos) {
                   j = gi + 1
                   while (j <= NF) {
                     # -c key=val / --config-env / --exec-path can inject an
@@ -942,7 +942,20 @@ EOF
                     return ""
                   }
                   if (gc ~ /^(mv|rm|init|clone|gc|repack|prune|update-ref|update-index|notes|replace|filter-branch|filter-repo|lfs|fast-import|symbolic-ref)$/) return "mutate:" gc
-                  if (gc == "config") { if ($(j + 1) ~ /^(--get|--get-all|--get-regexp|--list|-l|--get-urlmatch|--name-only)$/ || $(j + 1) == "") return ""; return "mutate:config" }
+                  if (gc == "config") {
+                    cr = 0; cpos = 0
+                    for (a = j + 1; a <= NF; a++) {
+                      if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
+                      if ($a ~ /^(--get|--get-all|--get-regexp|--list|-l|--get-urlmatch|--name-only|--get-color|--get-colorbool|get|list)$/) { cr = 1; continue }
+                      if ($a == "set" || $a == "unset" || $a == "--add" || $a == "--unset" || $a == "--unset-all" || $a == "--replace-all" || $a == "--rename-section" || $a == "--remove-section" || $a == "--edit" || $a == "-e") return "mutate:config"
+                      if ($a == "--file" || $a == "-f" || $a == "--blob" || $a == "--type" || $a == "-t" || $a == "--default") { a++; continue }
+                      if ($a ~ /^-/) continue
+                      cpos++
+                    }
+                    if (cr) return ""
+                    if (cpos >= 2) return "mutate:config"
+                    return ""
+                  }
                   if (gc == "remote") { if ($(j + 1) == "" || $(j + 1) == "-v" || $(j + 1) == "show" || $(j + 1) == "get-url") return ""; return "mutate:remote" }
                   if (gc == "submodule") { if ($(j + 1) == "" || $(j + 1) == "status" || $(j + 1) == "summary") return ""; return "mutate:submodule" }
                   return ""
