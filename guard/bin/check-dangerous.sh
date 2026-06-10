@@ -565,7 +565,7 @@ EOF
                   if (t ~ /^(install|uninstall|download)$/) return "mutate"
                   if (t ~ /^(list|show|freeze|check|config|search|help|inspect)$/) return ""
                 } else if (name == "cargo") {
-                  if (t ~ /^(add|remove|install|update|uninstall|init|new|publish|generate-lockfile|vendor|yank|fix)$/) return "mutate"
+                  if (t ~ /^(add|remove|install|update|uninstall|init|new|publish|generate-lockfile|vendor|yank|fix|clean)$/) return "mutate"
                   if (t == "fmt") { for (a = k + 1; a <= NF; a++) { if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break; if ($a == "--check" || $a == "--dry-run") return "" } return "mutate" }
                   if (t == "clippy") { for (a = k + 1; a <= NF; a++) { if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break; if ($a == "--fix") return "mutate" } return "" }
                   if (t ~ /^(test|build|check|run|doc|tree|metadata|bench)$/) return ""
@@ -682,7 +682,11 @@ EOF
                   }
                   print body; i = m; cmdpos = 1; continue
                 }
-                cmdpos = 0; i = k
+                # Wrappers (command/builtin/exec) and env-assignments keep
+                # the next word at a command position, so command eval ...
+                # and FOO=1 eval ... are still recognised.
+                cmdpos = (w ~ /^(command|builtin|exec|nohup|setsid|time)$/ || w ~ /^[A-Za-z_][A-Za-z0-9_]*=/) ? 1 : 0
+                i = k
               }
             }' 2>/dev/null | awk '
             # eval removes one level of quoting before re-parsing, so a

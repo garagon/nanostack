@@ -288,6 +288,9 @@ cell_git_mutations() {
   nh_assert_exit "eval word inside grep pattern is inert"     0 bash_hook "grep -R 'eval printf x > out' docs"
   nh_assert_exit "eval with quoted operator word blocked"     1 bash_hook "eval echo x '>' out"
   nh_assert_exit "eval protected operator stays inert"        0 bash_hook "eval grep \"'pattern > x'\" file"
+  nh_assert_exit "command eval wrapper mutation blocked"      1 bash_hook 'command eval "git checkout main"'
+  nh_assert_exit "builtin eval wrapper redirection blocked"   1 bash_hook 'builtin eval "printf x > out"'
+  nh_assert_exit "env-assignment before eval blocked"         1 bash_hook 'FOO=1 eval "git checkout main"'
   nh_assert_exit "escaped bare substitution not executed"    0 bash_hook 'echo \$(git checkout main)'
   nh_assert_exit "no-space && chained mutation blocks"       1 bash_hook 'git diff&&git checkout main'
   nh_assert_exit "no-space ; chained mutation blocks"        1 bash_hook 'git status;git restore app.js'
@@ -364,6 +367,7 @@ cell_package_managers() {
   nh_assert_exit "cargo fix rewrites source, blocked" 1 bash_hook 'cargo fix'
   nh_assert_exit "cargo clippy --fix blocked"       1 bash_hook 'cargo clippy --fix'
   nh_assert_exit "cargo clippy lint stays a read"   0 bash_hook 'cargo clippy'
+  nh_assert_exit "cargo clean deletes target, blocked" 1 bash_hook 'cargo clean'
 }
 
 nh_cell phase-scoped   cell_phase_scoped
