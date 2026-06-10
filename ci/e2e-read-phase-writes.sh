@@ -127,6 +127,11 @@ PY'
   nh_assert_exit "pipe into wrapped interpreter blocked"        1 bash_hook 'echo code | env python3'
   nh_assert_exit "wrapped npm test stays allowed"               0 bash_hook 'env NODE_ENV=test npm test'
   nh_assert_exit "attached perl -pe stream stays allowed"       0 bash_hook "perl -pe'X' file"
+  nh_assert_exit "command substitution inline code blocked"     1 bash_hook 'echo $(python3 -c "open()")'
+  nh_assert_exit "backtick substitution inline code blocked"    1 bash_hook 'x=`python3 -c "open()"`'
+  nh_assert_exit "path-qualified env wrapper blocked"           1 bash_hook '/usr/bin/env python3 -c "open()"'
+  nh_assert_exit "pipe into path-qualified wrapper blocked"     1 bash_hook 'echo code | /usr/bin/env python3'
+  nh_assert_exit "substitution of read command stays allowed"   0 bash_hook 'echo $(git rev-parse HEAD)'
 }
 
 # Cells: git worktree mutations beyond add/commit/push/reset.
@@ -154,6 +159,7 @@ cell_git_mutations() {
   nh_assert_exit "branch --format value is a read"           0 bash_hook "git branch --format '%(refname)'"
   nh_assert_exit "branch -v && echo is a read"               0 bash_hook 'git branch -v && echo done'
   nh_assert_exit "branch read then chained create blocks"    1 bash_hook 'git branch -v && git branch tmp'
+  nh_assert_exit "git mutation in substitution blocks"       1 bash_hook 'echo $(git checkout main)'
   nh_assert_exit "chained read-then-mutate blocks"           1 bash_hook 'git diff && git checkout main'
   nh_assert_exit "chained with ; blocks the mutation"        1 bash_hook 'git status; git restore app.js'
   nh_assert_exit "tag -n annotation listing is a read"       0 bash_hook 'git tag -n v1'

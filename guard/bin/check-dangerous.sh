@@ -351,6 +351,12 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
           | sed "s/'\([-a-zA-Z0-9._/=]*\)'/\1/g" \
           | sed 's/"\([-a-zA-Z0-9._/=]*\)"/\1/g' \
           | sed "s/'[^']*'/QUOTEDARG/g; s/\"[^\"]*\"/QUOTEDARG/g")
+        # CMD_SUB additionally turns command-substitution and backtick
+        # boundaries into a bare `(` token so an interpreter or git call
+        # nested in `$(...)` / backticks sits at a command position for
+        # the awk classifiers. (The redirection scan keeps using CMD_RON
+        # so arithmetic `$(( a > b ))` is still treated as a comparison.)
+        CMD_SUB=$(printf '%s' "$CMD_RON" | sed 's/[$]( / ( /g; s/[$](/ ( /g; s/`/ ( /g')
 
         # (a) Output redirection to anything except /dev/*. Bare fd
         #     dups (>&2, 2>&1) have no path target and never match the
@@ -400,21 +406,23 @@ EOF
         #     `-e` is code there. Interpreters are only classified at a
         #     command position (start, after an operator, or after a
         #     wrapper) so `grep python3 -c file` (count) is not misread.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | awk '
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_SUB" | awk '
             function basename(s) { sub(/.*\//, "", s); return s }
             # A command position is the start, just after an operator, or
             # after a run of wrappers / env-assignments. Walk backward so
             # `env FOO=1 python3`, `timeout 5 python3`, and `FOO=1 sudo
             # python3` are recognised; `grep python3 ...` is not.
-            function is_cmd_pos(i,    k, p) {
+            function is_cmd_pos(i,    k, p, pb, qb) {
               k = i - 1
               while (k >= 1) {
                 p = $k
                 if (p ~ /^(\||\|\||&&|;|&|\()$/ || p ~ /[|;&(]$/) return 1
                 if (p ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { k--; continue }
-                if (p ~ /^(env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs)$/) { k--; continue }
+                pb = p; sub(/.*\//, "", pb)
+                if (pb ~ /^(env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs)$/) { k--; continue }
                 if (p ~ /^-/) { k--; continue }
-                if (k >= 2 && $(k - 1) ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k -= 2; continue }
+                qb = (k >= 2) ? $(k - 1) : ""; sub(/.*\//, "", qb)
+                if (qb ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k -= 2; continue }
                 return 0
               }
               return 1
@@ -498,7 +506,7 @@ EOF
               }
               print
             }' | tr '\n' ' ')
-          if printf '%s' "$CMD_NOHD" | grep -qE '[^|]\|[[:space:]]*((env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs|timeout|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*)[[:space:]]+([0-9][^[:space:]]*[[:space:]]+)?)*(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)([[:space:]]+-[^[:space:]]+)*[[:space:]]*($|[|;&])'; then
+          if printf '%s' "$CMD_NOHD" | grep -qE '[^|]\|[[:space:]]*((([^[:space:]]*/)?(env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs|timeout)[[:space:]]+([0-9][^[:space:]]*[[:space:]]+)?)|([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+))*([^[:space:]]*/)?(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)([[:space:]]+-[^[:space:]]+)*[[:space:]]*($|[|;&])'; then
             RO_REASON="code piped into a bare interpreter"
           fi
         fi
@@ -514,9 +522,9 @@ EOF
         #     HEAD` is a filtered list (the positional is consumed by
         #     the read filter).
         if [ -z "$RO_REASON" ]; then
-          case "$CMD_RON" in
+          case "$CMD_SUB" in
             *git\ *)
-              GIT_VERDICT=$(printf '%s' "$CMD_RON" | awk '
+              GIT_VERDICT=$(printf '%s' "$CMD_SUB" | awk '
                 # Classify branch/tag args: a bare ref name with no list
                 # flag creates a ref; delete/move/copy/annotate forms
                 # mutate; list and filter flags (and the positional they
