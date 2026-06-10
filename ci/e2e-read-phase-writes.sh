@@ -106,6 +106,8 @@ EOF'
   nh_assert_exit "combined shell flag blocks (sh -ec)"        1 bash_hook 'sh -ec "echo x > f"'
   nh_assert_exit "combined python flag blocks (python -bc)"   1 bash_hook 'python -bc "open()"'
   nh_assert_exit "perl stream loop stays allowed (-ne)"       0 bash_hook "perl -ne 'print' file"
+  nh_assert_exit "node --eval blocked (long form)"           1 bash_hook 'node --eval "fs.writeFileSync()"'
+  nh_assert_exit "deno eval subcommand blocked"              1 bash_hook 'deno eval "Deno.writeTextFile()"'
 }
 
 # Cells: git worktree mutations beyond add/commit/push/reset.
@@ -123,6 +125,12 @@ cell_git_mutations() {
   nh_assert_exit "git branch <name> blocked (ref creation)" 1 bash_hook 'git branch tmp'
   nh_assert_exit "git tag <name> blocked (ref creation)"    1 bash_hook 'git tag v1.0'
   nh_assert_exit "quoted ref name still blocks (git branch \"tmp\")" 1 bash_hook 'git branch "tmp"'
+  nh_assert_exit "display flag before ref still blocks (branch -v tmp)" 1 bash_hook 'git branch -v tmp'
+  nh_assert_exit "rename blocks (git branch -m old new)"     1 bash_hook 'git branch -m old new'
+  nh_assert_exit "tag with sort and name blocks"            1 bash_hook 'git tag --sort=creatordate v1'
+  nh_assert_exit "branch --contains is a filtered read"      0 bash_hook 'git branch --contains HEAD'
+  nh_assert_exit "branch --merged is a filtered read"        0 bash_hook 'git branch --merged main'
+  nh_assert_exit "branch -v alone is a read"                 0 bash_hook 'git branch -v'
 }
 
 # Cells: the block is phase-scoped, not global.

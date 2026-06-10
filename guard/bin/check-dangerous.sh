@@ -402,6 +402,12 @@ EOF
         if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(node|deno|bun|ruby|perl|php)[[:space:]]+(-[^ec[:space:]][^[:space:]]*[[:space:]]+)*-(e|c)([[:space:]]|$)'; then
           RO_REASON="inline interpreter code"
         fi
+        # Long-form eval entry points: `node --eval`, `node --print`,
+        # `deno eval`, `bun --eval`. These evaluate inline code the same
+        # as -e, so they block during a read-only phase.
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | grep -qE '(^|[[:space:];&|(])(node|deno|bun|ruby|perl|php)[[:space:]]+(-[^[:space:]]*[[:space:]]+)*(--eval|--exec|--print)([[:space:]]|=|$)|(^|[[:space:];&|(])(deno|bun)[[:space:]]+eval([[:space:]]|$)'; then
+          RO_REASON="inline interpreter code"
+        fi
         # Stdin-fed bodies are the same risk with different plumbing:
         # `python3 - <<PY ... PY` and `sh <<EOF` execute code no
         # pattern check can see.
@@ -409,48 +415,64 @@ EOF
           RO_REASON="stdin-fed interpreter code"
         fi
 
-        # (d) Git worktree mutations beyond add/commit/push/reset. The
-        #     subcommand is parsed (skipping git's global options), not
-        #     substring-matched: `git merge-base main HEAD` is a read
-        #     and must not match `merge`, while `git switch -c tmp`
-        #     mutates and must.
+        # (d) Git worktree and ref mutations beyond add/commit/push/
+        #     reset. A single awk pass finds the git invocation, skips
+        #     git's global options (and their arguments), reads the
+        #     subcommand, then classifies. `git merge-base main HEAD`
+        #     is a read and must not match `merge`; `git switch -c tmp`
+        #     mutates and must. branch/tag need every argument scanned,
+        #     not just the first: `git branch -v tmp` still creates a
+        #     ref behind a display flag, while `git branch --contains
+        #     HEAD` is a filtered list (the positional is consumed by
+        #     the read filter).
         if [ -z "$RO_REASON" ]; then
           case "$CMD_RON" in
             *git\ *)
-              GIT_SUBPAIR=$(printf '%s' "$CMD_RON" | awk '{
-                for (i = 1; i <= NF; i++) {
-                  if ($i == "git" || $i ~ /\/git$/) {
-                    for (j = i + 1; j <= NF; j++) {
-                      if ($j == "-C" || $j == "-c" || $j == "--exec-path" || $j == "--git-dir" || $j == "--work-tree" || $j == "--namespace") { j++; continue }
-                      if ($j ~ /^-/) continue
-                      print $j, $(j + 1); exit
+              GIT_VERDICT=$(printf '%s' "$CMD_RON" | awk '
+                function classify_branch(start, istag,    k, t, listmode) {
+                  listmode = 0
+                  for (k = start; k <= NF; k++) {
+                    t = $k
+                    if (t ~ /^-/) {
+                      # delete / move / copy / edit / upstream / annotate
+                      # forms mutate; short clusters carry the letter.
+                      if (t ~ /^--(delete|move|copy|edit-description|set-upstream-to|unset-upstream|force|create-reflog)/) return "mutate"
+                      if (t ~ /^-[a-zA-Z]*[dDmMcCsfu]/ && t !~ /^--/) return "mutate"
+                      if (t == "-l" || t == "--list") { listmode = 1; continue }
+                      # read filters that consume the next positional.
+                      if (t ~ /^--(contains|no-contains|merged|no-merged|points-at)$/) { k++; continue }
+                      continue
+                    }
+                    # a bare positional ref name (not a list pattern) = create
+                    if (!listmode) return "mutate"
+                  }
+                  return "read"
+                }
+                {
+                  for (i = 1; i <= NF; i++) {
+                    if ($i == "git" || $i ~ /\/git$/) {
+                      j = i + 1
+                      while (j <= NF) {
+                        if ($j == "-C" || $j == "-c" || $j == "--exec-path" || $j == "--git-dir" || $j == "--work-tree" || $j == "--namespace") { j += 2; continue }
+                        if ($j ~ /^-/) { j++; continue }
+                        break
+                      }
+                      if (j > NF) { print "read"; exit }
+                      gc = $j
+                      if (gc ~ /^(checkout|switch|restore|apply|am|merge|rebase|cherry-pick|revert|clean|pull)$/) { print "mutate:" gc; exit }
+                      if (gc == "stash" || gc == "worktree") {
+                        if ($(j + 1) == "list" || $(j + 1) == "show") { print "read"; exit }
+                        print "mutate:" gc; exit
+                      }
+                      if (gc == "branch" || gc == "tag") { print classify_branch(j + 1, (gc == "tag")) ":" gc; exit }
+                      print "read"; exit
                     }
                   }
-                }
-              }' || true)
-              GIT_SUB="${GIT_SUBPAIR%% *}"
-              GIT_SUB2="${GIT_SUBPAIR#* }"
-              [ "$GIT_SUB2" = "$GIT_SUBPAIR" ] && GIT_SUB2=""
-              case "$GIT_SUB" in
-                checkout|switch|restore|apply|am|merge|rebase|cherry-pick|revert|clean|pull)
-                  RO_REASON="git worktree mutation (git $GIT_SUB)"
-                  ;;
-                stash|worktree)
-                  # Read-only inspection forms stay usable during
-                  # review/security diagnostics.
-                  case "$GIT_SUB2" in
-                    list|show) ;;
-                    *) RO_REASON="git worktree mutation (git $GIT_SUB)" ;;
-                  esac
-                  ;;
-                branch|tag)
-                  # Bare and listing forms are reads; a positional name
-                  # or a delete/move flag creates or mutates a ref.
-                  case "$GIT_SUB2" in
-                    ""|--list|-l|-a|--all|-r|--remotes|-v|-vv|--show-current|--contains|--merged|--no-merged|--points-at|--sort=*) ;;
-                    *) RO_REASON="git ref mutation (git $GIT_SUB)" ;;
-                  esac
-                  ;;
+                  print "read"
+                }' || true)
+              case "$GIT_VERDICT" in
+                mutate:branch|mutate:tag) RO_REASON="git ref mutation (git ${GIT_VERDICT#mutate:})" ;;
+                mutate:*) RO_REASON="git worktree mutation (git ${GIT_VERDICT#mutate:})" ;;
               esac
               ;;
           esac
