@@ -58,6 +58,8 @@ cell_redirection() {
   nh_assert_exit "/dev/null redirection allowed"                     0 bash_hook 'true > /dev/null'
   nh_assert_exit "bare fd dup allowed (npm test 2>&1)"               0 bash_hook 'npm test 2>&1'
   nh_assert_exit "quoted arrow is not redirection (awk \$3 > 5)"     0 bash_hook "awk '\$3 > 5' data.txt"
+  nh_assert_exit "quoted redirection target blocked (> \"out.txt\")"  1 bash_hook 'printf x > "out.txt"'
+  nh_assert_exit "single-quoted target blocked (>> 'notes.md')"      1 bash_hook "echo hi >> 'notes.md'"
 }
 
 # Cells: in-place editors and write utilities.
@@ -86,8 +88,10 @@ cell_git_mutations() {
   set_phase review
   nh_assert_exit "git stash blocked"            1 bash_hook 'git stash'
   nh_assert_exit "git restore blocked"          1 bash_hook 'git restore app.js'
+  nh_assert_exit "git switch blocked"           1 bash_hook 'git switch -c tmp'
   nh_assert_exit "git stash list allowed"       0 bash_hook 'git stash list'
   nh_assert_exit "git diff allowed"             0 bash_hook 'git diff'
+  nh_assert_exit "git merge-base is a read, allowed" 0 bash_hook 'git merge-base main HEAD'
 }
 
 # Cells: the block is phase-scoped, not global.

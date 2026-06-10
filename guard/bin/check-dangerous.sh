@@ -339,16 +339,20 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
         # Mutation paths the utility list above cannot see (security
         # review finding #3): output redirection, in-place editors,
         # inline interpreter code, and git worktree mutations all write
-        # without naming a write utility. Detection runs on CMD_NOQ
-        # (quoted segments stripped, the same normalization the
-        # allowlist classifier uses) so `grep 'a->b' file` is never read
-        # as redirection. Allowlisted safe reads never reach this tier.
+        # without naming a write utility. Detection normalizes quoted
+        # segments first so `grep 'a->b' file` is never read as
+        # redirection. Allowlisted safe reads never reach this tier.
 
-        # (a) Output redirection to anything except /dev/*. Bare fd dups
-        #     (>&2, 2>&1) have no path target and never match the
-        #     extraction; process substitution >(...) is an output pipe.
+        # (a) Output redirection to anything except /dev/*. Quoted
+        #     segments are REPLACED with a placeholder, not deleted:
+        #     deleting them would erase a quoted target (`> "out.txt"`)
+        #     and let the write through, while an arrow inside quotes
+        #     still disappears either way. Bare fd dups (>&2, 2>&1)
+        #     have no path target and never match the extraction;
+        #     process substitution >(...) is an output pipe.
         if [ -z "$RO_REASON" ]; then
-          RO_TARGETS=$(printf '%s' "$CMD_NOQ" | grep -oE '(&>>?|[0-9]*>>?)[[:space:]]*[^[:space:]&;|<>()]+' | sed -E 's/^(&>>?|[0-9]*>>?)[[:space:]]*//' || true)
+          CMD_ROQ=$(printf '%s' "$CMD" | sed "s/'[^']*'/QUOTEDARG/g; s/\"[^\"]*\"/QUOTEDARG/g")
+          RO_TARGETS=$(printf '%s' "$CMD_ROQ" | grep -oE '(&>>?|[0-9]*>>?)[[:space:]]*[^[:space:]&;|<>()]+' | sed -E 's/^(&>>?|[0-9]*>>?)[[:space:]]*//' || true)
           if [ -n "$RO_TARGETS" ]; then
             while IFS= read -r RO_TGT; do
               [ -z "$RO_TGT" ] && continue
@@ -357,7 +361,7 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
 $RO_TARGETS
 EOF
           fi
-          case "$CMD_NOQ" in *'>('*) RO_REASON="process substitution output" ;; esac
+          case "$CMD_ROQ" in *'>('*) RO_REASON="process substitution output" ;; esac
         fi
 
         # (b) In-place editors and write utilities.
@@ -371,11 +375,30 @@ EOF
           RO_REASON="inline interpreter code"
         fi
 
-        # (d) Git worktree mutations beyond add/commit/push/reset.
+        # (d) Git worktree mutations beyond add/commit/push/reset. The
+        #     subcommand is parsed (skipping git's global options), not
+        #     substring-matched: `git merge-base main HEAD` is a read
+        #     and must not match `merge`, while `git switch -c tmp`
+        #     mutates and must.
         if [ -z "$RO_REASON" ]; then
           case "$CMD_NOQ" in
-            *git\ checkout*|*git\ restore*|*git\ stash*|*git\ apply*|*git\ merge*|*git\ rebase*|*git\ cherry-pick*|*git\ clean*)
-              RO_REASON="git worktree mutation"
+            *git\ *)
+              GIT_SUB=$(printf '%s' "$CMD_NOQ" | awk '{
+                for (i = 1; i <= NF; i++) {
+                  if ($i == "git" || $i ~ /\/git$/) {
+                    for (j = i + 1; j <= NF; j++) {
+                      if ($j == "-C" || $j == "-c" || $j == "--exec-path" || $j == "--git-dir" || $j == "--work-tree" || $j == "--namespace") { j++; continue }
+                      if ($j ~ /^-/) continue
+                      print $j; exit
+                    }
+                  }
+                }
+              }' || true)
+              case "$GIT_SUB" in
+                checkout|switch|restore|stash|apply|am|merge|rebase|cherry-pick|revert|clean|pull|worktree)
+                  RO_REASON="git worktree mutation (git $GIT_SUB)"
+                  ;;
+              esac
               ;;
           esac
         fi
