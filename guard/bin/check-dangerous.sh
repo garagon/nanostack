@@ -860,7 +860,7 @@ EOF
                 }
                 # Classify one git invocation starting at the git token
                 # index gi. Returns "mutate:<sub>" or "" (read / n/a).
-                function classify_git(gi,    j, gc, a) {
+                function classify_git(gi,    j, gc, a, hc, ha) {
                   j = gi + 1
                   while (j <= NF) {
                     # -c key=val / --config-env / --exec-path can inject an
@@ -876,10 +876,15 @@ EOF
                   # git apply --check / --stat / --numstat / --summary
                   # validate a patch without touching the worktree.
                   if (gc == "apply") {
+                    hc = 0; ha = 0
                     for (a = j + 1; a <= NF; a++) {
                       if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
-                      if ($a == "--check" || $a == "--stat" || $a == "--numstat" || $a == "--summary") return ""
+                      if ($a == "--apply") ha = 1
+                      if ($a == "--check" || $a == "--stat" || $a == "--numstat" || $a == "--summary") hc = 1
                     }
+                    # --apply forces application even alongside a report
+                    # flag; only a check/stat flag without --apply is read.
+                    if (!ha && hc) return ""
                     return "mutate:apply"
                   }
                   if (gc ~ /^(checkout|switch|restore|am|merge|rebase|cherry-pick|revert|clean|pull)$/) return "mutate:" gc

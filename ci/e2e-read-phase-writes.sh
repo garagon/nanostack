@@ -190,6 +190,7 @@ cell_git_mutations() {
   nh_assert_exit "git worktree list is a read, allowed" 0 bash_hook 'git worktree list'
   nh_assert_exit "git worktree add blocked"           1 bash_hook 'git worktree add ../w2'
   nh_assert_exit "git apply --check is read-only"     0 bash_hook 'git apply --check patch.diff'
+  nh_assert_exit "git apply --stat --apply still mutates" 1 bash_hook 'git apply --stat --apply patch.diff'
   nh_assert_exit "git apply (real) blocked"           1 bash_hook 'git apply patch.diff'
   nh_assert_exit "git diff --output writes, blocked"  1 bash_hook 'git diff --output=patch.diff'
   nh_assert_exit "git -c config injection blocked"    1 bash_hook 'git -c core.pager=touch log'
