@@ -794,7 +794,7 @@ EOF
         #     the read filter).
         if [ -z "$RO_REASON" ]; then
           case "$CMD_SUB" in
-            *git\ *)
+            *git*)
               GIT_VERDICT=$(printf '%s' "$CMD_SUB" | awk '
                 function basename(s) { sub(/.*\//, "", s); return s }
                 # Only a git token at a command position is an invocation;
@@ -887,7 +887,14 @@ EOF
                     if (!ha && hc) return ""
                     return "mutate:apply"
                   }
-                  if (gc ~ /^(checkout|switch|restore|am|merge|rebase|cherry-pick|revert|clean|pull)$/) return "mutate:" gc
+                  if (gc == "clean") {
+                    for (a = j + 1; a <= NF; a++) {
+                      if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
+                      if ($a == "-n" || $a == "--dry-run") return ""
+                    }
+                    return "mutate:clean"
+                  }
+                  if (gc ~ /^(checkout|switch|restore|am|merge|rebase|cherry-pick|revert|pull)$/) return "mutate:" gc
                   if (gc == "format-patch") return "mutate:" gc
                   if (gc == "diff" || gc == "show" || gc == "log") {
                     for (a = j + 1; a <= NF; a++) {

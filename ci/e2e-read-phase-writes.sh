@@ -183,6 +183,10 @@ cell_git_mutations() {
   nh_assert_exit "git stash blocked"            1 bash_hook 'git stash'
   nh_assert_exit "git restore blocked"          1 bash_hook 'git restore app.js'
   nh_assert_exit "git switch blocked"           1 bash_hook 'git switch -c tmp'
+  nh_assert_exit "git clean -fd blocked"        1 bash_hook 'git clean -fd'
+  nh_assert_exit "git clean --dry-run is a read" 0 bash_hook 'git clean --dry-run'
+  nh_assert_exit "tab-separated git mutation blocked" 1 bash_hook "$(printf 'git\tcheckout main')"
+
   nh_assert_exit "git stash list allowed"       0 bash_hook 'git stash list'
   nh_assert_exit "git diff allowed"             0 bash_hook 'git diff'
   nh_assert_exit "git merge-base is a read, allowed" 0 bash_hook 'git merge-base main HEAD'
