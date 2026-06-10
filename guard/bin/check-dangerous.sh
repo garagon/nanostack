@@ -365,8 +365,12 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
         # (`git diff&&git checkout`) sits at its own command position.
         # The redirection scan keeps using CMD_RON, where literal `>`
         # inside double quotes stays hidden.
+        # `env -S "python3 -c ..."` tells env to split the quoted string
+        # into a command, so unquote the -S argument first; the inner
+        # command then sits at a command position for the classifiers.
         _SUB_BT=$(printf '\140')
         CMD_SUB=$(printf '%s' "$CMD" \
+          | sed "s/-S[[:space:]]*\"\([^\"]*\)\"/-S \1/g; s/-S[[:space:]]*'\([^']*\)'/-S \1/g" \
           | sed "s/${_SUB_BT}/ ( /g" \
           | sed "s/'\([-a-zA-Z0-9._/=]*\)'/\1/g" \
           | sed 's/"\([-a-zA-Z0-9._/=]*\)"/\1/g' \
@@ -382,7 +386,10 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
         #     pipe. [[ ... ]] and (( ... )) are comparison contexts
         #     where > is not a redirection; drop them before scanning.
         if [ -z "$RO_REASON" ]; then
-          CMD_ROQ=$(printf '%s' "$CMD_RON" | sed -E 's/\[\[[^]]*\]\]//g; s/\(\([^)]*\)\)//g')
+          # Escaped \> / \< (e.g. POSIX `[ a \> b ]` or `test a \> b`)
+          # are string-comparison arguments, not redirections; drop them
+          # along with the [[ ]] / (( )) comparison contexts.
+          CMD_ROQ=$(printf '%s' "$CMD_RON" | sed -E 's/\\[<>]//g; s/\[\[[^]]*\]\]//g; s/\(\([^)]*\)\)//g')
           RO_TARGETS=$(printf '%s' "$CMD_ROQ" | grep -oE '(&>>?|[0-9]*>>?\|?)[[:space:]]*[^[:space:]&;|<>()]+' | sed -E 's/^(&>>?|[0-9]*>>?\|?)[[:space:]]*//' || true)
           if [ -n "$RO_TARGETS" ]; then
             while IFS= read -r RO_TGT; do
@@ -474,7 +481,10 @@ EOF
                 t = $k
                 if (t ~ /^(&&|\|\||;|\||&|\(|\))$/) return ""
                 if (name ~ /^(npm|pnpm|yarn)$/) {
-                  if (t ~ /^(run|run-script|exec|test|start|ls|list|view|info|show|audit|outdated|why|search|ping|whoami|version|help|config|cache|dlx)$/) return ""
+                  # config/cache are namespaces: their nested verb decides.
+                  if (t == "config") { if ($(k + 1) ~ /^(set|delete|rm|edit)$/) return "mutate"; return "" }
+                  if (t == "cache") { if ($(k + 1) ~ /^(clean|rm|delete|add|prune)$/) return "mutate"; return "" }
+                  if (t ~ /^(run|run-script|exec|test|start|ls|list|view|info|show|audit|outdated|why|search|ping|whoami|version|help|dlx)$/) return ""
                   if (t ~ /^(ci|i|add|remove|rm|uninstall|un|update|up|upgrade|dedupe|prune|rebuild|link|unlink|install|import)$/) return "mutate"
                 } else if (name == "go") {
                   if (t == "get" || t == "install") return "mutate"

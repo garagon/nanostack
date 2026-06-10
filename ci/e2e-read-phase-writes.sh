@@ -64,6 +64,8 @@ cell_redirection() {
   nh_assert_exit "quoted /dev/null stays allowed"                    0 bash_hook 'true > "/dev/null"'
   nh_assert_exit "bash comparison is not redirection ([[ 5 > 3 ]])"  0 bash_hook '[[ 5 > 3 ]]'
   nh_assert_exit "arithmetic comparison allowed ((( count > 0 )))"   0 bash_hook '(( count > 0 ))'
+  nh_assert_exit "escaped test comparison not redirection"          0 bash_hook '[ a \> b ]'
+  nh_assert_exit "env -S inline code blocked"                       1 bash_hook "env -S \"python3 -c 'open(1)'\""
 }
 
 # Cells: in-place editors and write utilities.
@@ -219,6 +221,9 @@ cell_package_managers() {
   nh_assert_exit "env-assignment pnpm add blocked" 1 bash_hook 'FOO=1 pnpm add x'
   nh_assert_exit "python -m pip install blocked"   1 bash_hook 'python -m pip install foo'
   nh_assert_exit "python -m pytest stays a read"   0 bash_hook 'python -m pytest'
+  nh_assert_exit "npm config set blocked"          1 bash_hook 'npm config set registry x'
+  nh_assert_exit "npm cache clean blocked"         1 bash_hook 'npm cache clean --force'
+  nh_assert_exit "npm config get stays a read"     0 bash_hook 'npm config get registry'
 }
 
 nh_cell phase-scoped   cell_phase_scoped
