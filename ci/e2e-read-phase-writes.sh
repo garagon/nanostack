@@ -205,7 +205,9 @@ PY'
   nh_assert_exit "nested substitution redirection blocks"         1 bash_hook 'echo "$(printf x > $(pwd)/out.txt)"'
   nh_assert_exit "nested read substitution stays allowed"         0 bash_hook 'echo $(git rev-parse $(git branch --show-current))'
   nh_assert_exit "single-quoted substitution is inert"            0 bash_hook "grep -R '\$(git checkout main)' docs"
-  nh_assert_exit "escaped substitution is literal"                0 bash_hook 'grep "\\$(git checkout main)" docs'
+  nh_assert_exit "escaped substitution is literal"                0 bash_hook 'grep "\$(git checkout main)" docs'
+  nh_assert_exit "even-backslash substitution stays active"       1 bash_hook 'echo \\$(git checkout main)'
+  nh_assert_exit "even-backslash backtick stays active"           1 bash_hook 'echo \\`git checkout main`'
   nh_assert_exit "arithmetic comparison is not a redirect"        0 bash_hook 'echo $((5 > 3))'
   nh_assert_exit "arithmetic alongside read substitution allowed" 0 bash_hook 'echo $((1+1)) $(git rev-parse HEAD)'
 
@@ -297,6 +299,8 @@ cell_git_mutations() {
   nh_assert_exit "command eval wrapper mutation blocked"      1 bash_hook 'command eval "git checkout main"'
   nh_assert_exit "builtin eval wrapper redirection blocked"   1 bash_hook 'builtin eval "printf x > out"'
   nh_assert_exit "env-assignment before eval blocked"         1 bash_hook 'FOO=1 eval "git checkout main"'
+  nh_assert_exit "ANSI-C quoted eval body blocked"            1 bash_hook "eval \$'printf x > out'"
+  nh_assert_exit "harmless ANSI-C eval body allowed"          0 bash_hook "eval \$'echo hello'"
   nh_assert_exit "escaped bare substitution not executed"    0 bash_hook 'echo \$(git checkout main)'
   nh_assert_exit "no-space && chained mutation blocks"       1 bash_hook 'git diff&&git checkout main'
   nh_assert_exit "no-space ; chained mutation blocks"        1 bash_hook 'git status;git restore app.js'

@@ -618,7 +618,11 @@ EOF
           # body.
           _SQ=$(printf '\047')
           _BS=$(printf '\134')
-          SUBST_BODIES=$(printf '%s' "$CMD" | sed "s/${_BS}${_BS}[$](/XX/g; s/${_BS}${_BS}[$]/X/g; s/${_BS}${_BS}${_SUB_BT}/X/g" | sed "s/${_SQ}[^${_SQ}]*${_SQ}/QUOTEDARG/g" | awk '
+          # An even number of backslashes before $( leaves the
+          # substitution active (echo \\$(cmd) runs cmd), so collapse \\
+          # pairs to a placeholder first; only a remaining single backslash
+          # truly escapes the following $(/$/backtick.
+          SUBST_BODIES=$(printf '%s' "$CMD" | sed "s/${_BS}${_BS}${_BS}${_BS}/@@BS@@/g" | sed "s/${_BS}${_BS}[$](/XX/g; s/${_BS}${_BS}[$]/X/g; s/${_BS}${_BS}${_SUB_BT}/X/g" | sed "s/@@BS@@/${_BS}${_BS}/g" | sed "s/${_SQ}[^${_SQ}]*${_SQ}/QUOTEDARG/g" | awk '
             {
               s = $0; n = length(s)
               for (i = 1; i <= n; i++) {
@@ -700,6 +704,9 @@ EOF
               s = $0; n = length(s); out = ""; i = 1
               while (i <= n) {
                 c = substr(s, i, 1)
+                # ANSI-C ($\47...\47) and locale ($"...") quoting: bash drops
+                # the leading $ and the quotes, then runs the contents.
+                if (c == "$" && (substr(s, i + 1, 1) == "\47" || substr(s, i + 1, 1) == "\42")) { i++; continue }
                 if (c == "\47") { i++; while (i <= n && substr(s, i, 1) != "\47") { out = out substr(s, i, 1); i++ } i++; continue }
                 if (c == "\42") { i++; while (i <= n && substr(s, i, 1) != "\42") { ch = substr(s, i, 1); if (ch == "\134" && i < n) { i++; out = out substr(s, i, 1); i++; continue } out = out ch; i++ } i++; continue }
                 if (c == "\134" && i < n) { i++; out = out substr(s, i, 1); i++; continue }
