@@ -553,7 +553,8 @@ EOF
                   if (t == "version") { if ($(k + 1) ~ /^(major|minor|patch|premajor|preminor|prepatch|prerelease|from-git)$/ || $(k + 1) ~ /^v?[0-9]/) return "mutate"; return "" }
                   if (t == "pkg") { if ($(k + 1) ~ /^(set|delete|rm)$/) return "mutate"; return "" }
                   if (t ~ /^(init|create|pack|publish)$/) return "mutate"
-                  if (t ~ /^(run|run-script|exec|test|start|ls|list|view|info|show|audit|outdated|why|search|ping|whoami|help|dlx)$/) return ""
+                  if (t == "audit") { if ($(k + 1) == "fix") return "mutate"; return "" }
+                  if (t ~ /^(run|run-script|exec|test|start|ls|list|view|info|show|outdated|why|search|ping|whoami|help|dlx)$/) return ""
                   if (t ~ /^(ci|i|add|remove|rm|uninstall|un|update|up|upgrade|dedupe|prune|rebuild|link|unlink|install|import|publish)$/) return "mutate"
                 } else if (name == "go") {
                   if (t == "get" || t == "install" || t == "generate" || t == "fmt") return "mutate"
@@ -954,6 +955,26 @@ EOF
                     for (a = j + 1; a <= NF; a++) {
                       if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
                       if ($a == "-o" || $a == "--output" || $a ~ /^--output=/) return "mutate:" gc
+                    }
+                    return ""
+                  }
+                  if (gc == "bisect") {
+                    if ($(j + 1) ~ /^(log|view|visualize|help)$/) return ""
+                    return "mutate:" gc
+                  }
+                  if (gc == "reflog") {
+                    if ($(j + 1) ~ /^(expire|delete|drop)$/) return "mutate:" gc
+                    return ""
+                  }
+                  if (gc == "maintenance") {
+                    if ($(j + 1) ~ /^(run|start|stop|register|unregister)$/) return "mutate:" gc
+                    return ""
+                  }
+                  if (gc ~ /^(write-tree|commit-tree|mktag|mktree|pack-refs)$/) return "mutate:" gc
+                  if (gc == "hash-object") {
+                    for (a = j + 1; a <= NF; a++) {
+                      if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
+                      if ($a == "-w") return "mutate:" gc
                     }
                     return ""
                   }
