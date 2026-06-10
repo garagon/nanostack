@@ -402,14 +402,27 @@ EOF
         #     wrapper) so `grep python3 -c file` (count) is not misread.
         if [ -z "$RO_REASON" ] && printf '%s' "$CMD_RON" | awk '
             function basename(s) { sub(/.*\//, "", s); return s }
-            function is_cmd_pos(i,    p) {
-              if (i == 1) return 1
-              p = $(i - 1)
-              if (p ~ /^(\||\|\||&&|;|&|\()$/) return 1
-              if (p ~ /[|;&(]$/) return 1
-              if (p ~ /^(env|xargs|time|timeout|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch)$/) return 1
-              return 0
+            # A command position is the start, just after an operator, or
+            # after a run of wrappers / env-assignments. Walk backward so
+            # `env FOO=1 python3`, `timeout 5 python3`, and `FOO=1 sudo
+            # python3` are recognised; `grep python3 ...` is not.
+            function is_cmd_pos(i,    k, p) {
+              k = i - 1
+              while (k >= 1) {
+                p = $k
+                if (p ~ /^(\||\|\||&&|;|&|\()$/ || p ~ /[|;&(]$/) return 1
+                if (p ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { k--; continue }
+                if (p ~ /^(env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs)$/) { k--; continue }
+                if (p ~ /^-/) { k--; continue }
+                if (k >= 2 && $(k - 1) ~ /^(timeout|stdbuf|ionice|chrt|nice|nohup)$/) { k -= 2; continue }
+                return 0
+              }
+              return 1
             }
+            # Inline code can attach to the flag (`perl -e'code'` ->
+            # token -eQUOTEDARG), so the code-flag tests match a prefix,
+            # not an exact token. The double-dash guard keeps `--eval`
+            # forms explicit and stops `--experimental-*` matching `-e`.
             function code(name, gi,    j, t) {
               j = gi + 1
               while (j <= NF) {
@@ -431,21 +444,22 @@ EOF
                   j++; continue
                 }
                 if (name == "node" || name == "bun") {
-                  if (t == "-e" || t == "--eval" || t == "-p" || t == "--print" || t == "--exec") return 1
+                  if (t !~ /^--/ && t ~ /^-e/) return 1
+                  if (t == "--eval" || t ~ /^--eval=/ || t == "--print" || t == "--exec" || t == "-p") return 1
                   if (t == "-r" || t == "--require" || t == "-C" || t == "--conditions" || t == "--loader" || t == "--experimental-loader" || t == "--import") { j += 2; continue }
                   j++; continue
                 }
                 if (name == "deno") {
-                  if (t == "-e" || t == "--eval") return 1
+                  if ((t !~ /^--/ && t ~ /^-e/) || t == "--eval" || t ~ /^--eval=/) return 1
                   j++; continue
                 }
                 if (name == "perl" || name == "ruby") {
-                  if (t == "-e" || t == "-E") return 1
+                  if (t !~ /^--/ && t ~ /^-[eE]/) return 1
                   if (t == "-r" || t == "-I" || t == "-C" || t == "-K" || t == "-T") { j += 2; continue }
                   j++; continue
                 }
                 if (name == "php") {
-                  if (t == "-r" || t == "-R" || t == "-F") return 1
+                  if (t !~ /^--/ && t ~ /^-[rRF]/) return 1
                   j++; continue
                 }
                 j++
@@ -484,7 +498,7 @@ EOF
               }
               print
             }' | tr '\n' ' ')
-          if printf '%s' "$CMD_NOHD" | grep -qE '[^|]\|[[:space:]]*(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)([[:space:]]+-[^[:space:]]+)*[[:space:]]*($|[|;&])'; then
+          if printf '%s' "$CMD_NOHD" | grep -qE '[^|]\|[[:space:]]*((env|time|nice|nohup|stdbuf|ionice|setsid|chrt|sudo|doas|command|exec|watch|xargs|timeout|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*)[[:space:]]+([0-9][^[:space:]]*[[:space:]]+)?)*(python[0-9.]*|node|deno|bun|ruby|perl|php|bash|sh|zsh|ksh|dash)([[:space:]]+-[^[:space:]]+)*[[:space:]]*($|[|;&])'; then
             RO_REASON="code piped into a bare interpreter"
           fi
         fi

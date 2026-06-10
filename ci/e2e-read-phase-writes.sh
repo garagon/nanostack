@@ -119,6 +119,13 @@ PY'
   nh_assert_exit "option-arg before -e still blocks (node -r)"   1 bash_hook 'node -r ./hook -e "fs()"'
   nh_assert_exit "interpreter name as grep arg not misread"      0 bash_hook 'grep python3 -c file'
   nh_assert_exit "php -r inline code blocked"                    1 bash_hook 'php -r "file_put_contents()"'
+  nh_assert_exit "env-wrapped inline code blocked"              1 bash_hook 'env FOO=1 python3 -c "open()"'
+  nh_assert_exit "timeout-wrapped inline code blocked"          1 bash_hook 'timeout 5 python3 -c "open()"'
+  nh_assert_exit "env-assignment prefix inline code blocked"    1 bash_hook 'FOO=1 python3 -c "open()"'
+  nh_assert_exit "attached perl -e code blocked"                1 bash_hook "perl -e'open F,\">x\"'"
+  nh_assert_exit "pipe into wrapped interpreter blocked"        1 bash_hook 'echo code | env python3'
+  nh_assert_exit "wrapped npm test stays allowed"               0 bash_hook 'env NODE_ENV=test npm test'
+  nh_assert_exit "attached perl -pe stream stays allowed"       0 bash_hook "perl -pe'X' file"
 }
 
 # Cells: git worktree mutations beyond add/commit/push/reset.
