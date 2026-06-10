@@ -259,6 +259,11 @@ cell_git_mutations() {
   nh_assert_exit "git -C global-optioned add blocked" 1 bash_hook 'git -C . add file'
   nh_assert_exit "git -C global-optioned reset blocked" 1 bash_hook 'git -C . reset --hard'
   nh_assert_exit "git -C global-optioned status is read" 0 bash_hook 'git -C . status'
+  nh_assert_exit "multiline read then git mutation blocked" 1 bash_hook 'git status
+git checkout main'
+  nh_assert_exit "multiline all-read stays allowed"      0 bash_hook 'git status
+git diff
+git log'
   nh_assert_exit "git submodule status is read" 0 bash_hook 'git submodule status'
   nh_assert_exit "git clean --dry-run is a read" 0 bash_hook 'git clean --dry-run'
   nh_assert_exit "clustered git clean -nfd is dry-run" 0 bash_hook 'git clean -nfd'

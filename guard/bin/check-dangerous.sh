@@ -1111,16 +1111,18 @@ EOF
                   return ""
                 }
                 {
-                  # Scan EVERY git invocation: a chained read then mutate
-                  # (`git diff && git checkout main`) must still block.
+                  # Scan EVERY git invocation across all lines: a chained or
+                  # multiline read-then-mutate (git diff && git checkout, or
+                  # git status\ngit checkout) must still block, so the read
+                  # verdict is only emitted in END if no record mutated.
                   for (i = 1; i <= NF; i++) {
                     if ((basename($i) == "git") && is_cmd_pos(i)) {
                       r = classify_git(i)
-                      if (r != "") { print r; exit }
+                      if (r != "") { print r; found = 1; exit }
                     }
                   }
-                  print "read"
-                }' || true)
+                }
+                END { if (!found) print "read" }' || true)
               case "$GIT_VERDICT" in
                 mutate:branch|mutate:tag) RO_REASON="git ref mutation (git ${GIT_VERDICT#mutate:})" ;;
                 mutate:*) RO_REASON="git worktree mutation (git ${GIT_VERDICT#mutate:})" ;;
