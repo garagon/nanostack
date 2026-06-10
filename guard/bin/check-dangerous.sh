@@ -370,7 +370,7 @@ EOF
         fi
 
         # (b) In-place editors and write utilities.
-        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*(-[a-zA-Z]*i([[:space:]]|$)|--in-place)|(^|[[:space:];&|(])perl[[:space:]]+[^|;&]*[[:space:]]-[a-zA-Z]*i([[:space:]]|$)'; then
+        if [ -z "$RO_REASON" ] && printf '%s' "$CMD_NOQ" | grep -qE '(^|[[:space:];&|(])(tee|truncate|ln|install|patch|dd)([[:space:]]|$)|(^|[[:space:];&|(])sed[[:space:]]+(--?[a-zA-Z-]+(=[^[:space:]]*)?[[:space:]]+)*(-[a-zA-Z]*i[^[:space:]]*|--in-place(=[^[:space:]]*)?)([[:space:]]|$)|(^|[[:space:];&|(])perl[[:space:]]+[^|;&]*[[:space:]]-[a-zA-Z]*i([[:space:]]|$)'; then
           RO_REASON="in-place edit or write utility"
         fi
 
@@ -416,6 +416,14 @@ EOF
                   case "$GIT_SUB2" in
                     list|show) ;;
                     *) RO_REASON="git worktree mutation (git $GIT_SUB)" ;;
+                  esac
+                  ;;
+                branch|tag)
+                  # Bare and listing forms are reads; a positional name
+                  # or a delete/move flag creates or mutates a ref.
+                  case "$GIT_SUB2" in
+                    ""|--list|-l|-a|--all|-r|--remotes|-v|-vv|--show-current|--contains|--merged|--no-merged|--points-at|--sort=*) ;;
+                    *) RO_REASON="git ref mutation (git $GIT_SUB)" ;;
                   esac
                   ;;
               esac

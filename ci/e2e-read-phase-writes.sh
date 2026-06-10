@@ -71,6 +71,8 @@ cell_inplace() {
   set_phase security
   nh_assert_exit "sed -i blocked"               1 bash_hook 'sed -i s/a/b/ app.js'
   nh_assert_exit "sed -E -i blocked (option before -i)" 1 bash_hook "sed -E -i 's/a/b/' app.js"
+  nh_assert_exit "sed -i.bak blocked (suffix form)"     1 bash_hook 'sed -i.bak s/a/b/ app.js'
+  nh_assert_exit "sed --in-place=.bak blocked"          1 bash_hook 'sed --in-place=.bak s/a/b/ app.js'
 
   nh_assert_exit "tee blocked"                  1 bash_hook 'tee log.txt'
   nh_assert_exit "npm install blocked"          1 bash_hook 'npm install left-pad'
@@ -103,6 +105,8 @@ cell_git_mutations() {
   nh_assert_exit "git stash show is a read, allowed"  0 bash_hook 'git stash show'
   nh_assert_exit "git worktree list is a read, allowed" 0 bash_hook 'git worktree list'
   nh_assert_exit "git worktree add blocked"           1 bash_hook 'git worktree add ../w2'
+  nh_assert_exit "git branch <name> blocked (ref creation)" 1 bash_hook 'git branch tmp'
+  nh_assert_exit "git tag <name> blocked (ref creation)"    1 bash_hook 'git tag v1.0'
 }
 
 # Cells: the block is phase-scoped, not global.
