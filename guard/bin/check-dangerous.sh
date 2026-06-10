@@ -1019,6 +1019,11 @@ EOF
                     return "mutate:clean"
                   }
                   if (gc ~ /^(checkout|switch|restore|am|merge|rebase|cherry-pick|revert|pull)$/) return "mutate:" gc
+                  # Baseline writes (add/reset/commit/push/stage) were caught
+                  # by a substring check that misses global options like
+                  # git -C . reset; classify them here so the options are
+                  # consumed first.
+                  if (gc ~ /^(add|reset|commit|push|stage|restore-staged)$/) return "mutate:" gc
                   if (gc == "format-patch") return "mutate:" gc
                   if (gc == "diff" || gc == "show" || gc == "log") {
                     for (a = j + 1; a <= NF; a++) {
