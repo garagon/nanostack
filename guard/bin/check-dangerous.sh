@@ -448,7 +448,7 @@ EOF
               # command position only if nothing else runs before it.
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\(|\))$/ || $j ~ /[|;&()]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
               j = bnd
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
@@ -516,7 +516,7 @@ EOF
               # command position only if nothing else runs before it.
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\(|\))$/ || $j ~ /[|;&()]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
               j = bnd
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
@@ -713,7 +713,7 @@ EOF
               # command position only if nothing else runs before it.
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\(|\))$/ || $j ~ /[|;&()]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
               j = bnd
               while (j < i) {
                 t = $j; tb = t; sub(/.*\//, "", tb)
@@ -806,7 +806,7 @@ EOF
             function is_piped(i,    bnd, j) {
               bnd = 1
               for (j = i - 1; j >= 1; j--)
-                if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
+                if ($j ~ /^(\||\|\||&&|;|&|\(|\))$/ || $j ~ /[|;&()]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
               return (bnd >= 2 && $(bnd - 1) ~ /\|$/) ? 1 : 0
             }
             {
@@ -869,7 +869,7 @@ EOF
                 function is_cmd_pos(i,    bnd, j, t, tb) {
                   bnd = 1
                   for (j = i - 1; j >= 1; j--)
-                    if ($j ~ /^(\||\|\||&&|;|&|\()$/ || $j ~ /[|;&(]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
+                    if ($j ~ /^(\||\|\||&&|;|&|\(|\))$/ || $j ~ /[|;&()]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(then|do|else|elif|\{|!)$/) { bnd = j + 1; break }
                   j = bnd
                   while (j < i) {
                     t = $j; tb = t; sub(/.*\//, "", tb)
@@ -1037,7 +1037,7 @@ EOF
                   if (gc == "submodule") {
                     for (a = j + 1; a <= NF; a++) {
                       if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
-                      if ($a ~ /^(add|update|init|sync|set-url|set-branch|deinit|absorbgitdirs)$/) return "mutate:submodule"
+                      if ($a ~ /^(add|update|init|sync|set-url|set-branch|deinit|absorbgitdirs|foreach)$/) return "mutate:submodule"
                     }
                     return ""
                   }
