@@ -558,12 +558,14 @@ EOF
                   if (t ~ /^(run|run-script|exec|test|start|ls|list|view|info|show|outdated|why|search|ping|whoami|help|dlx)$/) return ""
                   if (t ~ /^(ci|i|add|remove|rm|uninstall|un|update|up|upgrade|dedupe|prune|rebuild|link|unlink|install|import|publish)$/) return "mutate"
                 } else if (name == "go") {
-                  if (t == "get" || t == "install" || t == "generate" || t == "fmt") return "mutate"
+                  if (t == "get" || t == "install" || t == "generate" || t == "fmt" || t == "clean") return "mutate"
                   if (t == "mod") { if ($(k + 1) ~ /^(tidy|edit|vendor|download|init)$/) return "mutate"; return "" }
-                  if (t ~ /^(test|build|run|vet|list|version|env|doc|tool)$/) return ""
+                  if (t == "env") { for (a = k + 1; a <= NF; a++) { if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break; if ($a == "-w" || $a == "-u") return "mutate" } return "" }
+                  if (t ~ /^(test|build|run|vet|list|version|doc|tool)$/) return ""
                 } else if (name ~ /^pip[0-9.]*$/) {
                   if (t ~ /^(install|uninstall|download)$/) return "mutate"
-                  if (t ~ /^(list|show|freeze|check|config|search|help|inspect)$/) return ""
+                  if (t == "config") { if ($(k + 1) ~ /^(set|unset|edit)$/) return "mutate"; return "" }
+                  if (t ~ /^(list|show|freeze|check|search|help|inspect)$/) return ""
                 } else if (name == "cargo") {
                   if (t ~ /^(add|remove|install|update|uninstall|init|new|publish|generate-lockfile|vendor|yank|fix|clean)$/) return "mutate"
                   if (t == "fmt") { for (a = k + 1; a <= NF; a++) { if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break; if ($a == "--check" || $a == "--dry-run") return "" } return "mutate" }
