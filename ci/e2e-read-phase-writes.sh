@@ -80,6 +80,9 @@ a > b
 EOF-1'
   nh_assert_exit "bash comparison is not redirection ([[ 5 > 3 ]])"  0 bash_hook '[[ 5 > 3 ]]'
   nh_assert_exit "arithmetic comparison allowed ((( count > 0 )))"   0 bash_hook '(( count > 0 ))'
+  nh_assert_exit "nested-paren arithmetic comparison allowed"       0 bash_hook '(( (count + 1) > limit ))'
+  nh_assert_exit "nested arithmetic expansion comparison allowed"   0 bash_hook 'echo $(((5) > 3))'
+  nh_assert_exit "arithmetic then real redirect still blocks"       1 bash_hook '(( x > 0 )) && printf y > out.txt'
   nh_assert_exit "escaped test comparison not redirection"          0 bash_hook '[ a \> b ]'
   nh_assert_exit "env -S inline code blocked"                       1 bash_hook "env -S \"python3 -c 'open(1)'\""
   nh_assert_exit "punctuation heredoc delimiter, write after blocked" 1 bash_hook 'cat <<EOF!

@@ -407,7 +407,28 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
                 d = substr($0, RSTART, RLENGTH); gsub(/<<-?[[:space:]]*/, "", d); gsub(/[\\'"'"'"]/, "", d); delim = d; skip = 1
               }
               print
-            }' | sed -E 's/\\\\/@@BS@@/g; s/\\[<>]//g; s/@@BS@@/\\/g; s/\[\[[^]]*\]\]//g; s/\(\([^)]*\)\)//g' \
+            }' | sed -E 's/\\\\/@@BS@@/g; s/\\[<>]//g; s/@@BS@@/\\/g; s/\[\[[^]]*\]\]//g' \
+            | awk '
+            # Remove balanced (( ... )) arithmetic contexts (and the $((...))
+            # expansion form), which may nest parens: (( (a+1) > b )). A
+            # non-balanced regex leaves the trailing > for the redirect scan.
+            {
+              s = $0; n = length(s); out = ""; i = 1
+              while (i <= n) {
+                if (substr(s, i, 2) == "((") {
+                  depth = 2; j = i + 2
+                  while (j <= n && depth > 0) {
+                    cj = substr(s, j, 1)
+                    if (cj == "(") depth++
+                    else if (cj == ")") depth--
+                    j++
+                  }
+                  i = j; continue
+                }
+                out = out substr(s, i, 1); i++
+              }
+              print out
+            }' \
             | sed -E 's/[0-9]*>&[0-9]+//g; s/[0-9]*[<>]&-//g')
           # fd dups (2>&1, >&2) were removed above, so every remaining
           # redirection (>, >>, &>, >&file, >|) targets a file -- even a
