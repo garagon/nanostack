@@ -612,18 +612,26 @@ EOF
             {
               for (i = 1; i <= NF; i++) {
                 b = basename($i)
-                # `python -m pip install` is pip by another name, even
-                # with leading python options (`python3 -u -I -m pip`).
+                # `python -m pip install` is pip by another name, even with
+                # leading python options. The module flag clusters with
+                # other no-arg short flags (python3 -Im pip, -Ompip), so a
+                # cluster carrying m is treated as the module selector and
+                # the rest of the token (or the next token) is the module.
                 if (b ~ /^python[0-9.]*$/ && is_cmd_pos(i)) {
                   jj = i + 1
-                  while (jj <= NF && $jj ~ /^-/ && $jj != "-m" && $jj != "--module" && $jj !~ /^-m./) {
+                  while (jj <= NF && $jj ~ /^-/) {
+                    if ($jj == "-m" || $jj == "--module") {
+                      if ($(jj + 1) == "pip" && pm_scan("pip", jj + 2) == "mutate") { found = 1; exit }
+                      break
+                    }
+                    if ($jj !~ /^--/ && $jj ~ /^-[bdEiIOPqRsSuvxBt]*m/) {
+                      rest = substr($jj, index($jj, "m") + 1)
+                      if (rest != "") {
+                        if (rest == "pip" && pm_scan("pip", jj + 1) == "mutate") { found = 1; exit }
+                      } else if ($(jj + 1) == "pip" && pm_scan("pip", jj + 2) == "mutate") { found = 1; exit }
+                      break
+                    }
                     if ($jj == "-W" || $jj == "-X" || $jj == "-Q" || $jj == "--check-hash-based-pycs") jj += 2; else jj++
-                  }
-                  # Attached spelling: python3 -mpip install (module glued to -m).
-                  if (jj <= NF && $jj ~ /^-m./ && $jj !~ /^--/) {
-                    if (substr($jj, 3) == "pip" && pm_scan("pip", jj + 1) == "mutate") { found = 1; exit }
-                  } else if (jj <= NF && ($jj == "-m" || $jj == "--module") && $(jj + 1) == "pip") {
-                    if (pm_scan("pip", jj + 2) == "mutate") { found = 1; exit }
                   }
                 }
                 if (b ~ /^(npm|pnpm|yarn|bun|go|pip[0-9.]*|cargo|gem|bundle)$/ && is_cmd_pos(i)) {
@@ -760,6 +768,13 @@ EOF
               }
               print out
             }' 2>/dev/null || true)
+          # An eval whose argument comes from an active $()/backtick runs a
+          # command we cannot statically recover (eval "$(printf 'git
+          # checkout -b tmp')"). The producer alone reads, but eval executes
+          # the generated text, so treat such eval bodies as unsafe.
+          if [ -z "$RO_REASON" ] && printf '%s' "$EVAL_BODIES" | grep -qE '[$]\(|`' 2>/dev/null; then
+            RO_REASON="eval of generated command"
+          fi
           SUBST_BODIES=$(printf '%s\n%s' "$SUBST_BODIES" "$EVAL_BODIES")
           if [ -n "$SUBST_BODIES" ]; then
             while IFS= read -r _body; do
