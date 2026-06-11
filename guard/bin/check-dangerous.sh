@@ -376,6 +376,7 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
           | sed "s/[$]\x27/\x27/g; s/[$]\"/\"/g" \
           | sed "s/${_SUB_BS}${_SUB_BS}${_SUB_BS}${_SUB_BS}/@@BS@@/g" \
           | sed "s/${_SUB_BS}${_SUB_BS} /_/g" \
+          | sed "s/${_SUB_BS}${_SUB_BS}[;&|()]/X/g" \
           | sed "s/@@BS@@/${_SUB_BS}${_SUB_BS}/g" \
           | sed "s/\"--split-string\"/-S/g; s/'--split-string'/-S/g; s/--split-string[ =]/-S /g; s/--split-string/-S/g; s/\"-S\"/-S/g; s/'-S'/-S/g" \
           | sed "s/-S[[:space:]]*\"\([^\"]*\)\"/-S \1/g; s/-S[[:space:]]*'\([^']*\)'/-S \1/g" \
@@ -652,11 +653,19 @@ EOF
           # substitution active (echo \\$(cmd) runs cmd), so collapse \\
           # pairs to a placeholder first; only a remaining single backslash
           # truly escapes the following $(/$/backtick.
-          SUBST_BODIES=$(printf '%s' "$CMD" | sed "s/${_BS}${_BS}${_BS}${_BS}/@@BS@@/g" | sed "s/${_BS}${_BS}[$](/XX/g; s/${_BS}${_BS}[$]/X/g; s/${_BS}${_BS}${_SUB_BT}/X/g" | sed "s/@@BS@@/${_BS}${_BS}/g" | sed "s/${_SQ}[^${_SQ}]*${_SQ}/QUOTEDARG/g" | awk '
+          SUBST_BODIES=$(printf '%s' "$CMD" | sed "s/${_BS}${_BS}${_BS}${_BS}/@@BS@@/g" | sed "s/${_BS}${_BS}[$](/XX/g; s/${_BS}${_BS}[$]/X/g; s/${_BS}${_BS}${_SUB_BT}/X/g" | sed "s/@@BS@@/${_BS}${_BS}/g" | awk '
+            # Quote-aware: a $(...) inside single quotes is inert and is
+            # skipped, but inside double quotes it stays active and is
+            # extracted WITH its inner quotes intact, so a nested
+            # eval \47git checkout\47 reaches the recursion undamaged.
             {
-              s = $0; n = length(s)
-              for (i = 1; i <= n; i++) {
+              s = $0; n = length(s); i = 1; q = ""
+              while (i <= n) {
                 c = substr(s, i, 1)
+                if (q == "\47") { if (c == "\47") q = ""; i++; continue }
+                if (q == "" && c == "\47") { q = "\47"; i++; continue }
+                if (q == "\42" && c == "\42") { q = ""; i++; continue }
+                if (q == "" && c == "\42") { q = "\42"; i++; continue }
                 if (c == "$" && substr(s, i + 1, 1) == "(") {
                   # Arithmetic expansion $((...)) starts with $(( and runs
                   # no command, so balance the parens and skip it instead
@@ -669,26 +678,28 @@ EOF
                       else if (cj == ")") { depth--; if (depth == 0) break }
                       j++
                     }
-                    i = j; continue
+                    i = j + 1; continue
                   }
-                  # Quote-aware paren balance: a ) inside double quotes is
-                  # data, not a substitution close, so printf ")" > out
-                  # does not truncate the body before the redirection.
-                  depth = 1; j = i + 2; body = ""; q = ""
+                  # Quote-aware paren balance: a ) inside quotes is data,
+                  # not a substitution close, so printf ")" > out does not
+                  # truncate the body before the redirection.
+                  depth = 1; j = i + 2; body = ""; bq = ""
                   while (j <= n && depth > 0) {
                     cj = substr(s, j, 1)
-                    if (q != "") { if (cj == q) q = ""; body = body cj; j++; continue }
-                    if (cj == "\"") { q = cj; body = body cj; j++; continue }
+                    if (bq != "") { if (cj == bq) bq = ""; body = body cj; j++; continue }
+                    if (cj == "\47" || cj == "\42") { bq = cj; body = body cj; j++; continue }
                     if (cj == "(") depth++
                     else if (cj == ")") { depth--; if (depth == 0) break }
                     body = body cj; j++
                   }
-                  print body; i = j
-                } else if (c == "`") {
+                  print body; i = j + 1; continue
+                }
+                if (c == "`") {
                   j = i + 1; body = ""
                   while (j <= n && substr(s, j, 1) != "`") { body = body substr(s, j, 1); j++ }
-                  print body; i = j
+                  print body; i = j + 1; continue
                 }
+                i++
               }
             }' 2>/dev/null || true)
           # `eval "..."` runs its argument as a command after the hook, so
