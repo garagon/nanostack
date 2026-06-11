@@ -374,11 +374,16 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
         CMD_SUB=$(printf '%s' "$CMD" \
           | sed "s/${_SUB_BS}${_SUB_BS}[$](/XX/g; s/${_SUB_BS}${_SUB_BS}[$]/X/g; s/${_SUB_BS}${_SUB_BS}${_SUB_BT}/X/g" \
           | sed "s/[$]\x27/\x27/g; s/[$]\"/\"/g" \
+          | sed "s/${_SUB_BS}${_SUB_BS}${_SUB_BS}${_SUB_BS}/@@BS@@/g" \
+          | sed "s/${_SUB_BS}${_SUB_BS} /_/g" \
+          | sed "s/@@BS@@/${_SUB_BS}${_SUB_BS}/g" \
           | sed "s/\"--split-string\"/-S/g; s/'--split-string'/-S/g; s/--split-string[ =]/-S /g; s/--split-string/-S/g; s/\"-S\"/-S/g; s/'-S'/-S/g" \
           | sed "s/-S[[:space:]]*\"\([^\"]*\)\"/-S \1/g; s/-S[[:space:]]*'\([^']*\)'/-S \1/g" \
           | sed "s/${_SUB_BT}/ ( /g" \
           | sed "s/'\([-a-zA-Z0-9._/=]*\)'/\1/g" \
           | sed 's/"\([-a-zA-Z0-9._/=]*\)"/\1/g' \
+          | sed "s/\"\([A-Za-z_][A-Za-z0-9_]*=\)[^\"]*\"/\1QUOTEDARG/g" \
+          | sed "s/'\([A-Za-z_][A-Za-z0-9_]*=\)[^']*'/\1QUOTEDARG/g" \
           | sed "s/'[^']*'/QUOTEDARG/g" \
           | sed 's/"\([^"]*[$][^"]*\)"/\1/g' \
           | sed 's/"[^"]*"/QUOTEDARG/g' \
