@@ -201,14 +201,14 @@ Los agentes cometen errores. Corren `rm -rf` cuando querían `rm -r`, hacen forc
 
 ### Seis tiers de seguridad
 
-Cada comando de Bash pasa por estos seis tiers, en este orden:
+Cada comando de Bash pasa por estos seis tiers, en este orden. El orden importa: los gates globales corren antes del allowlist y del atajo in-project, así que un comando allowlisteado o in-project no puede saltearlos.
 
 1. **Block rules**: las reglas de bloqueo corren primero. Cubren borrado masivo (`rm -rf .`, `find . -delete`), destrucción de historia (`git push --force`), lecturas de secretos (`.env`, `*.pem`), drops de DB, deploys a producción y ejecución remota (`curl | sh`). Una coincidencia bloquea aunque el binario esté en el allowlist de abajo. La fuente de verdad es [`guard/rules.json`](guard/rules.json); para ver el conteo actual: `jq '[.tiers.block.rules[].id] | length' guard/rules.json`.
-2. **Allowlist**: para comandos que pasaron las block rules, los allowlisteados (`git status`, `ls`, `cat`, `jq`, etc.) saltan el resto.
-3. **In-project**: operaciones que solo tocan archivos del repo actual pasan. El control de versiones es la red de seguridad.
-4. **Concurrencia por fase**: durante fases read-only (review, security, qa), las operaciones de escritura quedan bloqueadas para evitar race conditions.
-5. **Phase gate**: cuando hay un sprint activo, `git commit` y `git push` quedan bloqueados hasta que existan artifacts frescos de review, security y qa.
-6. **Budget gate**: cuando el sprint tiene un presupuesto y se gastó 95%+, todos los comandos no-allowlist quedan bloqueados.
+2. **Concurrencia por fase**: durante fases read-only (review, security, qa), las operaciones de escritura quedan bloqueadas para que las fases que corren en paralelo no muten estado compartido. La detección cubre más que las utilidades obvias: redirección de salida, editores in-place (`sed -i`, `perl -i`), código inline de intérprete (`python -c`, `node -e`, `sh -c`, `eval`), escrituras de gestores de paquetes, y mutaciones de index, worktree o refs de git. Lock: `ci/e2e-read-phase-writes.sh`.
+3. **Phase gate**: cuando hay un sprint activo, `git commit` y `git push` quedan bloqueados hasta que existan artifacts frescos de review, security y qa.
+4. **Budget gate**: cuando el sprint tiene un presupuesto y se gastó 95%+, todos los comandos no-allowlist quedan bloqueados.
+5. **Allowlist**: recién después de que pasen los gates de arriba, las lecturas seguras (`git status`, `ls`, `cat`, `jq`, etc.) saltan el resto. Correr el allowlist después de los gates globales es lo que evita que un binario allowlisteado se saltee una fase read-only o el phase gate.
+6. **In-project**: operaciones que solo tocan archivos del repo actual pasan, después de que corrieron los gates. El control de versiones es la red de seguridad.
 
 Mas un tier de reglas de advertencia (`warn`) para operaciones que requieren atención sin llegar a bloqueo. Las definiciones también viven en `guard/rules.json`.
 

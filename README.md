@@ -457,19 +457,19 @@ AI agents make mistakes. They run `rm -rf` when they mean `rm -r`, force push to
 
 ### Six tiers
 
-Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude-code-auto-mode), guard evaluates every Bash command through six tiers in this order:
+Inspired by [Claude Code auto mode](https://www.anthropic.com/engineering/claude-code-auto-mode), guard evaluates every Bash command through six tiers in this order. The order matters: the global gates run before the allowlist and in-project shortcuts, so a safe-listed or in-project command cannot skip them.
 
-**Tier 1: Block rules.** Patterns for mass deletion, history destruction, database drops, production deploys, remote code execution, secret reads, security degradation and safety bypasses run first. A match exits 1 immediately, even if the command's binary is on the allowlist below. This ordering closes the bypass class where `find . -delete` or `cat .env` slipped past Tier 2 because `find` and `cat` were on the allowlist. Block rule definitions live in [`guard/rules.json`](guard/rules.json); query the live count with `jq '[.tiers.block.rules[].id] | length' guard/rules.json`.
+**Tier 1: Block rules.** Patterns for mass deletion, history destruction, database drops, production deploys, remote code execution, secret reads, security degradation and safety bypasses run first. A match exits 1 immediately, even if the command's binary is on the allowlist below. This ordering closes the bypass class where `find . -delete` or `cat .env` slipped past the allowlist because `find` and `cat` were safe-listed. Block rule definitions live in [`guard/rules.json`](guard/rules.json); query the live count with `jq '[.tiers.block.rules[].id] | length' guard/rules.json`.
 
-**Tier 2: Allowlist.** After block rules clear, commands like `git status`, `ls`, `cat`, `jq` skip the remaining checks. They are read-only or otherwise side-effect-free for safe arguments.
+**Tier 2: Phase-aware concurrency.** During read-only phases (review, security, qa), write operations are blocked so phases that run in parallel cannot mutate shared state. Detection covers more than the obvious utilities: output redirection, in-place editors (`sed -i`, `perl -i`), inline interpreter code (`python -c`, `node -e`, `sh -c`, `eval`), package-manager writes, and git index, worktree, or ref mutations. The agent reports findings instead of auto-fixing. Locked by `ci/e2e-read-phase-writes.sh`.
 
-**Tier 3: In-project.** Operations that only touch files inside the current git repo pass through. If the agent writes a bad file, you revert it. Version control is the safety net.
+**Tier 3: Phase gate.** When a sprint is active, `git commit` and `git push` are blocked until review, security, and qa artifacts exist and are fresher than the latest code change. This prevents the agent from skipping pipeline phases on simple tasks. Bypass with `NANOSTACK_SKIP_GATE=1` for non-sprint commits.
 
-**Tier 4: Phase-aware concurrency.** During read-only phases (review, security, qa), write operations are blocked. This prevents race conditions when multiple agents run in parallel. The agent reports findings instead of auto-fixing.
+**Tier 4: Budget gate.** When a sprint budget is set and 95%+ spent, all non-allowlisted commands are blocked. The agent can still run safe commands (`ls`, `git status`, `cat`) to save work, but cannot execute builds, tests, or deploys. Bypass with `NANOSTACK_SKIP_BUDGET=1`.
 
-**Tier 5: Phase gate.** When a sprint is active, `git commit` and `git push` are blocked until review, security, and qa artifacts exist and are fresher than the latest code change. This prevents the agent from skipping pipeline phases on simple tasks. Bypass with `NANOSTACK_SKIP_GATE=1` for non-sprint commits.
+**Tier 5: Allowlist.** Only after the gates above clear do safe reads like `git status`, `ls`, `cat`, `jq` short-circuit the rest. They are read-only or otherwise side-effect-free for safe arguments. Running the allowlist after the global gates is what stops a safe-listed binary from skipping a read-only phase or the phase gate.
 
-**Tier 6: Budget gate.** When a sprint budget is set and 95%+ spent, all non-allowlisted commands are blocked. The agent can still run safe commands (`ls`, `git status`, `cat`) to save work, but cannot execute builds, tests, or deploys. Bypass with `NANOSTACK_SKIP_BUDGET=1`.
+**Tier 6: In-project.** Operations that only touch files inside the current git repo pass through, after the gates have run. If the agent writes a bad file, you revert it. Version control is the safety net.
 
 Plus a Tier 7 of warn rules for operations that need attention but not blocking. Warn rule definitions also live in `guard/rules.json`.
 
