@@ -7,12 +7,8 @@
       "path": "ci/e2e-harness-selftest.sh",
       "kind": "unit",
       "tier": "pr",
-      "surface": [
-        "harness-lib"
-      ],
-      "deps": [
-        "bash"
-      ],
+      "surface": ["harness-lib"],
+      "deps": ["bash"],
       "expected_checks": 24,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
@@ -23,14 +19,8 @@
       "path": "ci/check-harness-manifest.sh",
       "kind": "static-contract",
       "tier": "pr",
-      "surface": [
-        "harness-manifest",
-        "ci-inventory"
-      ],
-      "deps": [
-        "bash",
-        "jq"
-      ],
+      "surface": ["harness-manifest", "ci-inventory"],
+      "deps": ["bash", "jq"],
       "expected_checks": 0,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
@@ -41,14 +31,8 @@
       "path": "ci/e2e-harness-manifest-selftest.sh",
       "kind": "unit",
       "tier": "pr",
-      "surface": [
-        "harness-manifest",
-        "ci-inventory"
-      ],
-      "deps": [
-        "bash",
-        "jq"
-      ],
+      "surface": ["harness-manifest", "ci-inventory"],
+      "deps": ["bash", "jq"],
       "expected_checks": 0,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
@@ -59,16 +43,8 @@
       "path": "ci/e2e-concurrency-parity.sh",
       "kind": "runtime-e2e",
       "tier": "pr",
-      "surface": [
-        "guard",
-        "phases",
-        "concurrency"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["guard", "phases", "concurrency"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 10,
       "timeout_minutes": 3,
       "workflow": ".github/workflows/lint.yml",
@@ -79,16 +55,8 @@
       "path": "ci/e2e-read-phase-writes.sh",
       "kind": "runtime-e2e",
       "tier": "pr",
-      "surface": [
-        "guard",
-        "phases",
-        "concurrency"
-      ],
-      "deps": [
-        "bash",
-        "git",
-        "jq"
-      ],
+      "surface": ["guard", "phases", "concurrency"],
+      "deps": ["bash", "git", "jq"],
       "expected_checks": 320,
       "timeout_minutes": 5,
       "workflow": ".github/workflows/lint.yml",
@@ -99,17 +67,8 @@
       "path": "ci/e2e-structured-artifacts.sh",
       "kind": "runtime-e2e",
       "tier": "opt-in",
-      "surface": [
-        "artifact-schemas",
-        "save-artifact",
-        "find-artifact",
-        "resolve"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["artifact-schemas", "save-artifact", "find-artifact", "resolve"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 31,
       "timeout_minutes": 3,
       "workflow": ".github/workflows/e2e.yml",
@@ -120,17 +79,8 @@
       "path": "ci/e2e-artifact-trust.sh",
       "kind": "runtime-e2e",
       "tier": "opt-in",
-      "surface": [
-        "artifact-trust",
-        "find-artifact",
-        "resolve",
-        "phase-gate"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["artifact-trust", "find-artifact", "resolve", "phase-gate"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 41,
       "timeout_minutes": 5,
       "workflow": ".github/workflows/e2e.yml",
@@ -141,16 +91,8 @@
       "path": "ci/e2e-custom-routing.sh",
       "kind": "runtime-e2e",
       "tier": "opt-in",
-      "surface": [
-        "resolve",
-        "phase-context",
-        "routing"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["resolve", "phase-context", "routing"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 35,
       "timeout_minutes": 5,
       "workflow": ".github/workflows/e2e.yml",
@@ -161,19 +103,8 @@
       "path": "ci/e2e-custom-stack-flows.sh",
       "kind": "runtime-e2e",
       "tier": "opt-in",
-      "surface": [
-        "create-skill",
-        "conductor",
-        "guard",
-        "store-path",
-        "resolve"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git",
-        "node"
-      ],
+      "surface": ["create-skill", "conductor", "guard", "store-path", "resolve"],
+      "deps": ["bash", "jq", "git", "node"],
       "expected_checks": 40,
       "timeout_minutes": 6,
       "workflow": ".github/workflows/e2e.yml",
@@ -184,15 +115,8 @@
       "path": "ci/e2e-adapter-freshness.sh",
       "kind": "runtime-e2e",
       "tier": "opt-in",
-      "surface": [
-        "adapters",
-        "check-adapters"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["adapters", "check-adapters"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 74,
       "timeout_minutes": 5,
       "workflow": ".github/workflows/e2e.yml",
@@ -203,17 +127,8 @@
       "path": "ci/e2e-graph-aware-session.sh",
       "kind": "runtime-e2e",
       "tier": "pr",
-      "surface": [
-        "session",
-        "phases",
-        "phase-graph",
-        "conductor"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["session", "phases", "phase-graph", "conductor"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 61,
       "timeout_minutes": 6,
       "workflow": ".github/workflows/lint.yml",
@@ -224,15 +139,8 @@
       "path": "ci/e2e-delivery-matrix.sh",
       "kind": "runtime-e2e",
       "tier": "opt-in",
-      "surface": [
-        "delivery",
-        "host-matrix"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["delivery", "host-matrix"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 17,
       "timeout_minutes": 6,
       "workflow": ".github/workflows/e2e.yml",
@@ -243,16 +151,8 @@
       "path": "ci/e2e-onboarding-flows.sh",
       "kind": "runtime-e2e",
       "tier": "opt-in",
-      "surface": [
-        "nano-run",
-        "setup-artifact",
-        "onboarding"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["nano-run", "setup-artifact", "onboarding"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 34,
       "timeout_minutes": 6,
       "workflow": ".github/workflows/e2e.yml",
@@ -263,15 +163,8 @@
       "path": "ci/e2e-think-flows.sh",
       "kind": "runtime-e2e",
       "tier": "opt-in",
-      "surface": [
-        "think",
-        "session"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["think", "session"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 38,
       "timeout_minutes": 6,
       "workflow": ".github/workflows/e2e.yml",
@@ -282,15 +175,8 @@
       "path": "ci/e2e-think-archetypes.sh",
       "kind": "runtime-e2e",
       "tier": "opt-in",
-      "surface": [
-        "think",
-        "archetypes"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["think", "archetypes"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 25,
       "timeout_minutes": 6,
       "workflow": ".github/workflows/e2e.yml",
@@ -301,19 +187,8 @@
       "path": "ci/e2e-user-flows.sh",
       "kind": "runtime-e2e",
       "tier": "opt-in",
-      "surface": [
-        "install",
-        "sprint",
-        "phase-gate",
-        "guard",
-        "doctor",
-        "local-mode"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["install", "sprint", "phase-gate", "guard", "doctor", "local-mode"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 100,
       "timeout_minutes": 10,
       "workflow": ".github/workflows/e2e.yml",
@@ -324,17 +199,8 @@
       "path": "ci/e2e-examples.sh",
       "kind": "example-e2e",
       "tier": "opt-in",
-      "surface": [
-        "examples",
-        "sprint-roundtrip"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git",
-        "node",
-        "curl"
-      ],
+      "surface": ["examples", "sprint-roundtrip"],
+      "deps": ["bash", "jq", "git", "node", "curl"],
       "expected_checks": 40,
       "timeout_minutes": 10,
       "workflow": ".github/workflows/e2e.yml",
@@ -345,17 +211,8 @@
       "path": "ci/e2e-custom-stack-examples.sh",
       "kind": "example-e2e",
       "tier": "opt-in",
-      "surface": [
-        "custom-stack",
-        "compliance-release",
-        "examples"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git",
-        "node"
-      ],
+      "surface": ["custom-stack", "compliance-release", "examples"],
+      "deps": ["bash", "jq", "git", "node"],
       "expected_checks": 51,
       "timeout_minutes": 10,
       "workflow": ".github/workflows/e2e.yml",
@@ -366,18 +223,8 @@
       "path": "ci/e2e-visual-artifacts.sh",
       "kind": "visual-e2e",
       "tier": "pr",
-      "surface": [
-        "visual-render",
-        "trust",
-        "xss-safety",
-        "path-safety",
-        "journal",
-        "stack-render"
-      ],
-      "deps": [
-        "bash",
-        "jq"
-      ],
+      "surface": ["visual-render", "trust", "xss-safety", "path-safety", "journal", "stack-render"],
+      "deps": ["bash", "jq"],
       "expected_checks": 357,
       "timeout_minutes": 5,
       "workflow": ".github/workflows/lint.yml",
@@ -388,14 +235,8 @@
       "path": "ci/check-visual-artifact-templates.sh",
       "kind": "static-contract",
       "tier": "pr",
-      "surface": [
-        "visual-render",
-        "templates"
-      ],
-      "deps": [
-        "bash",
-        "jq"
-      ],
+      "surface": ["visual-render", "templates"],
+      "deps": ["bash", "jq"],
       "expected_checks": 38,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
@@ -406,14 +247,8 @@
       "path": "ci/check-examples.sh",
       "kind": "static-contract",
       "tier": "pr",
-      "surface": [
-        "examples",
-        "readme-contract"
-      ],
-      "deps": [
-        "bash",
-        "jq"
-      ],
+      "surface": ["examples", "readme-contract"],
+      "deps": ["bash", "jq"],
       "expected_checks": 32,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
@@ -424,15 +259,8 @@
       "path": "ci/check-custom-stack-examples.sh",
       "kind": "static-contract",
       "tier": "pr",
-      "surface": [
-        "custom-stack",
-        "compliance-release",
-        "contract"
-      ],
-      "deps": [
-        "bash",
-        "jq"
-      ],
+      "surface": ["custom-stack", "compliance-release", "contract"],
+      "deps": ["bash", "jq"],
       "expected_checks": 49,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
@@ -443,13 +271,8 @@
       "path": "ci/check-readme-public-copy.sh",
       "kind": "static-contract",
       "tier": "pr",
-      "surface": [
-        "readme",
-        "public-copy"
-      ],
-      "deps": [
-        "bash"
-      ],
+      "surface": ["readme", "public-copy"],
+      "deps": ["bash"],
       "expected_checks": 0,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
@@ -460,14 +283,8 @@
       "path": "ci/check-readme-narrative-locks.sh",
       "kind": "static-contract",
       "tier": "pr",
-      "surface": [
-        "readme",
-        "public-copy",
-        "narrative"
-      ],
-      "deps": [
-        "bash"
-      ],
+      "surface": ["readme", "public-copy", "narrative"],
+      "deps": ["bash"],
       "expected_checks": 0,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
@@ -478,16 +295,8 @@
       "path": "ci/check-release-docs-locks.sh",
       "kind": "static-contract",
       "tier": "pr",
-      "surface": [
-        "release-notes",
-        "extending",
-        "llms",
-        "agents",
-        "public-copy"
-      ],
-      "deps": [
-        "bash"
-      ],
+      "surface": ["release-notes", "extending", "llms", "agents", "public-copy"],
+      "deps": ["bash"],
       "expected_checks": 0,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
@@ -498,17 +307,8 @@
       "path": "ci/check-helper-path-containment.sh",
       "kind": "static-contract",
       "tier": "pr",
-      "surface": [
-        "session",
-        "conductor",
-        "discard-sprint",
-        "screenshot"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["session", "conductor", "discard-sprint", "screenshot"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 10,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
@@ -519,17 +319,8 @@
       "path": "ci/check-trusted-evidence.sh",
       "kind": "static-contract",
       "tier": "pr",
-      "surface": [
-        "feature-gate",
-        "restore-context",
-        "conductor",
-        "artifact-trust"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["feature-gate", "restore-context", "conductor", "artifact-trust"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 11,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
@@ -540,15 +331,8 @@
       "path": "ci/check-data-hygiene.sh",
       "kind": "static-contract",
       "tier": "pr",
-      "surface": [
-        "guard-audit",
-        "telemetry",
-        "graduation"
-      ],
-      "deps": [
-        "bash",
-        "jq"
-      ],
+      "surface": ["guard-audit", "telemetry", "graduation"],
+      "deps": ["bash", "jq"],
       "expected_checks": 16,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
@@ -559,17 +343,8 @@
       "path": "ci/check-policy-contract.sh",
       "kind": "static-contract",
       "tier": "pr",
-      "surface": [
-        "guard",
-        "phase-gate",
-        "budget-gate",
-        "freeze-docs"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["guard", "phase-gate", "budget-gate", "freeze-docs"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 32,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
@@ -580,13 +355,8 @@
       "path": "ci/check-visual-artifact-public-copy.sh",
       "kind": "static-contract",
       "tier": "pr",
-      "surface": [
-        "visual-render",
-        "public-copy"
-      ],
-      "deps": [
-        "bash"
-      ],
+      "surface": ["visual-render", "public-copy"],
+      "deps": ["bash"],
       "expected_checks": 0,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
@@ -597,14 +367,8 @@
       "path": "tests/run.sh",
       "kind": "unit",
       "tier": "local",
-      "surface": [
-        "bin-lib",
-        "unit"
-      ],
-      "deps": [
-        "bash",
-        "jq"
-      ],
+      "surface": ["bin-lib", "unit"],
+      "deps": ["bash", "jq"],
       "expected_checks": 0,
       "timeout_minutes": 5
     },
@@ -613,16 +377,8 @@
       "path": "tests/e2e-user-flows.sh",
       "kind": "runtime-e2e",
       "tier": "local",
-      "surface": [
-        "install",
-        "sprint",
-        "local"
-      ],
-      "deps": [
-        "bash",
-        "jq",
-        "git"
-      ],
+      "surface": ["install", "sprint", "local"],
+      "deps": ["bash", "jq", "git"],
       "expected_checks": 0,
       "timeout_minutes": 10
     }
