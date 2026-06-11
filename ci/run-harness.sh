@@ -17,11 +17,21 @@
 #   --continue-on-fail   keep running after a suite fails
 #   --dry-run            print what would run, run nothing
 #   --json               emit a JSON summary instead of a table
+#
+# A suite with expected_checks > 0 in the manifest must report at least
+# that many checks in its summary line, or the run counts as a failure
+# even when the suite exits 0. Exit codes alone cannot catch a suite
+# that silently skips half its cells; the declared floor can. Runs with
+# --filter skip the floor (filtering runs fewer cells by design).
+#
+# Test hook: NANOSTACK_HARNESS_MANIFEST overrides the manifest path so
+# the selftest can exercise this script against fixture suites without
+# touching the real manifest.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MANIFEST="$ROOT/ci/harnesses.json"
+MANIFEST="${NANOSTACK_HARNESS_MANIFEST:-$ROOT/ci/harnesses.json}"
 
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 1; }
 [ -f "$MANIFEST" ] || { echo "ERROR: $MANIFEST not found" >&2; exit 1; }
@@ -46,13 +56,15 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$MODE" ] || { echo "ERROR: pick one of --list --suite --kind --tier --all" >&2; exit 2; }
 
-# Emit the selected suites as tab-separated id<TAB>path<TAB>kind<TAB>tier<TAB>deps(space).
+# Emit the selected suites as tab-separated
+# id<TAB>path<TAB>kind<TAB>tier<TAB>deps(space)<TAB>expected_checks.
 select_suites() {
+  local fields='[.id,.path,.kind,.tier,(.deps|join(" ")),(.expected_checks // 0)] | @tsv'
   case "$MODE" in
-    list|all) jq -r '.suites[] | [.id,.path,.kind,.tier,(.deps|join(" "))] | @tsv' "$MANIFEST" ;;
-    suite)    jq -r --arg s "$SELECT" '.suites[] | select(.id==$s) | [.id,.path,.kind,.tier,(.deps|join(" "))] | @tsv' "$MANIFEST" ;;
-    kind)     jq -r --arg s "$SELECT" '.suites[] | select(.kind==$s) | [.id,.path,.kind,.tier,(.deps|join(" "))] | @tsv' "$MANIFEST" ;;
-    tier)     jq -r --arg s "$SELECT" '.suites[] | select(.tier==$s) | [.id,.path,.kind,.tier,(.deps|join(" "))] | @tsv' "$MANIFEST" ;;
+    list|all) jq -r ".suites[] | $fields" "$MANIFEST" ;;
+    suite)    jq -r --arg s "$SELECT" ".suites[] | select(.id==\$s) | $fields" "$MANIFEST" ;;
+    kind)     jq -r --arg s "$SELECT" ".suites[] | select(.kind==\$s) | $fields" "$MANIFEST" ;;
+    tier)     jq -r --arg s "$SELECT" ".suites[] | select(.tier==\$s) | $fields" "$MANIFEST" ;;
   esac
 }
 
@@ -68,7 +80,7 @@ if [ "$MODE" = "list" ]; then
     exit 0
   fi
   printf '%-32s %-16s %-8s %s\n' "SUITE" "KIND" "TIER" "PATH"
-  printf '%s\n' "$ROWS" | while IFS=$'\t' read -r id path kind tier deps; do
+  printf '%s\n' "$ROWS" | while IFS=$'\t' read -r id path kind tier deps expected; do
     printf '%-32s %-16s %-8s %s\n' "$id" "$kind" "$tier" "$path"
   done
   exit 0
@@ -81,14 +93,17 @@ deps_ok() {  # $1 = space-separated deps; echoes first missing or empty
 }
 
 # Parse a suite's own summary line for its check count (checks or cells).
+# Only the tail of the output is scanned: a suite that happens to echo a
+# count-shaped phrase mid-run (a sub-invocation, a quoted fixture) must
+# not displace the real summary line, which suites print last.
 parse_count() {
-  printf '%s\n' "$1" | grep -oE '[0-9]+ (checks|cells) passed|[0-9]+/[0-9]+ checks passed' \
+  printf '%s\n' "$1" | tail -5 | grep -oE '[0-9]+ (checks|cells) passed|[0-9]+/[0-9]+ checks passed' \
     | tail -1 | grep -oE '^[0-9]+' | head -1
 }
 
 OVERALL=0
 RESULTS_JSON="[]"
-printf '%s\n' "$ROWS" | { TABLE=""; while IFS=$'\t' read -r id path kind tier deps; do
+printf '%s\n' "$ROWS" | { while IFS=$'\t' read -r id path kind tier deps expected; do
   [ -z "$id" ] && continue
   if $DRYRUN; then
     if $JSON; then
@@ -105,22 +120,43 @@ printf '%s\n' "$ROWS" | { TABLE=""; while IFS=$'\t' read -r id path kind tier de
     RESULTS_JSON=$(printf '%s' "$RESULTS_JSON" | jq --arg i "$id" '. + [{suite:$i,result:"skip"}]')
     continue
   fi
+  case "$path" in
+    /*) suite_path="$path" ;;
+    *)  suite_path="$ROOT/$path" ;;
+  esac
   start=$(date +%s)
   if [ "$MODE" = "suite" ] && [ -n "$FILTER" ]; then
-    out=$(bash "$ROOT/$path" --filter "$FILTER" 2>&1); rc=$?
+    out=$(bash "$suite_path" --filter "$FILTER" 2>&1); rc=$?
   else
-    out=$(bash "$ROOT/$path" 2>&1); rc=$?
+    out=$(bash "$suite_path" 2>&1); rc=$?
   fi
   end=$(date +%s)
   secs=$((end - start))
   count=$(parse_count "$out"); count="${count:-?}"
+  # Enforce the manifest's declared check floor. A suite that exits 0
+  # but reports fewer checks than expected_checks (or none at all) has
+  # silently skipped work; count that as a failure. Filtered runs are
+  # exempt, and a count above the floor only earns a reminder to bump
+  # the manifest.
+  floor_msg=""
+  if [ "$rc" -eq 0 ] && [ -z "$FILTER" ] && [ "${expected:-0}" -gt 0 ]; then
+    if [ "$count" = "?" ]; then
+      rc=1; floor_msg="ERROR: $id reported no parseable check count (manifest expects >= $expected)"
+    elif [ "$count" -lt "$expected" ]; then
+      rc=1; floor_msg="ERROR: $id reported $count checks, below the manifest floor of $expected"
+    elif [ "$count" -gt "$expected" ]; then
+      floor_msg="note: $id reported $count checks, manifest expects $expected (update expected_checks)"
+    fi
+  fi
   if [ "$rc" -eq 0 ]; then result="pass"; else result="FAIL"; OVERALL=1; fi
   if ! $JSON; then
     printf '%-28s %-7s %-7s %ss\n' "$id" "$count" "$result" "$secs"
     [ "$rc" -ne 0 ] && printf '%s\n' "$out" | tail -20
+    [ -n "$floor_msg" ] && printf '%s\n' "$floor_msg"
   fi
   RESULTS_JSON=$(printf '%s' "$RESULTS_JSON" | jq --arg i "$id" --arg c "$count" --arg r "$result" --argjson s "$secs" \
-    '. + [{suite:$i,checks:$c,result:$r,seconds:$s}]')
+    --argjson e "${expected:-0}" --arg n "$floor_msg" \
+    '. + [{suite:$i,checks:$c,expected:$e,result:$r,seconds:$s} + (if $n == "" then {} else {note:$n} end)]')
   if [ "$rc" -ne 0 ] && [ "$CONTINUE" = "false" ]; then
     break
   fi

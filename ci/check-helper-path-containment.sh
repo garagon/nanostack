@@ -14,7 +14,8 @@ export NANOSTACK_STORE="$(mktemp -d)/store"
 mkdir -p "$NANOSTACK_STORE"
 
 fail=0
-pass() { printf '  ok   %s\n' "$1"; }
+pass_count=0
+pass() { pass_count=$((pass_count+1)); printf '  ok   %s\n' "$1"; }
 miss() { printf '  FAIL %s\n' "$1"; fail=1; }
 
 # ── session.sh archive ──────────────────────────────────────────────────────
@@ -97,4 +98,4 @@ if [ "$fail" -ne 0 ]; then
   echo "check-helper-path-containment: FAIL"
   exit 1
 fi
-echo "check-helper-path-containment: OK"
+echo "check-helper-path-containment: OK ($pass_count checks passed)"

@@ -20,7 +20,8 @@ set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
-pass() { printf '  ok   %s\n' "$1"; }
+pass_count=0
+pass() { pass_count=$((pass_count+1)); printf '  ok   %s\n' "$1"; }
 miss() { printf '  FAIL %s\n' "$1"; fail=1; }
 
 GUARD="$ROOT/guard/bin/check-dangerous.sh"
@@ -291,4 +292,4 @@ if [ "$fail" -ne 0 ]; then
   echo "check-policy-contract: FAIL"
   exit 1
 fi
-echo "check-policy-contract: OK"
+echo "check-policy-contract: OK ($pass_count checks passed)"
