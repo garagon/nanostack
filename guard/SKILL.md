@@ -112,7 +112,7 @@ When the user says `/unfreeze` or `/guard unfreeze`:
 
 **Allowlist.** Commands like `git status`, `ls`, `jq` short-circuit when no block rule matched.
 
-**Phase-aware concurrency.** When a session is active and the current phase declares `concurrency: read` (built-in or custom), write commands are blocked with category `concurrency-safety`. The active phase's `SKILL.md` is resolved through `bin/lib/phases.sh` so custom phases get the same protection as built-in ones.
+**Phase-aware concurrency.** When a session is active and the current phase declares `concurrency: read` (built-in or custom), write commands are blocked with category `concurrency-safety`. The active phase's `SKILL.md` is resolved through `bin/lib/phases.sh` so custom phases get the same protection as built-in ones. Detection covers more than the obvious utilities: output redirection to anything except `/dev/*`, in-place editors (`sed -i`, `perl -i`), `tee`/`truncate`/`patch`/`install`, inline interpreter code (`python -c`, `node -e`, `sh -c`, whose quoted body is invisible to pattern checks), and git worktree mutations (`stash`, `restore`, `checkout`, `merge`, `rebase`, `apply`, `clean`). Quoted segments are stripped first so a read like `awk '$3 > 5' file` is never mistaken for redirection. The regression lock is `ci/e2e-read-phase-writes.sh`.
 
 **In-project fast-path.** Operations that only touch files inside the current git repo pass through. Reviewable via version control. Runs after the concurrency check so an in-project `touch ./foo` cannot bypass a read-phase block.
 

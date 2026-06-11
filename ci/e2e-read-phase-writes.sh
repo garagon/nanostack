@@ -1,0 +1,442 @@
+#!/usr/bin/env bash
+# e2e-read-phase-writes.sh — Bash write paths during read-only phases.
+#
+# Security review finding #3: the Bash guard blocked the obvious write
+# utilities (rm/mv/cp/touch/...) during read-only phases, but a command
+# can mutate state without naming one: output redirection (`echo x >>
+# file`), in-place editors (`sed -i`), inline interpreter code
+# (`python -c`, `sh -c` — whose quoted body is invisible to pattern
+# checks), package installs, and git worktree mutations (`git stash`,
+# `git restore`). check-dangerous.sh Tier 2.4 now detects those classes
+# on the quote-stripped command. This suite is the active regression
+# lock: every cell drives the real hook with a real session file.
+#
+# The negative cells matter as much as the positive ones: /dev/null
+# redirection, bare fd dups (2>&1), quoted arrows (`awk '$3 > 5'`),
+# sed without -i, and allowlisted reads must all stay allowed, or
+# read-only phases become unusable for review/security/qa work.
+#
+# Exit 0 = all cells pass, exit 1 = any cell failed.
+set -u
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$REPO/ci/lib/harness.sh"
+
+CHECK_DANGEROUS="$REPO/guard/bin/check-dangerous.sh"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --filter) nh_set_filter "${2:-}"; shift 2 ;;
+    --filter=*) nh_set_filter "${1#*=}"; shift ;;
+    *) shift ;;
+  esac
+done
+
+nh_init read-phase-writes nano-rpw
+nh_require_cmd git jq
+
+WORK="$NH_TMP"
+cd "$WORK"
+git init -q
+git config user.email t@t.t; git config user.name t
+export NANOSTACK_STORE="$WORK/.nanostack"
+mkdir -p "$NANOSTACK_STORE"
+
+bash_hook() { (cd "$WORK" && "$CHECK_DANGEROUS" "$1" >/dev/null 2>&1); }
+
+set_phase() {
+  printf '{"workspace":"%s","current_phase":"%s","phase_log":[{"phase":"%s","status":"in_progress"}]}' \
+    "$WORK" "$1" "$1" > "$NANOSTACK_STORE/session.json"
+}
+
+# Cells: redirection writes blocked, harmless redirection allowed.
+cell_redirection() {
+  set_phase review
+  nh_assert_exit "append redirection blocked (echo hi >> notes.md)"  1 bash_hook 'echo hi >> notes.md'
+  nh_assert_exit "truncate redirection blocked (printf x > out.txt)" 1 bash_hook 'printf x > out.txt'
+  nh_assert_exit "stderr-to-file blocked (cmd 2> err.log)"           1 bash_hook 'diff a.txt b.txt 2> err.log'
+  nh_assert_exit "/dev/null redirection allowed"                     0 bash_hook 'true > /dev/null'
+  nh_assert_exit "/dev escape via .. blocked"                        1 bash_hook 'printf x > /dev/../tmp/out'
+  nh_assert_exit "bare fd dup allowed (npm test 2>&1)"               0 bash_hook 'npm test 2>&1'
+  nh_assert_exit "fd-closing redirect allowed (npm test 2>&-)"       0 bash_hook 'npm test 2>&-'
+  nh_assert_exit "quoted arrow is not redirection (awk \$3 > 5)"     0 bash_hook "awk '\$3 > 5' data.txt"
+  nh_assert_exit "quoted redirection target blocked (> \"out.txt\")"  1 bash_hook 'printf x > "out.txt"'
+  nh_assert_exit "single-quoted target blocked (>> 'notes.md')"      1 bash_hook "echo hi >> 'notes.md'"
+  nh_assert_exit "noclobber override blocked (>| out.txt)"           1 bash_hook 'printf x >| out.txt'
+  nh_assert_exit "quoted /dev/null stays allowed"                    0 bash_hook 'true > "/dev/null"'
+  nh_assert_exit ">& file redirection blocked"                       1 bash_hook 'echo hi >& out'
+  nh_assert_exit ">&2 fd dup stays allowed"                          0 bash_hook 'echo hi >&2'
+  nh_assert_exit "numeric filename redirection blocked"             1 bash_hook 'printf x > 1'
+  nh_assert_exit "2> numeric filename blocked"                      1 bash_hook 'cmd 2> 1'
+  nh_assert_exit "heredoc body containing > is not redirection"      0 bash_hook 'cat <<EOF
+this is text > out
+EOF'
+  nh_assert_exit "find -exec inline code blocked"                   1 bash_hook "find . -exec sh -c 'echo x > f' ;"
+  nh_assert_exit "escaped heredoc delimiter body ignored"           0 bash_hook 'cat <<\EOF
+a > b
+EOF'
+  nh_assert_exit "non-word heredoc delimiter body ignored"          0 bash_hook 'cat <<EOF-1
+a > b
+EOF-1'
+  nh_assert_exit "bash comparison is not redirection ([[ 5 > 3 ]])"  0 bash_hook '[[ 5 > 3 ]]'
+  nh_assert_exit "arithmetic comparison allowed ((( count > 0 )))"   0 bash_hook '(( count > 0 ))'
+  nh_assert_exit "nested-paren arithmetic comparison allowed"       0 bash_hook '(( (count + 1) > limit ))'
+  nh_assert_exit "nested arithmetic expansion comparison allowed"   0 bash_hook 'echo $(((5) > 3))'
+  nh_assert_exit "arithmetic then real redirect still blocks"       1 bash_hook '(( x > 0 )) && printf y > out.txt'
+  nh_assert_exit "escaped test comparison not redirection"          0 bash_hook '[ a \> b ]'
+  nh_assert_exit "env -S inline code blocked"                       1 bash_hook "env -S \"python3 -c 'open(1)'\""
+  nh_assert_exit "punctuation heredoc delimiter, write after blocked" 1 bash_hook 'cat <<EOF!
+body
+EOF!
+printf x > out.txt'
+  nh_assert_exit "even backslashes keep redirection active"         1 bash_hook 'echo x \\> out.txt'
+  nh_assert_exit "single escaped backslash redirect stays inert"    0 bash_hook 'echo x \> out.txt'
+  nh_assert_exit "escaped quote inside arg is not a redirect"       0 bash_hook 'awk "{print \"x > y\"}" file'
+}
+
+# Cells: in-place editors and write utilities.
+cell_inplace() {
+  set_phase security
+  nh_assert_exit "sed -i blocked"               1 bash_hook 'sed -i s/a/b/ app.js'
+  nh_assert_exit "sed -E -i blocked (option before -i)" 1 bash_hook "sed -E -i 's/a/b/' app.js"
+  nh_assert_exit "sed -i.bak blocked (suffix form)"     1 bash_hook 'sed -i.bak s/a/b/ app.js'
+  nh_assert_exit "sed --in-place=.bak blocked"          1 bash_hook 'sed --in-place=.bak s/a/b/ app.js'
+  nh_assert_exit "sed -i after the script blocked"      1 bash_hook "sed -e 's/a/b/' -i file"
+  nh_assert_exit "sed -e without -i stays allowed"     0 bash_hook "sed -e 's/a/b/' app.js"
+  nh_assert_exit "ruby -i in-place blocked"            1 bash_hook 'ruby -i -pe "x" file'
+  nh_assert_exit "ruby -pe stream stays allowed"       0 bash_hook "ruby -pe 'puts' file"
+
+
+  nh_assert_exit "quoted -i flag still blocks (sed \"-i\")" 1 bash_hook 'sed "-i" s/a/b/ app.js'
+
+  nh_assert_exit "tee blocked"                  1 bash_hook 'tee log.txt'
+  nh_assert_exit "npm install blocked"          1 bash_hook 'npm install left-pad'
+  nh_assert_exit "sed without -i allowed"       0 bash_hook 'sed -n 1,5p app.js'
+  nh_assert_exit "plain read tool allowed"      0 bash_hook 'diff a.txt b.txt'
+  nh_assert_exit "install utility at cmd pos blocked" 1 bash_hook 'install -m 0644 a b'
+  nh_assert_exit "install as npm script name allowed" 0 bash_hook 'npm run install'
+  nh_assert_exit "patch --dry-run validation allowed" 0 bash_hook 'patch --dry-run < p.diff'
+  nh_assert_exit "real patch application blocked"     1 bash_hook 'patch -p1 < p.diff'
+}
+
+# Cells: inline interpreter code (the quoted body can write through any
+# API and is invisible to pattern checks, so the flag itself blocks).
+cell_interpreters() {
+  set_phase qa
+  nh_assert_exit "python -c blocked"            1 bash_hook 'python3 -c "open(\"x\",\"w\")"'
+  nh_assert_exit "node -e blocked"              1 bash_hook 'node -e "fs.writeFileSync(\"x\",\"y\")"'
+  nh_assert_exit "sh -c blocked"                1 bash_hook 'sh -c "echo x > f"'
+  nh_assert_exit "python --version allowed"     0 bash_hook 'python --version'
+  nh_assert_exit "script execution allowed"     0 bash_hook 'npx playwright test'
+  nh_assert_exit "subcommand config flag allowed (pytest -c)" 0 bash_hook 'python -m pytest -c pytest.ini'
+  nh_assert_exit "deno test config flag allowed"              0 bash_hook 'deno test -c deno.json'
+  nh_assert_exit "perl -i.bak as first flag blocked"          1 bash_hook "perl -i.bak -pe 's/a/b/' file"
+  nh_assert_exit "perl -pe stream transform allowed"          0 bash_hook "perl -pe 's/a/b/' file"
+  nh_assert_exit "stdin-fed python blocked (python3 - <<PY)"  1 bash_hook 'python3 - <<PY
+open("x","w")
+PY'
+  nh_assert_exit "heredoc-fed sh blocked (sh <<EOF)"          1 bash_hook 'sh <<EOF
+echo hi > f
+EOF'
+  nh_assert_exit "attached heredoc blocked (python3<<PY)"    1 bash_hook 'python3<<PY
+open()
+PY'
+  nh_assert_exit "script execution with flag allowed"         0 bash_hook 'bash -x build.sh'
+  nh_assert_exit "quoted -c flag still blocks (python3 \"-c\")" 1 bash_hook 'python3 "-c" "open()"'
+  nh_assert_exit "ANSI-C quoted -c still blocks"             1 bash_hook "python3 \$'-c' 'open(1)'"
+
+  nh_assert_exit "combined shell flag blocks (bash -lc)"      1 bash_hook 'bash -lc "echo x > f"'
+  nh_assert_exit "combined shell flag blocks (sh -ec)"        1 bash_hook 'sh -ec "echo x > f"'
+  nh_assert_exit "combined python flag blocks (python -bc)"   1 bash_hook 'python -bc "open()"'
+  nh_assert_exit "perl stream loop stays allowed (-ne)"       0 bash_hook "perl -ne 'print' file"
+  nh_assert_exit "clustered perl -we inline code blocked"     1 bash_hook "perl -we 'open F,\">x\"'"
+  nh_assert_exit "clustered ruby -we inline code blocked"     1 bash_hook "ruby -we 'File.write(1,2)'"
+  nh_assert_exit "ruby -pe stream loop stays allowed"         0 bash_hook "ruby -pe 'puts' file"
+  nh_assert_exit "php -B begin inline code blocked"           1 bash_hook "php -B 'file_put_contents(1,2)'"
+  nh_assert_exit "node --eval blocked (long form)"           1 bash_hook 'node --eval "fs.writeFileSync()"'
+  nh_assert_exit "deno eval subcommand blocked"              1 bash_hook 'deno eval "Deno.writeTextFile()"'
+  nh_assert_exit "perl numeric flag in-place blocked"        1 bash_hook 'perl -0777 -pi.bak rewrite.pl file'
+  nh_assert_exit "perl clustered -0pi.bak blocked"           1 bash_hook 'perl -0pi.bak rewrite.pl file'
+  nh_assert_exit "pipe into bare interpreter blocked"        1 bash_hook 'echo "code" | node'
+  nh_assert_exit "logical-OR fallback to bare interpreter allowed" 0 bash_hook 'false || python --version'
+  nh_assert_exit "logical-OR fallback to node version allowed"     0 bash_hook 'false || node --version'
+  nh_assert_exit "logical-OR then mutation still blocks"           1 bash_hook 'false || git checkout main'
+  nh_assert_exit "heredoc piped into python blocked"         1 bash_hook 'cat <<PY | python3
+open("x","w")
+PY'
+  nh_assert_exit "pipe into interpreter with script allowed" 0 bash_hook 'cat data.csv | python3 process.py'
+  nh_assert_exit "pipe into module mode allowed"             0 bash_hook 'cat x | python3 -m json.tool'
+  nh_assert_exit "piped interpreter with option-arg blocked"   1 bash_hook 'echo code | python3 -W ignore'
+  nh_assert_exit "piped env -i interpreter blocked"            1 bash_hook 'echo code | env -i python3'
+  nh_assert_exit "process-sub into interpreter blocked"        1 bash_hook "python3 <(printf 'open(1)')"
+  nh_assert_exit "source process-sub executes generated code"  1 bash_hook "source <(printf 'date >out')"
+  nh_assert_exit "dot process-sub executes generated code"     1 bash_hook ". <(printf 'date >out')"
+  nh_assert_exit "source plain file stays allowed"             0 bash_hook 'source script.sh'
+  nh_assert_exit "piped bash -s stdin script blocked"         1 bash_hook "echo 'touch x' | bash -s arg"
+  nh_assert_exit "env -S split-string inline code blocked"    1 bash_hook "env -S \"python3 -c 'open(1)'\""
+  nh_assert_exit "quoted env -S split-string blocked"         1 bash_hook "env \"-S\" \"python3 -c 'open(1)'\""
+  nh_assert_exit "env --split-string inline code blocked"     1 bash_hook "env --split-string \"python3 -c 'open(1)'\""
+  nh_assert_exit "env -S wrapping a read stays allowed"       0 bash_hook "env -S 'npm test'"
+
+  nh_assert_exit "stdin-from-procsub interpreter blocked"      1 bash_hook "python3 < <(printf 'open(1)')"
+  nh_assert_exit "plain < file redirect stays allowed"        0 bash_hook 'python3 < script.py'
+  nh_assert_exit "option-arg before -c still blocks (python -W)" 1 bash_hook 'python -W ignore -c "open()"'
+  nh_assert_exit "option-arg before -e still blocks (node -r)"   1 bash_hook 'node -r ./hook -e "fs()"'
+  nh_assert_exit "interpreter name as grep arg not misread"      0 bash_hook 'grep python3 -c file'
+  nh_assert_exit "php -r inline code blocked"                    1 bash_hook 'php -r "file_put_contents()"'
+  nh_assert_exit "env-wrapped inline code blocked"              1 bash_hook 'env FOO=1 python3 -c "open()"'
+  nh_assert_exit "timeout-wrapped inline code blocked"          1 bash_hook 'timeout 5 python3 -c "open()"'
+  nh_assert_exit "timeout with options wraps inline code"      1 bash_hook 'timeout --preserve-status 5 python3 -c "open()"'
+  nh_assert_exit "timeout -s with signal arg wraps code"      1 bash_hook 'timeout -s KILL 5 python3 -c "open()"'
+  nh_assert_exit "sudo -u with user arg wraps code"           1 bash_hook 'sudo -u nobody python3 -c "open()"'
+  nh_assert_exit "env -u with unset arg wraps code"           1 bash_hook 'env -u FOO python3 -c "open()"'
+  nh_assert_exit "watch -n interval wraps code"               1 bash_hook 'watch -n 1 python3 -c "open()"'
+  nh_assert_exit "env -u wrapping a read stays allowed"       0 bash_hook 'env -u FOO npm test'
+  nh_assert_exit "env-assignment prefix inline code blocked"    1 bash_hook 'FOO=1 python3 -c "open()"'
+  nh_assert_exit "quoted-space env assignment inline code blocked" 1 bash_hook 'env "FOO=a b" python3 -c "open()"'
+  nh_assert_exit "escaped-space env assignment inline code blocked" 1 bash_hook 'FOO=a\ b python3 -c "open()"'
+  nh_assert_exit "quoted-space env assignment read stays allowed"   0 bash_hook 'env "FOO=a b" npm test'
+  nh_assert_exit "attached perl -e code blocked"                1 bash_hook "perl -e'open F,\">x\"'"
+  nh_assert_exit "pipe into wrapped interpreter blocked"        1 bash_hook 'echo code | env python3'
+  nh_assert_exit "wrapped npm test stays allowed"               0 bash_hook 'env NODE_ENV=test npm test'
+  nh_assert_exit "attached perl -pe stream stays allowed"       0 bash_hook "perl -pe'X' file"
+  nh_assert_exit "command substitution inline code blocked"     1 bash_hook 'echo $(python3 -c "open()")'
+  nh_assert_exit "backtick substitution inline code blocked"    1 bash_hook 'x=`python3 -c "open()"`'
+  nh_assert_exit "path-qualified env wrapper blocked"           1 bash_hook '/usr/bin/env python3 -c "open()"'
+  nh_assert_exit "pipe into path-qualified wrapper blocked"     1 bash_hook 'echo code | /usr/bin/env python3'
+  nh_assert_exit "substitution of read command stays allowed"   0 bash_hook 'echo $(git rev-parse HEAD)'
+  nh_assert_exit "stdin pseudo-file is inline code"            1 bash_hook 'echo code | python3 /dev/stdin'
+  nh_assert_exit "fd-backed heredoc is inline code"          1 bash_hook 'python3 /dev/fd/3 3<<PY
+open("x","w")
+PY'
+  nh_assert_exit "heredoc to /dev/stdin is inline code"        1 bash_hook 'python3 /dev/stdin <<PY
+open()
+PY'
+  nh_assert_exit "double-quoted substitution inline code blocks"  1 bash_hook 'echo "$(python3 -c '"'"'open(1)'"'"')"'
+  nh_assert_exit "quoted param-expansion with operators is data" 0 bash_hook 'printf "%s" "$FOO && git checkout main"'
+  nh_assert_exit "quoted param-expansion with redirect is data"  0 bash_hook 'echo "${VAR} > out.txt"'
+  nh_assert_exit "nested eval in command-sub blocked"           1 bash_hook 'echo "$(eval '"'"'git checkout main'"'"')"'
+  nh_assert_exit "apostrophe in double-quoted sub still blocks"  1 bash_hook 'echo "it'"'"'s $(git checkout main)"'
+  nh_assert_exit "eval of substitution-generated command blocked" 1 bash_hook "eval \"\$(printf 'git checkout -b tmp')\""
+  nh_assert_exit "plain eval read body stays allowed"            0 bash_hook 'eval "git diff"'
+  nh_assert_exit "double-quoted git mutation blocks"              1 bash_hook 'echo "$(git checkout main)"'
+  nh_assert_exit "redirection inside substitution blocks"         1 bash_hook 'echo "$(printf x > out.txt)"'
+  nh_assert_exit "git as a plain argument is not classified"      0 bash_hook 'printf git checkout'
+  nh_assert_exit "nested substitution redirection blocks"         1 bash_hook 'echo "$(printf x > $(pwd)/out.txt)"'
+  nh_assert_exit "quoted paren in sub does not truncate write"    1 bash_hook 'echo "$(printf ")" > out.txt)"'
+  nh_assert_exit "quoted paren read substitution allowed"         0 bash_hook 'echo "$(printf ")")"'
+  nh_assert_exit "nested read substitution stays allowed"         0 bash_hook 'echo $(git rev-parse $(git branch --show-current))'
+  nh_assert_exit "single-quoted substitution is inert"            0 bash_hook "grep -R '\$(git checkout main)' docs"
+  nh_assert_exit "escaped substitution is literal"                0 bash_hook 'grep "\$(git checkout main)" docs'
+  nh_assert_exit "even-backslash substitution stays active"       1 bash_hook 'echo \\$(git checkout main)'
+  nh_assert_exit "even-backslash backtick stays active"           1 bash_hook 'echo \\`git checkout main`'
+  nh_assert_exit "arithmetic comparison is not a redirect"        0 bash_hook 'echo $((5 > 3))'
+  nh_assert_exit "arithmetic alongside read substitution allowed" 0 bash_hook 'echo $((1+1)) $(git rev-parse HEAD)'
+
+  nh_assert_exit "node combined -pe inline code blocked"          1 bash_hook 'node -pe "require(0).writeFileSync(1,2)"'
+  nh_assert_exit "node -c syntax check stays allowed"             0 bash_hook 'node -c script.js'
+  nh_assert_exit "ruby -E encoding before script allowed"         0 bash_hook 'ruby -E UTF-8 script.rb'
+  nh_assert_exit "ruby attached -E encoding allowed"              0 bash_hook 'ruby -EUTF-8:UTF-8 script.rb'
+  nh_assert_exit "bundle exec inline ruby code blocked"           1 bash_hook "bundle exec ruby -e 'File.write(1,2)'"
+  nh_assert_exit "bundle exec gem install blocked"                1 bash_hook 'bundle exec gem install rake'
+  nh_assert_exit "bundle exec sed in-place blocked"               1 bash_hook 'bundle exec sed -i s/a/b/ file'
+  nh_assert_exit "bundle exec running a test stays allowed"       0 bash_hook 'bundle exec rspec'
+}
+
+# Cells: git worktree mutations beyond add/commit/push/reset.
+cell_git_mutations() {
+  set_phase review
+  nh_assert_exit "git stash blocked"            1 bash_hook 'git stash'
+  nh_assert_exit "git restore blocked"          1 bash_hook 'git restore app.js'
+  nh_assert_exit "git switch blocked"           1 bash_hook 'git switch -c tmp'
+  nh_assert_exit "git clean -fd blocked"        1 bash_hook 'git clean -fd'
+  nh_assert_exit "git config set blocked"       1 bash_hook 'git config user.name x'
+  nh_assert_exit "git config --get is a read"   0 bash_hook 'git config --get user.name'
+  nh_assert_exit "scoped config read allowed"   0 bash_hook 'git config --global --get user.email'
+  nh_assert_exit "config key value is a write"  1 bash_hook 'git config --global user.email a@b'
+  nh_assert_exit "git remote set-url blocked"   1 bash_hook 'git remote set-url origin x'
+  nh_assert_exit "git remote -v is a read"      0 bash_hook 'git remote -v'
+  nh_assert_exit "git remote -v set-url blocked" 1 bash_hook 'git remote -v set-url origin new'
+  nh_assert_exit "git fetch writes refs, blocked" 1 bash_hook 'git fetch'
+  nh_assert_exit "git fetch origin blocked"     1 bash_hook 'git fetch origin'
+  nh_assert_exit "git fetch --dry-run is a read" 0 bash_hook 'git fetch --dry-run'
+  nh_assert_exit "git bisect start blocked"     1 bash_hook 'git bisect start'
+  nh_assert_exit "git bisect log is a read"      0 bash_hook 'git bisect log'
+  nh_assert_exit "git reflog expire blocked"    1 bash_hook 'git reflog expire --expire=now --all'
+  nh_assert_exit "git reflog show is a read"     0 bash_hook 'git reflog show'
+  nh_assert_exit "git maintenance run blocked"  1 bash_hook 'git maintenance run'
+  nh_assert_exit "git write-tree blocked"       1 bash_hook 'git write-tree'
+  nh_assert_exit "git hash-object -w blocked"    1 bash_hook 'git hash-object -w file'
+  nh_assert_exit "git hash-object read is a read" 0 bash_hook 'git hash-object file'
+  nh_assert_exit "git symbolic-ref read is a read" 0 bash_hook 'git symbolic-ref --short HEAD'
+  nh_assert_exit "git symbolic-ref write blocked"  1 bash_hook 'git symbolic-ref HEAD refs/heads/x'
+  nh_assert_exit "git read-tree updates index, blocked" 1 bash_hook 'git read-tree --reset -u HEAD'
+  nh_assert_exit "git checkout-index blocked"   1 bash_hook 'git checkout-index -a -f'
+  nh_assert_exit "git sparse-checkout set blocked" 1 bash_hook 'git sparse-checkout set src'
+  nh_assert_exit "git sparse-checkout list is a read" 0 bash_hook 'git sparse-checkout list'
+  nh_assert_exit "git archive --output blocked" 1 bash_hook 'git archive --output=out.tar HEAD'
+  nh_assert_exit "git archive attached -o blocked" 1 bash_hook 'git archive -oout.tar HEAD'
+  nh_assert_exit "git archive to stdout is a read" 0 bash_hook 'git archive HEAD'
+  nh_assert_exit "git submodule update blocked" 1 bash_hook 'git submodule update --init'
+  nh_assert_exit "git submodule foreach blocked" 1 bash_hook 'git submodule foreach git checkout main'
+  nh_assert_exit "git -C global-optioned add blocked" 1 bash_hook 'git -C . add file'
+  nh_assert_exit "git -C global-optioned reset blocked" 1 bash_hook 'git -C . reset --hard'
+  nh_assert_exit "git -C global-optioned status is read" 0 bash_hook 'git -C . status'
+  nh_assert_exit "multiline read then git mutation blocked" 1 bash_hook 'git status
+git checkout main'
+  nh_assert_exit "multiline all-read stays allowed"      0 bash_hook 'git status
+git diff
+git log'
+  nh_assert_exit "git submodule status is read" 0 bash_hook 'git submodule status'
+  nh_assert_exit "git clean --dry-run is a read" 0 bash_hook 'git clean --dry-run'
+  nh_assert_exit "clustered git clean -nfd is dry-run" 0 bash_hook 'git clean -nfd'
+  nh_assert_exit "tab-separated git mutation blocked" 1 bash_hook "$(printf 'git\tcheckout main')"
+
+  nh_assert_exit "git stash list allowed"       0 bash_hook 'git stash list'
+  nh_assert_exit "git diff allowed"             0 bash_hook 'git diff'
+  nh_assert_exit "git merge-base is a read, allowed" 0 bash_hook 'git merge-base main HEAD'
+  nh_assert_exit "git stash show is a read, allowed"  0 bash_hook 'git stash show'
+  nh_assert_exit "git worktree list is a read, allowed" 0 bash_hook 'git worktree list'
+  nh_assert_exit "git worktree add blocked"           1 bash_hook 'git worktree add ../w2'
+  nh_assert_exit "git apply --check is read-only"     0 bash_hook 'git apply --check patch.diff'
+  nh_assert_exit "git apply --stat --apply still mutates" 1 bash_hook 'git apply --stat --apply patch.diff'
+  nh_assert_exit "git apply (real) blocked"           1 bash_hook 'git apply patch.diff'
+  nh_assert_exit "git diff --output writes, blocked"  1 bash_hook 'git diff --output=patch.diff'
+  nh_assert_exit "git -c config injection blocked"    1 bash_hook 'git -c core.pager=touch log'
+  nh_assert_exit "git -C dir (chdir) stays a read"    0 bash_hook 'git -C dir status'
+  nh_assert_exit "git format-patch writes, blocked"   1 bash_hook 'git format-patch -1'
+  nh_assert_exit "git branch -r filter is a read"     0 bash_hook 'git branch -r origin/main'
+  nh_assert_exit "git branch <name> blocked (ref creation)" 1 bash_hook 'git branch tmp'
+  nh_assert_exit "git tag <name> blocked (ref creation)"    1 bash_hook 'git tag v1.0'
+  nh_assert_exit "quoted ref name still blocks (git branch \"tmp\")" 1 bash_hook 'git branch "tmp"'
+  nh_assert_exit "display flag before ref still blocks (branch -v tmp)" 1 bash_hook 'git branch -v tmp'
+  nh_assert_exit "rename blocks (git branch -m old new)"     1 bash_hook 'git branch -m old new'
+  nh_assert_exit "tag with sort and name blocks"            1 bash_hook 'git tag --sort=creatordate v1'
+  nh_assert_exit "branch --contains is a filtered read"      0 bash_hook 'git branch --contains HEAD'
+  nh_assert_exit "branch --merged is a filtered read"        0 bash_hook 'git branch --merged main'
+  nh_assert_exit "branch -v alone is a read"                 0 bash_hook 'git branch -v'
+  nh_assert_exit "branch -a (all) is a read"                 0 bash_hook 'git branch -a'
+  nh_assert_exit "branch --format value is a read"           0 bash_hook "git branch --format '%(refname)'"
+  nh_assert_exit "branch -v && echo is a read"               0 bash_hook 'git branch -v && echo done'
+  nh_assert_exit "branch read then chained create blocks"    1 bash_hook 'git branch -v && git branch tmp'
+  nh_assert_exit "git mutation in substitution blocks"       1 bash_hook 'echo $(git checkout main)'
+  nh_assert_exit "find -exec git mutation blocked"           1 bash_hook 'find . -exec git checkout main \;'
+  nh_assert_exit "eval body git mutation blocked"            1 bash_hook 'eval "git checkout main"'
+  nh_assert_exit "eval harmless body stays allowed"          0 bash_hook 'eval "echo hello"'
+  nh_assert_exit "unquoted eval git mutation blocked"        1 bash_hook 'eval git checkout main'
+  nh_assert_exit "unquoted eval redirection blocked"         1 bash_hook 'eval printf x \> out.txt'
+  nh_assert_exit "eval body after separator blocked"         1 bash_hook 'eval "echo ok; git checkout main"'
+  nh_assert_exit "eval word inside awk program is inert"      0 bash_hook 'awk '\''{ print "foo eval printf x > out" }'\'' data.txt'
+  nh_assert_exit "eval word inside grep pattern is inert"     0 bash_hook "grep -R 'eval printf x > out' docs"
+  nh_assert_exit "eval with quoted operator word blocked"     1 bash_hook "eval echo x '>' out"
+  nh_assert_exit "eval protected operator stays inert"        0 bash_hook "eval grep \"'pattern > x'\" file"
+  nh_assert_exit "command eval wrapper mutation blocked"      1 bash_hook 'command eval "git checkout main"'
+  nh_assert_exit "builtin eval wrapper redirection blocked"   1 bash_hook 'builtin eval "printf x > out"'
+  nh_assert_exit "env-assignment before eval blocked"         1 bash_hook 'FOO=1 eval "git checkout main"'
+  nh_assert_exit "ANSI-C quoted eval body blocked"            1 bash_hook "eval \$'printf x > out'"
+  nh_assert_exit "harmless ANSI-C eval body allowed"          0 bash_hook "eval \$'echo hello'"
+  nh_assert_exit "escaped bare substitution not executed"    0 bash_hook 'echo \$(git checkout main)'
+  nh_assert_exit "no-space && chained mutation blocks"       1 bash_hook 'git diff&&git checkout main'
+  nh_assert_exit "no-space ; chained mutation blocks"        1 bash_hook 'git status;git restore app.js'
+  nh_assert_exit "escaped semicolon is data, not a boundary"  0 bash_hook 'echo ok \; git checkout main'
+  nh_assert_exit "escaped && is data, not a boundary"         0 bash_hook 'echo ok \&\& git checkout main'
+  nh_assert_exit "if/then block mutation blocked"            1 bash_hook 'if true; then git checkout main; fi'
+  nh_assert_exit "brace group mutation blocked"             1 bash_hook '{ git checkout main; }'
+  nh_assert_exit "case arm git mutation blocked"            1 bash_hook 'case x in x) git checkout main;; esac'
+  nh_assert_exit "case arm package write blocked"           1 bash_hook 'case x in x) npm ci;; esac'
+  nh_assert_exit "case arm harmless stays allowed"          0 bash_hook 'case x in x) echo ok;; esac'
+  nh_assert_exit "if/then harmless block stays allowed"     0 bash_hook 'if true; then echo ok; fi'
+  nh_assert_exit "if-condition git mutation blocked"        1 bash_hook 'if git checkout main; then echo x; fi'
+  nh_assert_exit "while-condition package write blocked"    1 bash_hook 'while npm ci; do echo x; done'
+  nh_assert_exit "if-condition read stays allowed"          0 bash_hook 'if git diff; then echo x; fi'
+  nh_assert_exit "chained read-then-mutate blocks"           1 bash_hook 'git diff && git checkout main'
+  nh_assert_exit "chained with ; blocks the mutation"        1 bash_hook 'git status; git restore app.js'
+  nh_assert_exit "tag -n annotation listing is a read"       0 bash_hook 'git tag -n v1'
+  nh_assert_exit "tag --contains is a read"                  0 bash_hook 'git tag --contains HEAD'
+  nh_assert_exit "tag -a annotated create blocks"            1 bash_hook 'git tag -a v1 -m x'
+  nh_assert_exit "tag -v signature verify is a read"         0 bash_hook 'git tag -v v1.0'
+}
+
+# Cells: the block is phase-scoped, not global.
+cell_phase_scoped() {
+  set_phase build
+  nh_assert_exit "build phase: redirection allowed"  0 bash_hook 'printf x > out.txt'
+  rm -f "$NANOSTACK_STORE/session.json"
+  nh_assert_exit "no session: redirection allowed"   0 bash_hook 'printf x > out.txt'
+}
+
+nh_cell redirection    cell_redirection
+nh_cell inplace        cell_inplace
+nh_cell interpreters   cell_interpreters
+nh_cell git-mutations  cell_git_mutations
+# Cells: package-manager dependency writes block; read subcommands stay.
+cell_package_managers() {
+  set_phase qa
+  nh_assert_exit "npm ci blocked"               1 bash_hook 'npm ci'
+  nh_assert_exit "yarn add blocked"             1 bash_hook 'yarn add left-pad'
+  nh_assert_exit "go get blocked"               1 bash_hook 'go get ./...'
+  nh_assert_exit "pip install blocked"          1 bash_hook 'pip install foo'
+  nh_assert_exit "npm test allowed"             0 bash_hook 'npm test'
+  nh_assert_exit "go test allowed"              0 bash_hook 'go test ./...'
+  nh_assert_exit "cargo build allowed"          0 bash_hook 'cargo build'
+  nh_assert_exit "npm ls allowed"               0 bash_hook 'npm ls'
+  nh_assert_exit "go mod tidy blocked"          1 bash_hook 'go mod tidy'
+  nh_assert_exit "bun add blocked"              1 bash_hook 'bun add left-pad'
+  nh_assert_exit "bun run script stays a read"  0 bash_hook 'bun run test'
+  nh_assert_exit "go mod graph is a read"       0 bash_hook 'go mod graph'
+  nh_assert_exit "go env -w writes config, blocked" 1 bash_hook 'go env -w GOPRIVATE=x'
+  nh_assert_exit "go clean removes cache, blocked"  1 bash_hook 'go clean -cache'
+  nh_assert_exit "go env query stays a read"     0 bash_hook 'go env GOPATH'
+  nh_assert_exit "pip config set blocked"        1 bash_hook 'pip config set global.index-url x'
+  nh_assert_exit "pip config get stays a read"   0 bash_hook 'pip config get global.index-url'
+  nh_assert_exit "pip wheel writes artifacts, blocked" 1 bash_hook 'pip wheel foo'
+  nh_assert_exit "python -m pip wheel blocked"   1 bash_hook 'python -m pip wheel foo'
+  nh_assert_exit "npm version bump blocked"     1 bash_hook 'npm version patch'
+  nh_assert_exit "npm version (no arg) is read" 0 bash_hook 'npm version'
+  nh_assert_exit "go generate blocked"          1 bash_hook 'go generate ./...'
+  nh_assert_exit "pnpm --filter add blocked"    1 bash_hook 'pnpm --filter app add left-pad'
+  nh_assert_exit "yarn workspace add blocked"   1 bash_hook 'yarn workspace app add left-pad'
+  nh_assert_exit "pm selector named like read verb" 1 bash_hook 'pnpm --filter run add left-pad'
+  nh_assert_exit "pm selector then read stays read" 0 bash_hook 'pnpm --filter app test'
+  nh_assert_exit "npm audit fix rewrites lock, blocked" 1 bash_hook 'npm audit fix'
+  nh_assert_exit "npm audit report stays a read"     0 bash_hook 'npm audit'
+  nh_assert_exit "pip -q install blocked"       1 bash_hook 'pip -q install foo'
+  nh_assert_exit "npm run <script> stays read"  0 bash_hook 'npm run add'
+  nh_assert_exit "wrapped npm ci blocked"       1 bash_hook '/usr/bin/env npm ci'
+  nh_assert_exit "env-assignment pnpm add blocked" 1 bash_hook 'FOO=1 pnpm add x'
+  nh_assert_exit "python -m pip install blocked"   1 bash_hook 'python -m pip install foo'
+  nh_assert_exit "attached -mpip install blocked"  1 bash_hook 'python3 -mpip install foo'
+  nh_assert_exit "attached -mpip list stays a read" 0 bash_hook 'python3 -mpip list'
+  nh_assert_exit "clustered -Im pip install blocked" 1 bash_hook 'python3 -Im pip install foo'
+  nh_assert_exit "clustered -Ompip install blocked"  1 bash_hook 'python3 -Ompip install foo'
+  nh_assert_exit "clustered -Im pip list stays a read" 0 bash_hook 'python3 -Im pip list'
+  nh_assert_exit "python -m pytest stays a read"   0 bash_hook 'python -m pytest'
+  nh_assert_exit "python flags before -m pip blocked" 1 bash_hook 'python3 -u -m pip install foo'
+  nh_assert_exit "dotted pip version blocked"      1 bash_hook 'pip3.12 install foo'
+  nh_assert_exit "npm config set blocked"          1 bash_hook 'npm config set registry x'
+  nh_assert_exit "npm cache clean blocked"         1 bash_hook 'npm cache clean --force'
+  nh_assert_exit "npm config get stays a read"     0 bash_hook 'npm config get registry'
+  nh_assert_exit "npm exec inline code blocked"    1 bash_hook 'npm exec sh -c "echo x > f"'
+  nh_assert_exit "npx inline code blocked"         1 bash_hook 'npx sh -c "echo x > f"'
+  nh_assert_exit "npx running a tool stays read"   0 bash_hook 'npx eslint .'
+  nh_assert_exit "npx -p package then code blocked" 1 bash_hook 'npx -p zx sh -c "echo x > f"'
+  nh_assert_exit "workspace selector then exec inline code blocked" 1 bash_hook 'pnpm --filter app exec sh -c "echo x > f"'
+  nh_assert_exit "yarn workspace exec inline code blocked" 1 bash_hook 'yarn workspace app exec sh -c "echo x > f"'
+  nh_assert_exit "workspace selector exec running a tool allowed" 0 bash_hook 'pnpm --filter app exec eslint .'
+  nh_assert_exit "go fmt rewrites source, blocked"  1 bash_hook 'go fmt ./...'
+  nh_assert_exit "npm init blocked"             1 bash_hook 'npm init -y'
+  nh_assert_exit "npm pkg set blocked"          1 bash_hook 'npm pkg set scripts.test=echo'
+  nh_assert_exit "cargo init blocked"           1 bash_hook 'cargo init'
+  nh_assert_exit "cargo fmt --check stays a read"   0 bash_hook 'cargo fmt --check'
+  nh_assert_exit "cargo fix rewrites source, blocked" 1 bash_hook 'cargo fix'
+  nh_assert_exit "cargo clippy --fix blocked"       1 bash_hook 'cargo clippy --fix'
+  nh_assert_exit "cargo clippy lint stays a read"   0 bash_hook 'cargo clippy'
+  nh_assert_exit "cargo clean deletes target, blocked" 1 bash_hook 'cargo clean'
+  nh_assert_exit "bundle config set writes config, blocked" 1 bash_hook 'bundle config set path vendor/bundle'
+  nh_assert_exit "bundle config get stays a read"   0 bash_hook 'bundle config get path'
+}
+
+nh_cell phase-scoped   cell_phase_scoped
+nh_cell package-managers cell_package_managers
+
+nh_summary
