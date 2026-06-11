@@ -63,6 +63,14 @@ echo "child: 10 checks passed, 0 failed"
 echo "cleaning up fixture workspace"
 exit 0
 EOF
+# A fixture that mimics NANOSTACK_KEEP_TMP=1: the harness EXIT trap
+# prints a [harness] diagnostic after nh_summary.
+cat > "$FIX/keep-tmp.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "fixture: 3 checks passed, 0 failed"
+echo "[harness] NANOSTACK_KEEP_TMP=1 keeping temp root /tmp/fixture.XXXX"
+exit 0
+EOF
 chmod +x "$FIX"/*.sh
 
 write_manifest() {  # $1 = suite path, $2 = expected_checks
@@ -134,6 +142,12 @@ cell_final_summary_wins() {
   run_fixture
   nh_assert_eq "trailing child count does not stand in for a summary" 1 "$RH_RC"
   nh_assert_contains "child-noise run reads as missing summary" "$RH_OUT" "no parseable check count"
+  # The harness library's own diagnostics print after nh_summary from
+  # the EXIT trap (the NANOSTACK_KEEP_TMP notice). They are not suite
+  # output and must not hide the summary line above them.
+  write_manifest "$FIX/keep-tmp.sh" 3
+  run_fixture
+  nh_assert_eq "[harness] trailer does not hide the summary" 0 "$RH_RC"
 }
 
 nh_cell floor-enforced cell_floor_enforced

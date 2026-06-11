@@ -103,9 +103,12 @@ deps_ok() {  # $1 = space-separated deps; echoes first missing or empty
 # Only the last non-empty line counts: every suite prints its summary
 # last, so a count-shaped phrase echoed earlier (a sub-invocation, a
 # quoted fixture, trailing log noise) can neither displace the real
-# summary nor stand in for a missing one.
+# summary nor stand in for a missing one. Lines starting with
+# "[harness]" are the harness library's own diagnostics (the
+# NANOSTACK_KEEP_TMP notice prints from the EXIT trap, after
+# nh_summary) and are not suite output.
 parse_count() {
-  printf '%s\n' "$1" | awk 'NF { last = $0 } END { print last }' \
+  printf '%s\n' "$1" | awk 'NF && $0 !~ /^\[harness\]/ { last = $0 } END { print last }' \
     | grep -oE '[0-9]+ (checks|cells) passed|[0-9]+/[0-9]+ checks passed' \
     | tail -1 | grep -oE '^[0-9]+' | head -1
 }
