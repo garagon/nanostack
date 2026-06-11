@@ -254,6 +254,14 @@ flow_write_guard() {
   cd "$proj"
   local guard="$REPO/guard/bin/check-write.sh"
 
+  # Hermetic store: this flow tests the secret/symlink denylist, not the
+  # read-phase block (flow 5 covers that). Without an isolated store the
+  # guard falls back to ~/.nanostack, so a developer with an ambient
+  # sprint session would see every "allow" assertion fail under that
+  # session's read-only phase. Point at an empty, sessionless store.
+  export NANOSTACK_STORE="$proj/.nanostack"
+  mkdir -p "$NANOSTACK_STORE"
+
   # Block list — basename matches do not need symlink resolution.
   assert_false "write blocks: .env" "$guard" "$proj/.env"
 
@@ -295,6 +303,7 @@ flow_write_guard() {
   assert_true "write allows: relative symlink within project" \
     "$guard" "$proj/safe-link/notes.txt"
 
+  unset NANOSTACK_STORE
   cd "$REPO"
 }
 
