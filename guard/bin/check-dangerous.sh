@@ -491,7 +491,7 @@ EOF
                   continue
                 }
                 if (tb == "npx" || tb == "bunx") { j++; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package|--node-options|--node-arg)$/) j++; j++ } continue }
-                if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue }
+                if (tb ~ /^(npm|pnpm|yarn|bun)$/) { jw = j + 1; while (jw < i && $jw ~ /^(--filter|-F|-w|--workspace|-C|--dir|--prefix|--cwd|--scope)$/) jw += 2; if (jw < i && $jw == "workspace") jw += 2; if (jw < i && $jw ~ /^(exec|dlx|x)$/) { j = jw + 1; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue } }
                 if (tb ~ /^(bundle|bundler)$/ && $(j + 1) == "exec") { j += 2; continue }
                 if (t ~ /^-/) { j++; continue }
                 return 0
@@ -559,7 +559,7 @@ EOF
                   continue
                 }
                 if (tb == "npx" || tb == "bunx") { j++; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package|--node-options|--node-arg)$/) j++; j++ } continue }
-                if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue }
+                if (tb ~ /^(npm|pnpm|yarn|bun)$/) { jw = j + 1; while (jw < i && $jw ~ /^(--filter|-F|-w|--workspace|-C|--dir|--prefix|--cwd|--scope)$/) jw += 2; if (jw < i && $jw == "workspace") jw += 2; if (jw < i && $jw ~ /^(exec|dlx|x)$/) { j = jw + 1; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue } }
                 if (tb ~ /^(bundle|bundler)$/ && $(j + 1) == "exec") { j += 2; continue }
                 if (t ~ /^-/) { j++; continue }
                 return 0
@@ -832,7 +832,7 @@ EOF
                   continue
                 }
                 if (tb == "npx" || tb == "bunx") { j++; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package|--node-options|--node-arg)$/) j++; j++ } continue }
-                if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue }
+                if (tb ~ /^(npm|pnpm|yarn|bun)$/) { jw = j + 1; while (jw < i && $jw ~ /^(--filter|-F|-w|--workspace|-C|--dir|--prefix|--cwd|--scope)$/) jw += 2; if (jw < i && $jw == "workspace") jw += 2; if (jw < i && $jw ~ /^(exec|dlx|x)$/) { j = jw + 1; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue } }
                 if (tb ~ /^(bundle|bundler)$/ && $(j + 1) == "exec") { j += 2; continue }
                 if (t ~ /^-/) { j++; continue }
                 return 0
@@ -1001,7 +1001,7 @@ EOF
                       continue
                     }
                     if (tb == "npx" || tb == "bunx") { j++; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package|--node-options|--node-arg)$/) j++; j++ } continue }
-                    if (tb ~ /^(npm|pnpm|yarn|bun)$/ && $(j + 1) ~ /^(exec|dlx|x)$/) { j += 2; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue }
+                    if (tb ~ /^(npm|pnpm|yarn|bun)$/) { jw = j + 1; while (jw < i && $jw ~ /^(--filter|-F|-w|--workspace|-C|--dir|--prefix|--cwd|--scope)$/) jw += 2; if (jw < i && $jw == "workspace") jw += 2; if (jw < i && $jw ~ /^(exec|dlx|x)$/) { j = jw + 1; while (j < i && $j ~ /^-/) { if ($j ~ /^(-p|--package)$/) j++; j++ } continue } }
                     if (tb ~ /^(bundle|bundler)$/ && $(j + 1) == "exec") { j += 2; continue }
                     if (t ~ /^-/) { j++; continue }
                     return 0
