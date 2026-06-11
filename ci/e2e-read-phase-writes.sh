@@ -157,6 +157,9 @@ PY'
   nh_assert_exit "perl numeric flag in-place blocked"        1 bash_hook 'perl -0777 -pi.bak rewrite.pl file'
   nh_assert_exit "perl clustered -0pi.bak blocked"           1 bash_hook 'perl -0pi.bak rewrite.pl file'
   nh_assert_exit "pipe into bare interpreter blocked"        1 bash_hook 'echo "code" | node'
+  nh_assert_exit "logical-OR fallback to bare interpreter allowed" 0 bash_hook 'false || python --version'
+  nh_assert_exit "logical-OR fallback to node version allowed"     0 bash_hook 'false || node --version'
+  nh_assert_exit "logical-OR then mutation still blocks"           1 bash_hook 'false || git checkout main'
   nh_assert_exit "heredoc piped into python blocked"         1 bash_hook 'cat <<PY | python3
 open("x","w")
 PY'

@@ -389,7 +389,7 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
           | sed 's/"\([^"]*[$]([^"]*\)"/\1/g' \
           | sed 's/"[^"]*"/QUOTEDARG/g' \
           | sed 's/[$]( / ( /g; s/[$](/ ( /g' \
-          | sed 's/&/ \& /g; s/|/ | /g; s/;/ ; /g; s/(/ ( /g; s/)/ ) /g; s/<</ << /g')
+          | sed 's/||/ @@OR@@ /g; s/&&/ @@AND@@ /g; s/&/ \& /g; s/|/ | /g; s/;/ ; /g; s/(/ ( /g; s/)/ ) /g; s/<</ << /g; s/@@OR@@/|| /g; s/@@AND@@/\&\& /g')
 
         # (a) Output redirection to anything except /dev/*. Bare fd
         #     dups (>&2, 2>&1) have no path target and never match the
@@ -914,7 +914,7 @@ EOF
               bnd = 1
               for (j = i - 1; j >= 1; j--)
                 if ($j ~ /^(\||\|\||&&|;|&|\(|\))$/ || $j ~ /[|;&()]$/ || $j ~ /^-(exec|execdir|ok|okdir)$/ || $j == "eval" || $j ~ /^(if|then|while|until|do|else|elif|\{|!)$/) { bnd = j + 1; break }
-              return (bnd >= 2 && $(bnd - 1) ~ /\|$/) ? 1 : 0
+              return (bnd >= 2 && $(bnd - 1) == "|") ? 1 : 0
             }
             {
               for (i = 1; i <= NF; i++) {
