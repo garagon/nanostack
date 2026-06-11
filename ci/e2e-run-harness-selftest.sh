@@ -105,6 +105,12 @@ cell_filter_exempt() {
   write_manifest "$FIX/reports.sh" 10
   REPORT_N=2 run_fixture --filter anything
   nh_assert_eq "filtered run skips the floor" 0 "$RH_RC"
+  # Outside --suite the filter is never forwarded, so accepting it
+  # would disable the floor while running unfiltered suites. It must
+  # be rejected, not ignored.
+  nh_capture RH_OUT RH_RC bash "$RUN_HARNESS" --all --filter anything
+  nh_assert_eq "--filter without --suite is rejected" 2 "$RH_RC"
+  nh_assert_contains "rejection names the rule" "$RH_OUT" "requires --suite"
 }
 
 cell_final_summary_wins() {

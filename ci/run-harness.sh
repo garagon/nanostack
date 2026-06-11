@@ -55,6 +55,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$MODE" ] || { echo "ERROR: pick one of --list --suite --kind --tier --all" >&2; exit 2; }
+# --filter is only forwarded in --suite mode. Accepting it elsewhere
+# would silently run unfiltered suites with the expected_checks floor
+# disabled, so reject it instead of ignoring it.
+if [ -n "$FILTER" ] && [ "$MODE" != "suite" ]; then
+  echo "ERROR: --filter requires --suite" >&2
+  exit 2
+fi
 
 # Emit the selected suites as tab-separated
 # id<TAB>path<TAB>kind<TAB>tier<TAB>deps(space)<TAB>expected_checks.
