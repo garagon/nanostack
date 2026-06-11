@@ -51,11 +51,16 @@ EOF
 cat > "$FIX/noisy.sh" <<'EOF'
 #!/usr/bin/env bash
 echo "replaying log: 999 checks passed earlier today"
-echo "padding line one"
-echo "padding line two"
-echo "padding line three"
-echo "padding line four"
 echo "fixture: 3 checks passed, 0 failed"
+exit 0
+EOF
+# A fixture whose own summary is missing but whose tail contains a
+# count-shaped child line followed by cleanup chatter. The parser must
+# only accept the last non-empty line, so this reads as no summary.
+cat > "$FIX/child-noise.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "child: 10 checks passed, 0 failed"
+echo "cleaning up fixture workspace"
 exit 0
 EOF
 chmod +x "$FIX"/*.sh
@@ -114,14 +119,21 @@ cell_filter_exempt() {
 }
 
 cell_final_summary_wins() {
-  # The count comes from the end of the output: a count-shaped phrase
-  # echoed mid-run must not satisfy (or inflate past) the floor.
+  # The count comes from the last non-empty line only: a count-shaped
+  # phrase echoed mid-run must not satisfy (or inflate past) the floor.
   write_manifest "$FIX/noisy.sh" 3
   run_fixture
   nh_assert_eq "final summary line is the parsed count" 0 "$RH_RC"
   write_manifest "$FIX/noisy.sh" 4
   run_fixture
   nh_assert_eq "mid-run 999 does not satisfy a floor of 4" 1 "$RH_RC"
+  # A child invocation's count followed by cleanup chatter is not a
+  # summary: the suite never printed its own final line, so the floor
+  # must fail closed instead of adopting the child's count.
+  write_manifest "$FIX/child-noise.sh" 10
+  run_fixture
+  nh_assert_eq "trailing child count does not stand in for a summary" 1 "$RH_RC"
+  nh_assert_contains "child-noise run reads as missing summary" "$RH_OUT" "no parseable check count"
 }
 
 nh_cell floor-enforced cell_floor_enforced

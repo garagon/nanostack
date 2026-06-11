@@ -99,12 +99,14 @@ deps_ok() {  # $1 = space-separated deps; echoes first missing or empty
   echo ""
 }
 
-# Parse a suite's own summary line for its check count (checks or cells).
-# Only the tail of the output is scanned: a suite that happens to echo a
-# count-shaped phrase mid-run (a sub-invocation, a quoted fixture) must
-# not displace the real summary line, which suites print last.
+# Parse a suite's summary line for its check count (checks or cells).
+# Only the last non-empty line counts: every suite prints its summary
+# last, so a count-shaped phrase echoed earlier (a sub-invocation, a
+# quoted fixture, trailing log noise) can neither displace the real
+# summary nor stand in for a missing one.
 parse_count() {
-  printf '%s\n' "$1" | tail -5 | grep -oE '[0-9]+ (checks|cells) passed|[0-9]+/[0-9]+ checks passed' \
+  printf '%s\n' "$1" | awk 'NF { last = $0 } END { print last }' \
+    | grep -oE '[0-9]+ (checks|cells) passed|[0-9]+/[0-9]+ checks passed' \
     | tail -1 | grep -oE '^[0-9]+' | head -1
 }
 
