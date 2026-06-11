@@ -209,6 +209,8 @@ PY'
 open()
 PY'
   nh_assert_exit "double-quoted substitution inline code blocks"  1 bash_hook 'echo "$(python3 -c '"'"'open(1)'"'"')"'
+  nh_assert_exit "quoted param-expansion with operators is data" 0 bash_hook 'printf "%s" "$FOO && git checkout main"'
+  nh_assert_exit "quoted param-expansion with redirect is data"  0 bash_hook 'echo "${VAR} > out.txt"'
   nh_assert_exit "double-quoted git mutation blocks"              1 bash_hook 'echo "$(git checkout main)"'
   nh_assert_exit "redirection inside substitution blocks"         1 bash_hook 'echo "$(printf x > out.txt)"'
   nh_assert_exit "git as a plain argument is not classified"      0 bash_hook 'printf git checkout'

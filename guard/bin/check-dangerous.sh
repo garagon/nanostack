@@ -385,7 +385,7 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
           | sed "s/\"\([A-Za-z_][A-Za-z0-9_]*=\)[^\"]*\"/\1QUOTEDARG/g" \
           | sed "s/'\([A-Za-z_][A-Za-z0-9_]*=\)[^']*'/\1QUOTEDARG/g" \
           | sed "s/'[^']*'/QUOTEDARG/g" \
-          | sed 's/"\([^"]*[$][^"]*\)"/\1/g' \
+          | sed 's/"\([^"]*[$]([^"]*\)"/\1/g' \
           | sed 's/"[^"]*"/QUOTEDARG/g' \
           | sed 's/[$]( / ( /g; s/[$](/ ( /g' \
           | sed 's/&/ \& /g; s/|/ | /g; s/;/ ; /g; s/(/ ( /g; s/)/ ) /g; s/<</ << /g')
