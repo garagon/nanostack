@@ -91,6 +91,7 @@ EOF!
 printf x > out.txt'
   nh_assert_exit "even backslashes keep redirection active"         1 bash_hook 'echo x \\> out.txt'
   nh_assert_exit "single escaped backslash redirect stays inert"    0 bash_hook 'echo x \> out.txt'
+  nh_assert_exit "escaped quote inside arg is not a redirect"       0 bash_hook 'awk "{print \"x > y\"}" file'
 }
 
 # Cells: in-place editors and write utilities.
@@ -267,6 +268,9 @@ cell_git_mutations() {
   nh_assert_exit "git write-tree blocked"       1 bash_hook 'git write-tree'
   nh_assert_exit "git hash-object -w blocked"    1 bash_hook 'git hash-object -w file'
   nh_assert_exit "git hash-object read is a read" 0 bash_hook 'git hash-object file'
+  nh_assert_exit "git symbolic-ref read is a read" 0 bash_hook 'git symbolic-ref --short HEAD'
+  nh_assert_exit "git symbolic-ref write blocked"  1 bash_hook 'git symbolic-ref HEAD refs/heads/x'
+  nh_assert_exit "git read-tree updates index, blocked" 1 bash_hook 'git read-tree --reset -u HEAD'
   nh_assert_exit "git checkout-index blocked"   1 bash_hook 'git checkout-index -a -f'
   nh_assert_exit "git sparse-checkout set blocked" 1 bash_hook 'git sparse-checkout set src'
   nh_assert_exit "git sparse-checkout list is a read" 0 bash_hook 'git sparse-checkout list'

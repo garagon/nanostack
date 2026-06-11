@@ -347,11 +347,15 @@ if [ -n "${NANOSTACK_STORE:-}" ]; then
         # spaces or shell metacharacters (code bodies, `grep 'a->b'`
         # patterns) become an inert placeholder. Allowlisted safe reads
         # never reach this tier.
+        _RON_BS=$(printf '\134')
         CMD_RON=$(printf '%s' "$CMD" \
           | sed "s/[$]\x27/\x27/g" \
           | sed "s/'\([-a-zA-Z0-9._/=]*\)'/\1/g" \
           | sed 's/"\([-a-zA-Z0-9._/=]*\)"/\1/g' \
-          | sed "s/'[^']*'/QUOTEDARG/g; s/\"[^\"]*\"/QUOTEDARG/g")
+          | sed "s/${_RON_BS}${_RON_BS}${_RON_BS}${_RON_BS}/@@BS@@/g" \
+          | sed "s/${_RON_BS}${_RON_BS}\"/@@DQ@@/g; s/${_RON_BS}${_RON_BS}'/@@SQ@@/g" \
+          | sed "s/'[^']*'/QUOTEDARG/g; s/\"[^\"]*\"/QUOTEDARG/g" \
+          | sed "s/@@DQ@@/X/g; s/@@SQ@@/X/g; s/@@BS@@/${_RON_BS}${_RON_BS}${_RON_BS}${_RON_BS}/g")
         # CMD_SUB is the normalization the awk classifiers (interpreter,
         # git, package-manager) consume. It is built from CMD, not
         # CMD_RON, because command substitution stays ACTIVE inside
@@ -1140,7 +1144,21 @@ EOF
                     }
                     return "mutate:fetch"
                   }
-                  if (gc ~ /^(mv|rm|init|clone|gc|repack|prune|update-ref|update-index|checkout-index|notes|replace|filter-branch|filter-repo|lfs|fast-import|symbolic-ref)$/) return "mutate:" gc
+                  # symbolic-ref reads with one positional (git symbolic-ref
+                  # --short HEAD); it writes only with -d or NAME REF (two
+                  # positionals).
+                  if (gc == "symbolic-ref") {
+                    cpos = 0
+                    for (a = j + 1; a <= NF; a++) {
+                      if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
+                      if ($a == "-d" || $a == "--delete") return "mutate:" gc
+                      if ($a ~ /^-/) continue
+                      cpos++
+                    }
+                    if (cpos >= 2) return "mutate:" gc
+                    return ""
+                  }
+                  if (gc ~ /^(mv|rm|init|clone|gc|repack|prune|update-ref|update-index|checkout-index|read-tree|notes|replace|filter-branch|filter-repo|lfs|fast-import)$/) return "mutate:" gc
                   if (gc == "config") {
                     cr = 0; cpos = 0
                     for (a = j + 1; a <= NF; a++) {
