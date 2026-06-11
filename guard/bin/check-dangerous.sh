@@ -877,6 +877,15 @@ EOF
                   if (r == 1) { found = 1; exit }
                   if (r == 2 && is_piped(i)) { found = 1; exit }
                 }
+                # source <(...) and . <(...) execute the process
+                # substitution output as shell code, so a write hidden in
+                # the generated script runs.
+                if ((b == "source" || $i == ".") && is_cmd_pos(i)) {
+                  for (k = i + 1; k <= NF; k++) {
+                    if ($k ~ /^(&&|\|\||;|\||&)$/) break
+                    if ($k == "<(" || ($k == "<" && $(k + 1) == "(")) { found = 1; exit }
+                  }
+                }
               }
             }
             END { exit(found ? 0 : 1) }
@@ -1049,7 +1058,7 @@ EOF
                   if (gc == "archive") {
                     for (a = j + 1; a <= NF; a++) {
                       if ($a ~ /^(&&|\|\||;|\||&|\(|\))$/) break
-                      if ($a == "-o" || $a == "--output" || $a ~ /^--output=/) return "mutate:" gc
+                      if ($a == "-o" || $a ~ /^-o./ || $a == "--output" || $a ~ /^--output=/) return "mutate:" gc
                     }
                     return ""
                   }

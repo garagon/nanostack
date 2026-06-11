@@ -162,6 +162,9 @@ PY'
   nh_assert_exit "piped interpreter with option-arg blocked"   1 bash_hook 'echo code | python3 -W ignore'
   nh_assert_exit "piped env -i interpreter blocked"            1 bash_hook 'echo code | env -i python3'
   nh_assert_exit "process-sub into interpreter blocked"        1 bash_hook "python3 <(printf 'open(1)')"
+  nh_assert_exit "source process-sub executes generated code"  1 bash_hook "source <(printf 'date >out')"
+  nh_assert_exit "dot process-sub executes generated code"     1 bash_hook ". <(printf 'date >out')"
+  nh_assert_exit "source plain file stays allowed"             0 bash_hook 'source script.sh'
   nh_assert_exit "piped bash -s stdin script blocked"         1 bash_hook "echo 'touch x' | bash -s arg"
   nh_assert_exit "env -S split-string inline code blocked"    1 bash_hook "env -S \"python3 -c 'open(1)'\""
   nh_assert_exit "quoted env -S split-string blocked"         1 bash_hook "env \"-S\" \"python3 -c 'open(1)'\""
@@ -256,6 +259,7 @@ cell_git_mutations() {
   nh_assert_exit "git sparse-checkout set blocked" 1 bash_hook 'git sparse-checkout set src'
   nh_assert_exit "git sparse-checkout list is a read" 0 bash_hook 'git sparse-checkout list'
   nh_assert_exit "git archive --output blocked" 1 bash_hook 'git archive --output=out.tar HEAD'
+  nh_assert_exit "git archive attached -o blocked" 1 bash_hook 'git archive -oout.tar HEAD'
   nh_assert_exit "git archive to stdout is a read" 0 bash_hook 'git archive HEAD'
   nh_assert_exit "git submodule update blocked" 1 bash_hook 'git submodule update --init'
   nh_assert_exit "git submodule foreach blocked" 1 bash_hook 'git submodule foreach git checkout main'
