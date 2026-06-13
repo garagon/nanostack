@@ -365,6 +365,46 @@ jobs:
           chmod +x ci/e2e-run-harness-selftest.sh
           ci/e2e-run-harness-selftest.sh
 
+  lib-units:
+    name: bin/lib unit coverage
+    runs-on: ubuntu-latest
+    # Architecture review round (2026-06-11). The fine-grained bin/lib
+    # unit cases (save-artifact integrity, session/budget/circuit, the
+    # phase registry, custom-phase resolver + conductor graph) used to
+    # run only in a developer-local runner, so a bin/lib regression could
+    # ship green. ci/e2e-lib-units.sh carries that coverage into CI; the
+    # runner enforces the manifest's expected_checks floor, so a suite
+    # that silently stops running cells fails the build.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ci/e2e-lib-units.sh through the harness floor
+        run: |
+          chmod +x ci/run-harness.sh ci/e2e-lib-units.sh
+          ci/run-harness.sh --suite lib-units
+
+  lib-units-macos:
+    name: bin/lib units on macOS (portability)
+    runs-on: macos-latest
+    # bin/lib leans on sha256/mtime/sed/date helpers that differ between
+    # GNU (Linux) and BSD (macOS) userland; past portability bugs (PR
+    # #109) were only caught after they shipped. This runs the bin/lib
+    # unit suite on macOS so BSD-userland drift fails the build instead of
+    # a contributor's machine. (--kind unit is not used here: it would
+    # also select the tier=local tests/run.sh, which is gitignored and
+    # absent from a CI checkout.)
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure jq is available
+        run: command -v jq >/dev/null 2>&1 || brew install jq
+      - name: Run ci/e2e-lib-units.sh on macOS
+        run: |
+          chmod +x ci/run-harness.sh ci/e2e-lib-units.sh
+          ci/run-harness.sh --suite lib-units
+
   harness-manifest:
     name: Harness manifest consistency
     runs-on: ubuntu-latest

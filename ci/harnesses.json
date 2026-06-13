@@ -72,6 +72,26 @@
       "job": "harness-selftest"
     },
     {
+      "id": "lib-units",
+      "path": "ci/e2e-lib-units.sh",
+      "kind": "unit",
+      "tier": "pr",
+      "surface": [
+        "bin-lib",
+        "unit"
+      ],
+      "deps": [
+        "bash",
+        "jq",
+        "git",
+        "python3"
+      ],
+      "expected_checks": 83,
+      "timeout_minutes": 5,
+      "workflow": ".github/workflows/lint.yml",
+      "job": "lib-units"
+    },
+    {
       "id": "concurrency-parity",
       "path": "ci/e2e-concurrency-parity.sh",
       "kind": "runtime-e2e",
