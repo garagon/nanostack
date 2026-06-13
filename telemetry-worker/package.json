@@ -14,8 +14,9 @@
     "typescript": "^5.4.0",
     "wrangler": "^4.85.0"
   },
-  "//overrides": "ws < 8.20.1 has a moderate advisory (GHSA-58qx-3vcg-4xpx, uninitialized memory disclosure). It reaches us transitively via wrangler > miniflare. Pin to the patched line here rather than bumping wrangler, because wrangler 4.95 adds a third-party native-binary dependency we do not want in a privacy-strict Worker. Revisit when miniflare ships ws >= 8.20.1 upstream.",
+  "//overrides": "Transitive security pins. ws < 8.20.1 has a moderate advisory (GHSA-58qx-3vcg-4xpx, uninitialized memory disclosure) and esbuild < 0.28.1 has a high advisory (GHSA-gv7w-rqvm-qjhr, missing binary integrity verification enabling RCE via NPM_CONFIG_REGISTRY). Both reach us transitively via wrangler (ws via miniflare; esbuild directly). Pin the patched lines here rather than bumping wrangler, because wrangler's later lines add a third-party native-binary dependency we do not want in a privacy-strict Worker. Revisit each when wrangler ships the patched line upstream. esbuild is build-time only (wrangler bundling), never shipped to the Worker runtime.",
   "overrides": {
-    "ws": "^8.20.1"
+    "ws": "^8.20.1",
+    "esbuild": "^0.28.1"
   }
 }
