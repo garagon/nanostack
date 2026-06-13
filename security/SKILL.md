@@ -263,7 +263,25 @@ After the security audit is complete and the artifact is saved:
 
 Use `.user_message` for the prose and `.next_phase` for the phase name. The legacy positional form (`next-step.sh security`) is still supported.
 
-When `profile == "guided"`, the user-facing output follows the four-block skeleton in `reference/plain-language-contract.md` (Result / How to try / What was checked / What remains). Whether it is safe to try goes inside Result; do not add a separate block.
+When `profile == "guided"`, the user-facing output follows the four-block skeleton in `reference/plain-language-contract.md` (Result / How to try / What was checked / What remains). Whether it is safe to try goes inside Result; do not add a separate block. Use plain words (no "vulnerability", "threat model", "STRIDE"). Example:
+
+<!-- guided-output:start -->
+```
+Resultado: Es seguro para probar. No vi problemas que te expongan.
+
+Como verlo:
+1. Corre el comando que te indique mas arriba y segui las instrucciones.
+
+Que revise:
+- Nadie entra sin permiso a lo que deberia estar protegido.
+- Los datos sensibles no quedan a la vista.
+- Las entradas raras no rompen ni dejan escapar informacion.
+
+Pendiente:
+- No probe contra un ataque dirigido y sostenido.
+- No revise servicios externos que no controlamos.
+```
+<!-- guided-output:end -->
 
 ## Final Headline
 

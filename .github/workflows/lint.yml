@@ -2085,7 +2085,7 @@ jobs:
           fi
           # Each user-facing skill must point at the contract so wording
           # changes don't drift away from the canonical list.
-          for skill in think/SKILL.md plan/SKILL.md qa/SKILL.md ship/SKILL.md doctor/SKILL.md; do
+          for skill in think/SKILL.md plan/SKILL.md qa/SKILL.md ship/SKILL.md doctor/SKILL.md review/SKILL.md security/SKILL.md; do
             if ! grep -q "reference/plain-language-contract.md" "$skill"; then
               echo "FAIL: $skill must reference reference/plain-language-contract.md"
               fail=1
@@ -2101,7 +2101,7 @@ jobs:
           # the contract's term table. Patterns use word boundaries so
           # "diff" doesn't match "different".
           patterns='\bartifact\b|\bartifacts\b|\bPR\b|\bPRs\b|\bCI\b|\bbranch\b|\bbranches\b|\bdiff\b|\bdiffs\b|\bhook\b|\bhooks\b|\bphase\b|\bphases\b|\bsecurity audit\b|\bQA\b|\bscope drift\b'
-          for skill in think/SKILL.md plan/SKILL.md qa/SKILL.md ship/SKILL.md doctor/SKILL.md reference/plain-language-contract.md; do
+          for skill in think/SKILL.md plan/SKILL.md qa/SKILL.md ship/SKILL.md doctor/SKILL.md review/SKILL.md security/SKILL.md reference/plain-language-contract.md; do
             # Extract fenced blocks. awk emits one line per block,
             # joined with " || " so grep -E -i sees the full block.
             blocks=$(awk '

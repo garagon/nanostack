@@ -44,6 +44,13 @@ The output is JSON with `upstream_artifacts` containing paths for think, plan, r
 - `/think` scope decisions (these are decisions worth recording)
 - `/qa` failures that were debugged (these are bugs with investigation trails)
 
+**Report-only ship check.** Read the ship artifact's `run_mode`. If it is `"report_only"`, `/ship` only previewed the delivery and nothing was published (no commit, no PR, no deploy). Tell the user plainly that the ship was report-only, then keep going: the investigation from `/review`, `/security`, and `/qa` is still worth capturing if it was non-trivial. But do not write a solution or summary that claims work was shipped or that the sprint closed. There is no shipment to record yet.
+
+```bash
+SHIP_ARTIFACT=$(~/.claude/skills/nanostack/bin/resolve.sh compound 2>/dev/null | jq -r '.upstream_artifacts.ship // empty')
+SHIP_RUN_MODE=$(jq -r '.run_mode // "normal"' "$SHIP_ARTIFACT" 2>/dev/null || echo "normal")
+```
+
 ### 2. Identify what's worth capturing
 
 Not everything needs a solution document. Capture:
