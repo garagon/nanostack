@@ -357,6 +357,13 @@ jobs:
         run: |
           chmod +x ci/e2e-harness-selftest.sh
           ci/e2e-harness-selftest.sh
+      - name: Run ci/e2e-run-harness-selftest.sh
+        # Proves run-harness.sh enforces the manifest expected_checks
+        # floor (fails closed on under-count, missing summary, and
+        # mid-run count noise).
+        run: |
+          chmod +x ci/e2e-run-harness-selftest.sh
+          ci/e2e-run-harness-selftest.sh
 
   harness-manifest:
     name: Harness manifest consistency

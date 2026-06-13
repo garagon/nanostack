@@ -403,9 +403,11 @@ fi
 
 # ─── Summary ────────────────────────────────────────────────
 TOTAL=$((PASS+FAIL))
-printf "\n  %s/%s checks passed\n" "$PASS" "$TOTAL"
 if [ "$FAIL" -gt 0 ]; then
   printf "${RED}=== %s checks failed ===${NC}\n" "$FAIL"
   exit 1
 fi
+# The count line goes last: run-harness.sh parses the final non-empty
+# line of the output for the expected_checks floor.
 printf "${GREEN}=== all checks passed ===${NC}\n"
+printf "\n  %s/%s checks passed\n" "$PASS" "$TOTAL"

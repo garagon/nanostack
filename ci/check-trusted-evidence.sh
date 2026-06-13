@@ -27,7 +27,8 @@ git commit -qm init >/dev/null 2>&1
 PROJECT="$WORK"
 
 fail=0
-ck() { if [ "$1" = "$2" ]; then printf '  ok   %s\n' "$3"; else printf '  FAIL %s (got %s, want %s)\n' "$3" "$2" "$1"; fail=1; fi; }
+pass_count=0
+ck() { if [ "$1" = "$2" ]; then pass_count=$((pass_count+1)); printf '  ok   %s\n' "$3"; else printf '  FAIL %s (got %s, want %s)\n' "$3" "$2" "$1"; fail=1; fi; }
 hash_of() { (sha256sum 2>/dev/null || shasum -a 256) | cut -d' ' -f1; }
 
 # Use a current artifact filename and timestamp (matching how save-artifact.sh
@@ -115,4 +116,4 @@ if [ "$fail" -ne 0 ]; then
   echo "check-trusted-evidence: FAIL"
   exit 1
 fi
-echo "check-trusted-evidence: OK"
+echo "check-trusted-evidence: OK ($pass_count checks passed)"

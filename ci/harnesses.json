@@ -49,10 +49,27 @@
         "bash",
         "jq"
       ],
-      "expected_checks": 0,
+      "expected_checks": 51,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
       "job": "harness-manifest"
+    },
+    {
+      "id": "run-harness-selftest",
+      "path": "ci/e2e-run-harness-selftest.sh",
+      "kind": "unit",
+      "tier": "pr",
+      "surface": [
+        "harness-runner"
+      ],
+      "deps": [
+        "bash",
+        "jq"
+      ],
+      "expected_checks": 16,
+      "timeout_minutes": 2,
+      "workflow": ".github/workflows/lint.yml",
+      "job": "harness-selftest"
     },
     {
       "id": "concurrency-parity",
@@ -657,7 +674,7 @@
         "jq",
         "git"
       ],
-      "expected_checks": 0,
+      "expected_checks": 5,
       "timeout_minutes": 10
     }
   ]
