@@ -13,6 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NANOSTACK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
 source "$SCRIPT_DIR/lib/audit.sh"
+source "$SCRIPT_DIR/lib/session-lock.sh"
 [ -f "$SCRIPT_DIR/lib/preflight.sh" ] && { source "$SCRIPT_DIR/lib/preflight.sh"; nanostack_require jq; }
 [ -f "$SCRIPT_DIR/lib/phases.sh" ] && . "$SCRIPT_DIR/lib/phases.sh"
 
@@ -178,6 +179,11 @@ cmd_init() {
   fi
   [ -z "$plan_approval" ] && plan_approval="manual"
 
+  # Lock across archive-existing + new-session write so a concurrent
+  # writer cannot land an update on the old session between our snapshot
+  # and its replacement, and cannot race two inits into one file.
+  nano_session_lock "$SESSION_FILE"
+
   # Archive existing session if present
   if [ -f "$SESSION_FILE" ]; then
     local old_id
@@ -315,6 +321,8 @@ cmd_init() {
       last_updated: $date
     }' > "$SESSION_FILE"
 
+  nano_session_unlock
+
   audit_log "session_init" "$session_id" "$type"
 
   # Snapshot git state for loop guard
@@ -324,9 +332,9 @@ cmd_init() {
 }
 
 # ─── phase-start ────────────────────────────────────────────
-# Uses an atomic mkdir-lock so concurrent agents (e.g., /conductor) cannot
-# double-register the same phase. mkdir is atomic on every POSIX filesystem;
-# flock would not work on macOS without coreutils.
+# Holds the shared session lock (see lib/session-lock.sh) across the
+# read-modify-write so concurrent agents (e.g., /conductor) cannot
+# double-register the same phase or interleave writes to session.json.
 cmd_phase_start() {
   local phase="${1:?Usage: session.sh phase-start <phase>}"
 
@@ -335,42 +343,7 @@ cmd_phase_start() {
     exit 1
   fi
 
-  local lockdir="${SESSION_FILE}.lockdir"
-  local owner_pid=""
-  local waited=0
-  while ! mkdir "$lockdir" 2>/dev/null; do
-    waited=$((waited + 1))
-
-    # Once per second, check whether the current lockholder is still alive.
-    # If the owner file names a PID that no longer exists, the lock is
-    # stale (the holder crashed or exited mid-write) and we reclaim it.
-    # If the PID is still alive, we are in live contention and keep
-    # waiting. Missing owner file is treated as live (conservative).
-    if [ $((waited % 10)) -eq 0 ] && [ -f "$lockdir/owner" ]; then
-      owner_pid=$(cat "$lockdir/owner" 2>/dev/null)
-      if [ -n "$owner_pid" ] && ! kill -0 "$owner_pid" 2>/dev/null; then
-        rm -rf "$lockdir" 2>/dev/null || true
-        echo "INFO: previous session lockholder (pid $owner_pid) is gone, reclaiming" >&2
-        continue
-      fi
-    fi
-
-    if [ "$waited" -gt 300 ]; then
-      # 30 seconds of live contention. Fail closed rather than race the
-      # writer: conductor mode specifically needs consistent session.json
-      # state. The user can retry or remove the lockdir manually after
-      # confirming no other agent is running.
-      echo "ERROR: session lock held >30s (owner pid ${owner_pid:-unknown}). Retry after the other agent finishes, or remove $lockdir if nothing is running." >&2
-      exit 1
-    fi
-    sleep 0.1
-  done
-
-  # Record ownership so other agents can detect a stale lock if we crash.
-  # Best-effort: if the write fails, the lock still works for liveness
-  # (other agents fall back to conservative "live" treatment). Removed
-  # together with the lockdir on release.
-  echo "$$" > "$lockdir/owner" 2>/dev/null || true
+  nano_session_lock "$SESSION_FILE"
 
   # Re-check inside the lock (idempotent under concurrency)
   local existing
@@ -378,7 +351,7 @@ cmd_phase_start() {
     '[.phase_log[] | select(.phase == $p and (.status == "completed" or .status == "in_progress"))] | length' \
     "$SESSION_FILE" 2>/dev/null || echo "0")
   if [ "$existing" -gt 0 ]; then
-    rm -rf "$lockdir" 2>/dev/null || true
+    nano_session_unlock
     echo "OK: $phase already in log"
     return 0
   fi
@@ -432,7 +405,7 @@ cmd_phase_start() {
     fi
   fi
 
-  rm -rf "$lockdir" 2>/dev/null || true
+  nano_session_unlock
 
   audit_log "phase_start" "$phase"
   echo "OK: $phase started"
@@ -450,6 +423,11 @@ cmd_phase_complete() {
     echo "ERROR: no active session." >&2
     exit 1
   fi
+
+  # Hold the lock across the whole read-modify-write: the ready/next
+  # computation below reads session.json and the jq mutation rewrites it,
+  # so a concurrent phase-start/complete must not interleave between them.
+  nano_session_lock "$SESSION_FILE"
 
   # ─── next phase via phase_graph ───────────────────────────
   # PR 4 of the 2026-05-10 architecture audit: next-phase logic now
@@ -533,6 +511,8 @@ cmd_phase_complete() {
      .ready_phases = $ready |
      .last_updated = $date' "$SESSION_FILE" > "${SESSION_FILE}.tmp"
   mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
+
+  nano_session_unlock
 
   audit_log "phase_complete" "$phase" "${duration}s"
 
@@ -662,6 +642,11 @@ cmd_archive() {
     exit 0
   fi
 
+  # Lock across read + archive write + removal so a concurrent writer
+  # cannot mutate session.json after we snapshot it but before we remove
+  # it (which would silently discard that update).
+  nano_session_lock "$SESSION_FILE"
+
   local session_id
   session_id=$(jq -r '.session_id' "$SESSION_FILE")
   session_id=$(nano_safe_id "$session_id")
@@ -670,6 +655,8 @@ cmd_archive() {
 
   jq --arg date "$NOW" '.status = "archived" | .archived_at = $date' "$SESSION_FILE" > "$archive_dir/${session_id}.json"
   rm "$SESSION_FILE"
+
+  nano_session_unlock
 
   echo "OK: archived $session_id"
 }
