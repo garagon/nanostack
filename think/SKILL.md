@@ -366,7 +366,7 @@ After `session.sh init`, read the canonical session fields per `reference/sessio
 SESSION=$NANOSTACK_STORE/session.json
 [ -f "$SESSION" ] || SESSION="$HOME/.nanostack/session.json"
 
-PROFILE=$(jq -r '.profile // "professional"' "$SESSION" 2>/dev/null || echo "professional")
+PROFILE=$(jq -r '.profile // (if (.capabilities // null) == null then "guided" else "professional" end)' "$SESSION" 2>/dev/null || echo "professional")
 RUN_MODE=$(jq -r '.run_mode // "normal"' "$SESSION" 2>/dev/null || echo "normal")
 AUTOPILOT=$(jq -r '.autopilot // false' "$SESSION" 2>/dev/null || echo "false")
 PLAN_APPROVAL=$(jq -r '.plan_approval // (if .autopilot then "auto" else "manual" end)' "$SESSION" 2>/dev/null || echo "manual")

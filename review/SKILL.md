@@ -205,7 +205,25 @@ Use `.user_message` for the prose to show the user (it is profile-aware). Use `.
 
 The legacy positional form (`next-step.sh review`) still works and emits a space-separated list of pending phases for the autopilot logging line below; prefer `--json` for everything else.
 
-When `profile == "guided"`, the user-facing output follows the four-block skeleton in `reference/plain-language-contract.md` (Result / How to try / What was checked / What remains). Whether it is safe to try goes inside Result; do not add a separate block.
+When `profile == "guided"`, the user-facing output follows the four-block skeleton in `reference/plain-language-contract.md` (Result / How to try / What was checked / What remains). Whether it is safe to try goes inside Result; do not add a separate block. Use plain words (no "review", "findings", "blocking"). Example:
+
+<!-- guided-output:start -->
+```
+Resultado: El trabajo esta solido y se entiende bien.
+
+Como verlo:
+1. Corre el comando que te indique mas arriba y segui las instrucciones.
+
+Que revise:
+- La logica principal hace lo que tiene que hacer.
+- Los casos comunes quedan cubiertos, sin cabos sueltos.
+- El codigo es claro para la proxima persona que lo toque.
+
+Pendiente:
+- Anote un par de detalles menores para mas adelante.
+- No mire casos muy poco frecuentes.
+```
+<!-- guided-output:end -->
 
 ## Final Headline
 
