@@ -9,6 +9,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/store-path.sh"
 source "$SCRIPT_DIR/lib/pricing.sh"
+source "$SCRIPT_DIR/lib/session-lock.sh"
 
 SESSION_FILE="$NANOSTACK_STORE/session.json"
 
@@ -30,11 +31,13 @@ cmd_set() {
     exit 1
   fi
 
+  nano_session_lock "$SESSION_FILE"
   jq \
     --argjson max "$max_usd" \
     --arg model "$model" \
     '.budget.max_usd = $max | .budget.model = $model' "$SESSION_FILE" > "${SESSION_FILE}.tmp"
   mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
+  nano_session_unlock
 
   echo "OK: budget set to \$$max_usd ($model)"
 }
@@ -55,6 +58,10 @@ cmd_check() {
     exit 0
   fi
 
+  # Lock across the token read + accumulate + write so two concurrent
+  # checks cannot both read the old totals and lose one increment.
+  nano_session_lock "$SESSION_FILE"
+
   local max_usd model prev_input prev_output
   max_usd=$(jq -r '.budget.max_usd // "null"' "$SESSION_FILE")
   model=$(jq -r '.budget.model // "sonnet-4"' "$SESSION_FILE")
@@ -63,6 +70,7 @@ cmd_check() {
 
   # No budget set: always continue
   if [ "$max_usd" = "null" ]; then
+    nano_session_unlock
     echo '{"action":"continue","reason":"no_budget_set"}'
     exit 0
   fi
@@ -101,6 +109,7 @@ cmd_check() {
     --argjson spent "$spent_usd" \
     '.budget.tokens_input = $input | .budget.tokens_output = $output | .budget.spent_usd = $spent' "$SESSION_FILE" > "${SESSION_FILE}.tmp"
   mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
+  nano_session_unlock
 
   jq -n \
     --argjson spent "$spent_usd" \
