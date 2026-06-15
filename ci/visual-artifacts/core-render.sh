@@ -200,7 +200,7 @@ PROJ="$TMP_ROOT/cell9b"
 setup_project "$PROJ"
 export NANOSTACK_STORE="$PROJ/.nanostack"
 mkdir -p "$NANOSTACK_STORE"
-(cd "$PROJ" && NANOSTACK_STORE="$NANOSTACK_STORE" "$REPO/bin/save-artifact.sh" --from-session plan "legacy summary" >/dev/null 2>&1)
+(cd "$PROJ" && NANOSTACK_STORE="$NANOSTACK_STORE" NANOSTACK_ALLOW_LEGACY_ARTIFACT=1 "$REPO/bin/save-artifact.sh" --from-session plan "legacy summary" >/dev/null 2>&1)
 set +e
 HTML=$(cd "$PROJ" && "$REPO/bin/render-artifact.sh" plan --latest 2>/dev/null)
 RC=$?

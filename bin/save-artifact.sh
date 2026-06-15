@@ -17,6 +17,12 @@
 # emits a deprecation warning to stderr. The core SKILL.md files
 # (plan/review/security/qa/ship) no longer document it.
 #
+# Because the validator bypass produces an artifact that downstream gates
+# still trust as "verified", --from-session is gated behind an explicit
+# opt-in (NANOSTACK_ALLOW_LEGACY_ARTIFACT=1). No normal-flow skill sets
+# it, so a buggy or compromised call cannot silently write a
+# schema-bypassing artifact; manual recovery sets it deliberately.
+#
 # Validates JSON has required fields before saving. Fails on invalid input.
 set -e
 
@@ -34,6 +40,20 @@ if [ "${1:-}" = "--from-session" ]; then
   PHASE="${2:?Usage: save-artifact.sh --from-session <phase> <summary>}"
   SUMMARY_TEXT="${3:?Missing summary argument}"
   LEGACY_MODE=1
+
+  # Gate the validator bypass behind an explicit opt-in. The resulting
+  # schema_legacy artifact is still treated as a verified upstream by
+  # resolve.sh / the phase gate, so an accidental or programmatic call
+  # could otherwise pass an unvalidated prose blob off as a completed
+  # phase. Manual recovery sets NANOSTACK_ALLOW_LEGACY_ARTIFACT=1 on
+  # purpose; no normal-flow skill does.
+  if [ "${NANOSTACK_ALLOW_LEGACY_ARTIFACT:-0}" != "1" ]; then
+    echo "save-artifact.sh: --from-session is gated. It bypasses per-phase schema" >&2
+    echo "                  validation and exists only for manual recovery. Re-run with" >&2
+    echo "                  NANOSTACK_ALLOW_LEGACY_ARTIFACT=1 if you truly need it, or use" >&2
+    echo "                  the structured form (see reference/artifact-schema.md)." >&2
+    exit 1
+  fi
 
   echo "save-artifact.sh: --from-session is a legacy mode for manual recovery." >&2
   echo "                  Normal-path skills must call the structured form (see reference/artifact-schema.md)." >&2

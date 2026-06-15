@@ -181,7 +181,7 @@
         "jq",
         "git"
       ],
-      "expected_checks": 31,
+      "expected_checks": 34,
       "timeout_minutes": 3,
       "workflow": ".github/workflows/e2e.yml",
       "job": "e2e-structured-artifacts"
