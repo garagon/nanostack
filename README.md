@@ -644,7 +644,7 @@ A review artifact captures everything: findings, scope drift, conflicts resolved
 }
 ```
 
-Every artifact `bin/save-artifact.sh` writes carries a SHA-256 `integrity` field over the canonical JSON, so a downstream consumer can detect a tampered file. Strict consumers call `bin/find-artifact.sh --require-integrity` to also reject artifacts whose `.integrity` field is missing. The save path validates the structured shape per phase (see `bin/lib/artifact-schemas.sh`); the legacy `--from-session` form still works for manual recovery but writes `schema_legacy: true` so downstream tools know the artifact was reconstructed instead of produced by the structured flow.
+Every artifact `bin/save-artifact.sh` writes carries a SHA-256 `integrity` field over the canonical JSON, so a downstream consumer can detect a tampered file. Strict consumers call `bin/find-artifact.sh --require-integrity` to also reject artifacts whose `.integrity` field is missing. The save path validates the structured shape per phase (see `bin/lib/artifact-schemas.sh`); the legacy `--from-session` form is for manual recovery only and skips that validation, so it is gated behind `NANOSTACK_ALLOW_LEGACY_ARTIFACT=1` and writes `schema_legacy: true` so downstream tools know the artifact was reconstructed instead of produced by the structured flow.
 
 Full schema in [`reference/artifact-schema.md`](reference/artifact-schema.md). To disable auto-save, set `auto_save: false` in `.nanostack/config.json`.
 

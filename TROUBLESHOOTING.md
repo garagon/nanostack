@@ -287,10 +287,10 @@ If a phase shows `in_progress` but you saw it report success, the artifact save 
 tail -20 .nanostack/audit.log
 ```
 
-Look for `phase_complete` events. If the second-to-last review has no `phase_complete`, the agent forgot to call `save-artifact.sh`. Re-run the phase manually:
+Look for `phase_complete` events. If the second-to-last review has no `phase_complete`, the agent forgot to call `save-artifact.sh`. Re-run the phase manually. The `--from-session` recovery form skips per-phase schema validation, so it is gated behind an explicit opt-in:
 
 ```bash
-~/.claude/skills/nanostack/bin/save-artifact.sh --from-session review 'manual save: <summary>'
+NANOSTACK_ALLOW_LEGACY_ARTIFACT=1 ~/.claude/skills/nanostack/bin/save-artifact.sh --from-session review 'manual save: <summary>'
 ```
 
 Then continue the sprint.

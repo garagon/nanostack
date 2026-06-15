@@ -122,15 +122,26 @@ cell_save_writes_valid() {
   nh_assert_true "ship report_only artifact file exists" test -f "$saved_ship_ro"
 }
 
-# Cell 5: --from-session still works, emits deprecation, marks legacy.
+# Cell 5: --from-session works WITH the opt-in, emits deprecation, marks legacy.
 cell_from_session_legacy() {
   local out rc saved_legacy
-  nh_capture out rc "$SAVE" --from-session qa 'N tests passed'
+  nh_capture out rc env NANOSTACK_ALLOW_LEGACY_ARTIFACT=1 "$SAVE" --from-session qa 'N tests passed'
   saved_legacy=$(printf '%s\n' "$out" | tail -1)
   nh_assert_eq "legacy save exit code is 0" "0" "$rc"
   nh_assert_true "legacy artifact file exists" test -f "$saved_legacy"
   nh_assert_jq_file "legacy artifact has schema_legacy: true" "$saved_legacy" '.schema_legacy == true'
   nh_assert_contains "deprecation warning printed" "$out" "--from-session is a legacy mode"
+}
+
+# Cell 5b: WITHOUT the opt-in, --from-session is refused and writes nothing.
+cell_from_session_gated() {
+  local out rc before after
+  before=$(ls "$NANOSTACK_STORE/review" 2>/dev/null | wc -l | tr -d ' ')
+  nh_capture out rc "$SAVE" --from-session review 'ad-hoc prose'
+  nh_assert_eq "ungated --from-session exits non-zero" "1" "$rc"
+  nh_assert_contains "refusal names the opt-in" "$out" "NANOSTACK_ALLOW_LEGACY_ARTIFACT=1"
+  after=$(ls "$NANOSTACK_STORE/review" 2>/dev/null | wc -l | tr -d ' ')
+  nh_assert_eq "no artifact written when gated" "$before" "$after"
 }
 
 # Cell 6: legacy artifacts remain readable by find-artifact + resolve.
@@ -139,7 +150,7 @@ cell_legacy_readable() {
   # Self-contained under --filter: ensure a legacy qa artifact exists even
   # when from-session-legacy was filtered out. The full run also seeds one
   # there; re-seeding is harmless (find/resolve take the newest).
-  "$SAVE" --from-session qa 'N tests passed' >/dev/null 2>&1 || true
+  NANOSTACK_ALLOW_LEGACY_ARTIFACT=1 "$SAVE" --from-session qa 'N tests passed' >/dev/null 2>&1 || true
   found=$( "$FIND" qa 30 2>/dev/null )
   nh_assert_true "find-artifact returns the legacy qa artifact" test -f "$found"
   resolved=$( "$RESOLVE" ship 2>/dev/null )
@@ -179,6 +190,7 @@ nh_cell validator-rejects      cell_validator_rejects
 nh_cell save-rejects-invalid   cell_save_rejects_invalid
 nh_cell save-writes-valid      cell_save_writes_valid
 nh_cell from-session-legacy    cell_from_session_legacy
+nh_cell from-session-gated     cell_from_session_gated
 nh_cell legacy-readable        cell_legacy_readable
 nh_cell skill-md-clean         cell_skill_md_clean
 nh_cell save-wires-validator   cell_save_wires_validator
