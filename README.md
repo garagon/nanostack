@@ -6,18 +6,18 @@
 <br>
 
 <p align="center">
-  Your AI agent writes code. Nanostack makes sure it ships work you can trust.
+  An agent harness for planning, reviewing, and testing the code you ship.
 </p>
 
 <p align="center">
-  <em>Local delivery workflow harness for AI coding agents.</em>
+  <em>A delivery workflow for your AI coding agent.</em>
 </p>
 
 <p align="center">
-  Scope, plan, build, review, security, QA, ship. Every step leaves evidence you can read, in plain files on your disk. Use the default sprint, or build your own workflow stack on top.
+  Give your agent a repeatable process, with plans and check results you can inspect. Use the built-in skills or build your own workflow stack.
 </p>
 
-<p align="center"><strong>Open source. Plain text skills. Local artifacts. Verified adapters. No Nanostack cloud.</strong></p>
+<p align="center"><strong>Open source. Editable skills. Inspectable results.</strong></p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
@@ -38,85 +38,28 @@
 <br>
 
 
-Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). Nanostack gives your agent the working method of a small product team: it questions the scope, plans, reviews the code, audits security, tests, and ships, leaving a paper trail you can inspect at every step. Everything is plain text and local scripts under Apache 2.0, so you can read every rule your agent follows. No Nanostack cloud, no daemon, no app runtime.
+Nanostack adds planning, code review, security checks, and testing to your AI coding workflow. It saves the plan and results as files, so you can see what changed and how it was checked.
 
-Verified adapters today: **Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI**. The skill files are plain text, so other agents may load them, but only those five have a verified adapter and capability declaration in [`adapters/`](adapters/).
+Verified adapters: **Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI**. Claude Code supports blocking hooks; the other adapters use guided instructions. See the [per-agent capabilities](#what-enforces-on-which-agent) and [verification records](adapters/) for dates and test scope. Installation checks do not guarantee a full sprint on every host version.
 
-What changed in the latest release (custom workflow stacks, visual artifacts, stronger safety contracts): see [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
+## Quick start
 
-## See it work
-
-```
-You:    I need to add notifications to my app. Users keep missing
-        replies on their posts.
-You:    /think
-
-Agent:  Before we build anything, how are users coping today?
-
-You:    They open the app 3-4 times a day just to check. Sometimes
-        they miss replies for hours. People are frustrated.
-
-Agent:  I'm going to push back on "notifications." You said users open
-        the app 3-4 times a day. That's high engagement. They already
-        come back. The problem isn't that they can't be reached. The
-        problem is that when they arrive, they can't tell what changed.
-
-        That's a freshness problem, not a messaging problem.
-
-        A notification system (email, push, in-app, preferences,
-        digest, unsubscribe) is a 3-week project. A red dot on the
-        nav icon that says "something new" ships this afternoon.
-
-        One solves the symptom (they're not being told). The other
-        solves the cause (they can't see what's new when they look).
-
-        RECOMMENDATION: Reduce. Ship the dot. See if complaints drop.
-        If they do, you just saved 3 weeks. If they don't, then build
-        push notifications, but now you have data, not a guess.
-
-You:    Makes sense. Let's do the dot.
-You:    /nano
-        [3 steps, 2 files, product standards: shadcn/ui + Tailwind]
-
-You:    [builds it]
-
-You:    /review
-        Review: 2 findings (1 auto-fixed, 1 nit). 2 things done well.
-
-You:    /security
-        No secrets, auth changes, or unsafe data flows introduced. Grade A.
-
-You:    /qa
-        Opened the app, posted a reply, refreshed, confirmed the dot
-        appears and clears. 4 checks pass.
-
-You:    /ship
-        PR explains why the change exists, how it was checked, and what
-        remains. CI green. Sprint journal saved.
+```bash
+npx create-nanostack
 ```
 
-That is the difference: not just code generation, but a delivery loop you can inspect.
+Run `/nano-run` in your agent to configure the project. See [requirements](#requirements) and [installation options](#install).
+
+Start with `/think` to work through an idea, or `/nano` to plan a defined change. For an autonomous sprint in an existing project, use `/feature <goal>`; it automatically approves the plan and continues through the phases.
 
 ## What changes after installing Nanostack
 
-| Without Nanostack | With Nanostack |
-| --- | --- |
-| ❌ A vague prompt turns into code immediately. | ✅ `/think` turns the idea into a brief, risk, and smallest useful starting point. |
-| ❌ The plan disappears in chat. | ✅ `/nano` saves a plan with files, risks, checks, and out-of-scope items. |
-| ❌ The agent quietly refactors three things you did not ask for. | ✅ `/review` compares the code against the plan. Scope drift is visible before merge. |
-| ❌ QA and security happen only if someone remembers. | ✅ `/qa` opens your app and exercises it. `/security` runs on every ship and catches the mistakes that make headlines. |
-| ❌ Your PR says "add notifications" and nobody knows what actually changed or why. | ✅ `/ship` explains why the change exists, how it was checked, and what remains. |
-| ❌ You rush-commit Friday 5pm and Monday find out it broke something unrelated. | ✅ The sprint blocks `git commit` until `/review`, `/security`, and `/qa` pass. (Enforcement varies by agent; see honesty matrix below.) |
-| ❌ Every session re-pastes the same context: what we use, what is fragile. | ✅ Every skill reads the artifact the previous skill wrote. Sprint journals preserve decisions in `.nanostack/`. |
+- **Plan the change.** Record the scope, files, risks, and checks before implementation.
+- **Review the result.** Check the code against the plan, audit security, and test behavior.
+- **Inspect the work.** Read saved reports or open them as [visual artifacts](#visual-artifacts) in your browser.
+- **Adapt the workflow.** Edit the skills or add your own phases with [custom stacks](#build-on-nanostack).
 
-## Nanostack is right for you if
-
-- ✅ You have an AI agent open all day and still feel like you ship slowly
-- ✅ You want reviews that catch scope drift, not just typos
-- ✅ You want a security audit before every ship, not once a quarter
-- ✅ You want PR descriptions that explain the WHY, not just list files
-- ✅ You want a process that works across Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI
-- ✅ You want the skills on disk, inspectable, not locked in a SaaS
+Inspired by [gstack](https://github.com/garrytan/gstack) from [Garry Tan](https://x.com/garrytan). Apache 2.0. No Nanostack cloud. See [privacy](#privacy) for telemetry and agent-provider details, and [release notes](RELEASE_NOTES.md) for recent changes.
 
 ## Try it safely first
 
@@ -133,18 +76,6 @@ Not sure yet? Start with a disposable sandbox from the Examples Library. It give
 Each example has a copy-paste prompt, expected sprint flow, success criteria, and reset steps. Full Examples Library: [`examples/`](examples/).
 
 `compliance-release` is advanced. It is not a starter app and it is not a compliance certification. It shows how several custom skills can compose into one release workflow.
-
-## Quick start
-
-```bash
-npx create-nanostack
-```
-
-One command. Detects your agents, installs everything, runs setup.
-
-Then run `/nano-run` in your agent to configure your project through a conversation. On your first sprint, `/think` shows the full pipeline so you know what comes next.
-
-If you want to see the workflow before installing into a real repo, use one of the sandbox examples above.
 
 ## Choose your path
 
