@@ -727,6 +727,39 @@ assert_eq "professional after plan = review wording" \
   "Run /review to check scope, structure, and edge cases." \
   "$msg"
 
+# Explicit build tracking is the coordinator's boundary between writers and readers.
+echo "[11] explicit build blocks verification until completion"
+new_project "cell11-explicit-build"
+"$SESSION_SH" init feature --autopilot --plan-approval auto >/dev/null
+"$SESSION_SH" phase-start plan >/dev/null
+"$SESSION_SH" phase-complete plan >/dev/null
+"$SESSION_SH" phase-start build >/dev/null
+assert_eq "build is active" "build" "$(jq -r '.current_phase' "$NANOSTACK_STORE/session.json")"
+assert_eq "active build leaves no ready verification" "0" \
+  "$(jq '[.ready_phases[] | select(. == "review" or . == "security" or . == "qa")] | length' "$NANOSTACK_STORE/session.json")"
+"$SESSION_SH" phase-complete build >/dev/null
+assert_eq "completed build makes verification ready" "3" \
+  "$(jq '[.ready_phases[] | select(. == "review" or . == "security" or . == "qa")] | length' "$NANOSTACK_STORE/session.json")"
+
+# These are instruction regression locks, not evidence of model compliance.
+echo "[12] specialist instructions preserve coordinator ownership"
+assert_eq "plan returns rather than building" "1" \
+  "$(grep -cF 'Do not build or invoke downstream specialists.' "$REPO/plan/SKILL.md")"
+assert_eq "think hands off through feature" "1" \
+  "$(grep -cF 'then invoke `/feature` without waiting' "$REPO/think/SKILL.md")"
+assert_eq "QA cannot commit repairs" "1" \
+  "$(grep -cF 'Do not edit product files or commit fixes during QA.' "$REPO/qa/SKILL.md")"
+for skill in review security qa; do
+  assert_eq "$skill returns to caller" "1" \
+    "$(grep -cF 'Return the artifact and findings to the caller.' "$REPO/$skill/SKILL.md" || true)"
+done
+assert_eq "publication permission remains separate" "1" \
+  "$(grep -cF '**Auto-approval is not publication permission.**' "$REPO/feature/SKILL.md")"
+assert_eq "repairs invalidate the verification batch" "1" \
+  "$(grep -cF 're-run all three verification phases before `/ship`' "$REPO/feature/SKILL.md")"
+assert_eq "no gated legacy recovery command" "0" \
+  "$(grep -cF 'save-artifact.sh --from-session' "$REPO/plan/SKILL.md" || true)"
+
 cd "$TMP_ROOT"
 
 echo

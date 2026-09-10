@@ -118,8 +118,8 @@ Nanostack es un proceso, no una colección de herramientas. Las skills corren en
 |-------|-----------------|----------|
 | `/think` | **CEO / Founder** | Se activa antes de construir. Refina una idea cruda con preguntas, de a una. Explora 2-3 caminos con sus trade-offs. Recorre el diseño con vos, sección por sección. Guarda un brief que los próximos pasos leen. `--autopilot` corre el sprint completo después de aprobar el brief. `--retro` reflexiona sobre lo que ya se hizo. |
 | `/nano` | **Eng Manager** | Genera specs de producto (alcance Mediano) o specs de producto + técnico (alcance Grande) antes de los pasos de implementación. Estándares por tipo de proyecto (web, CLI/TUI). |
-| `/review` | **Staff Engineer** | Revisión de código en dos pasadas: estructural y luego adversarial. Auto-arregla cosas mecánicas. Detecta scope drift contra el plan. |
-| `/qa` | **QA Lead** | Testing funcional + Visual QA. Toma screenshots y analiza la UI contra los estándares de producto. Modos browser, API, CLI y debug. |
+| `/review` | **Staff Engineer** | Revisión de código en dos pasadas: estructural y luego adversarial. Propone correcciones y señala decisiones que necesitan tu criterio. Detecta scope drift contra el plan. |
+| `/qa` | **QA Lead** | Testing funcional + Visual QA. Toma screenshots y analiza la UI contra los estándares de producto. Modos browser, API, CLI y debug. Reporta errores reproducibles sin editar el código del producto. |
 | `/security` | **Security Engineer** | Auto-detecta tu stack, escanea secretos, inyecciones, auth, CI/CD, vulnerabilidades de IA/LLM. Reporte calificado A-F. |
 | `/ship` | **Release Engineer** | Pre-flight + checks de calidad del repo. Crea el PR, monitorea CI, genera el sprint journal. Después del commit pregunta: corro local, deploy a producción, o terminé. |
 

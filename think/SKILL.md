@@ -240,7 +240,7 @@ Not:
 
 ### Brief gate invariant (do not break)
 
-The Phase 6.6 autopilot brief gate checks five fields: `value_proposition`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`. It does NOT check `archetype`. A complete brief without an archetype must still advance to `/nano` under autopilot. Missing archetype alone never blocks the gate.
+The Phase 6.6 autopilot brief gate checks five fields: `value_proposition`, `target_user`, `narrowest_wedge`, `key_risk`, `premise_validated`. It does NOT check `archetype`. A complete brief without an archetype must still advance to `/feature` under autopilot. Missing archetype alone never blocks the gate.
 
 ## Retro Mode
 
@@ -380,7 +380,7 @@ How `/think` uses each field:
 | `PROFILE=guided` | Shorter conversation (max 3 opening questions). No internal labels (no "Founder mode", "Phase 1.5", "Startup mode"). Output follows `reference/plain-language-contract.md`. The Spanish four-block skeleton applies on local mode. |
 | `PROFILE=professional` | Keep the full Founder/Startup/Builder mode framework, the diagnostic, the staff-engineer scorecard. |
 | `RUN_MODE=report_only` | Brief produced and saved as artifact, but `/think` does NOT advance to `/nano` (no autopilot continuation, no plan_approval=auto). |
-| `AUTOPILOT=true` and brief is complete | Continue to `/nano` without pausing for approval (per session contract). The Minimum Viable Brief Gate decides "complete". |
+| `AUTOPILOT=true` and brief is complete | Hand off to `/feature`, which invokes `/nano` in the same session. The Minimum Viable Brief Gate decides "complete". |
 | `AUTOPILOT=true` and brief is incomplete | Pause once with a single focused question — see Phase 5 (Brief gate). Do not invent fields. |
 | `HOST=codex/cursor/opencode/gemini` | Even with a git repo, profile may already be `guided` because the host adapter declared `instructions_only`. Trust `PROFILE`, do not re-derive guided/professional from `detect_git_mode` alone. |
 
@@ -667,9 +667,9 @@ When `RUN_MODE=report_only`, skip the gate entirely. The brief is saved as the r
 
 **If `--autopilot` was used** (or the user said "autopilot", "run everything", "ship it end to end") AND the Brief Gate passed:
 
-> Autopilot active. Proceeding with the full sprint: /nano, build, /review, /security, /qa, /ship. I'll only stop for blocking issues or product questions I can't answer.
+> Autopilot active. `/feature` will coordinate /nano, build, /review, /security, /qa, /ship. I'll stop for unresolved scope, safety issues, or required publication approval.
 
-Then proceed directly to `/nano` without waiting. Set `AUTOPILOT=true` in your context and carry it through every subsequent skill.
+Finalize telemetry, then invoke `/feature` without waiting. Pass the completed brief and explicitly request reuse of this active development session, not initialization of a new feature session. `/feature` invokes `/nano` and owns the remaining sprint. Autopilot does not waive `/ship`'s publication authorization.
 
 **If `--autopilot` was used but the Brief Gate failed:** Stop. Ask the one question from Phase 6.6. Do not advance to `/nano`. Do not "decide for the user".
 

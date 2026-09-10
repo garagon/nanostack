@@ -6,12 +6,14 @@ This file lists every built-in skill shipped by Nanostack for the verified adapt
 
 ### Default sprint
 
+`/feature` coordinates the built-in sprint, either directly or after `/think --autopilot` completes its brief. `/nano` returns a plan; review, security, and QA return findings. Repairs happen in build after verification readers stop, then verification runs again. Automatic plan approval does not authorize publication.
+
 | Skill | Directory | Description |
 |-------|-----------|-------------|
 | think | `think/` | Refines a rough idea before code: questions one at a time, alternatives with trade-offs, design walked in sections. Calibrated per archetype. Saves a structured artifact (value proposition, scope mode, target user, narrowest wedge, key risk, premise validation). |
 | nano  | `plan/` | Implementation planning. Planned files, plan approval, scope assessment, product standards. |
 | review | `review/` | Two-pass code review (structural + adversarial). Scope drift detection against /nano. Conflict precedence with /security. |
-| qa     | `qa/` | Browser, API, CLI, or debug testing. WTF heuristic. |
+| qa     | `qa/` | Browser, API, CLI, or debug testing. Reports reproducible findings without repairing product code. |
 | security | `security/` | OWASP Top 10 + STRIDE audit. Cross-references /review for conflicts. |
 | ship   | `ship/` | Pre-flight, PR creation, CI monitoring, post-deploy verification. Generates the sprint journal on success. |
 | compound | `compound/` | Knowledge capture after /ship. Promotes proven solutions across sprints (bug, pattern, decision) with confidence and applied_count. |
@@ -27,7 +29,7 @@ This file lists every built-in skill shipped by Nanostack for the verified adapt
 
 | Skill | Directory | Description |
 |-------|-----------|-------------|
-| feature   | `feature/` | Fast sprint for an existing project. Skips /think, runs plan through ship. |
+| feature   | `feature/` | Coordinates plan through authorized shipping. Direct calls skip discovery; think autopilot hands off its existing session. |
 | nano-run  | `start/` | First-run onboarding. Reads adapter capabilities, writes a setup artifact, configures permissions and stack preferences through a conversation. |
 | nano-help | `help/` | Quick reference for all built-in skills and the default sprint flow. |
 | nano-doctor | `doctor/` | Diagnostic. Reports the actual enforcement level for the running adapter and any drift between adapter declarations and the local install. |

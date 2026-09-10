@@ -3,13 +3,15 @@ name: qa
 description: Use to verify that code works correctly — browser-based testing with Playwright, native app testing with computer use, CLI testing, API testing, or root-cause debugging. Supports --quick, --standard, --thorough modes. Triggers on /qa.
 concurrency: read
 depends_on: [build]
-summary: "QA testing. Browser, native, API, CLI, or debug modes. Finds and fixes bugs with atomic commits."
+summary: "QA testing. Browser, native, API, CLI, or debug modes. Reproduces bugs and reports evidence for repair."
 estimated_tokens: 450
 ---
 
 # /qa — Quality Assurance & Debugging
 
-You test like a real user and fix like an engineer. Click everything, fill every form, check every state. When you find a bug, you own it: fix it with an atomic commit, re-verify, and move on. If a fix touches more than it should, stop and report instead.
+You verify behavior and report reproducible findings. Do not edit product files or commit fixes during QA. Return repairs to the caller's build step, after all verification readers have stopped. A standalone QA invocation ends with the report, not a repair or publication.
+
+Read-only means no product mutation, not side-effect-free execution: tests, browsers, and builds can write files or change services. Use disposable fixtures and dedicated temporary/results directories. Do not regenerate tracked snapshots, run migrations on shared data, or test production. If isolation is unavailable, report the affected checks as untested. Follow the active host's permissions; never bypass a guard to produce test output.
 
 ## Telemetry preamble
 
@@ -25,18 +27,18 @@ unset _P
 
 If the user specifies a mode flag, use it. Otherwise, check `bin/init-config.sh` for `preferences.default_intensity`.
 
-| Mode | Flag | Scope | Bug fix limit |
-|------|------|-------|---------------|
-| **Quick** | `--quick` | Happy path only, screenshots on failure only | Max 3 fixes |
-| **Standard** | (default) | Happy path + error states + empty states | Max 10 fixes |
-| **Thorough** | `--thorough` | Happy + error + edge + load + regression tests | Max 20 fixes |
-| **Report only** | `--report-only` | Same scope as standard, but NO fixes | 0 — findings only |
+| Mode | Flag | Scope |
+|------|------|-------|
+| **Quick** | `--quick` | Happy path only, screenshots on failure only |
+| **Standard** | (default) | Happy path + error states + empty states |
+| **Thorough** | `--thorough` | Happy + error + edge + load + regression tests |
+| **Report only** | `--report-only` | Same scope as standard; no automatic continuation |
 
-`--report-only` can combine with any intensity: `/qa --thorough --report-only` scans everything but touches nothing. Use when you want a bug inventory without code changes.
+`--report-only` remains supported with any intensity. All QA modes report findings without repairing product code.
 
 ### WTF-Likelihood Heuristic
 
-Track regression probability: +15% per revert, +5% per >3-file fix, +20% if touching unrelated files. Stop at 20%. Hard cap: quick=3 fixes, standard=10, thorough=20.
+Describe regression concerns from observed failures and coverage gaps. The legacy `wtf_likelihood` field is qualitative, not a measured probability; do not invent percentages or a numeric safety score.
 
 ## Mode Selection
 
@@ -143,16 +145,16 @@ Find the actual cause, not just the symptom:
 - "The API returns 500" is a symptom
 - "The handler doesn't check for nil user before accessing user.email" is a root cause
 
-### 4. Fix and Verify
-- Fix the root cause, not the symptom
-- Write a test that fails before the fix and passes after
-- Check for the same pattern elsewhere in the codebase
+### 4. Report the Repair
+- Explain the root cause and the smallest proposed fix
+- Specify a regression test for the build step to add
+- Check for the same pattern elsewhere without changing files
 
 ## Output Format
 
 Open with a summary line:
 ```
-QA: 12 tests, 11 passed, 1 failed. 1 bug found, 1 fixed. WTF: 0%.
+QA: 12 tests, 11 passed, 1 failed. 1 bug needs repair.
 ```
 
 Then the full report:
@@ -171,7 +173,7 @@ Then the full report:
 - **{{severity}}:** {{description}}
   - **Reproduce:** {{steps}}
   - **Root cause:** {{why it happens}}
-  - **Fix:** {{what you changed, with commit hash}}
+  - **Proposed fix:** {{smallest repair and regression test}}
 
 ### What's Working
 - {{2-3 specific things that work well. Not filler.}}
@@ -212,9 +214,8 @@ QA_JSON=$(jq -n \
 | Test scope | Happy path only | Happy + error + empty | Happy + error + edge + load |
 | Screenshots | On failure only | Key checkpoints | Every state |
 | Visual QA | Skip | Main states + mobile | Every state + mobile + dark mode |
-| Bug fix limit | 3 | 10 | 20 |
-| Regression tests | Skip | If fixing a bug | Full regression suite |
-| WTF threshold | 20% | 20% | 20% |
+| Product repairs | Report only | Report only | Report only |
+| Regression tests | Targeted | Relevant existing tests | Full regression suite |
 
 ## Session state
 
@@ -224,9 +225,9 @@ Read `profile`, `run_mode`, `autopilot`, and `plan_approval` per `reference/sess
 
 After QA is complete and the artifact is saved:
 
-**If `autopilot == true` and tests pass:** Proceed to `/ship`. Show: `Autopilot: qa passed (X tests, 0 failed). Running /ship...`
+**If `autopilot == true`:** Return the artifact and findings to the caller. Do not invoke `/ship` or any other specialist. The coordinator decides whether the whole verification batch passed.
 
-**If autopilot and tests fail:** Stop and ask the user. Show failures and wait.
+**If tests fail:** Include reproduction steps and proposed repairs. The caller must leave verification before editing product code, then verify the repaired build again.
 
 **Otherwise:** Read the next action from session state:
 
@@ -286,4 +287,4 @@ Pass `abort` or `error` instead of `success` if the QA session did not complete 
 - **Don't confuse "no errors" with "working."** A page that renders without errors but shows the wrong data is still broken. Assert content, not just absence of errors.
 - **Screenshots are evidence.** When a visual test passes, capture a screenshot anyway. When it fails, the screenshot is your debug tool.
 - **If the test environment is flaky, say so.** Don't retry silently hoping it passes. Flakiness is a finding.
-- **Respect the WTF heuristic.** When it says stop, stop. Listing remaining bugs is more valuable than introducing regressions.
+- **Report coverage honestly.** Untested behavior and environment failures are not passing checks.

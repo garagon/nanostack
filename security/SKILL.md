@@ -251,9 +251,9 @@ Read `profile`, `run_mode`, `autopilot`, and `plan_approval` per `reference/sess
 
 After the security audit is complete and the artifact is saved:
 
-**If `autopilot == true` and no critical/high findings:** Proceed to next pending skill. Show: `Autopilot: security grade X (0 critical, 0 high). Running /qa...`
+**If `autopilot == true`:** Return the artifact and findings to the caller. Do not invoke another specialist. `/feature` owns continuation and waits for the whole verification batch.
 
-**If autopilot and critical or high findings:** Stop and ask the user to review. Show the findings and wait. After resolution, continue autopilot.
+**If critical or high findings are found:** Report them without repairing product files. The caller handles repairs in the build step after all verification readers have stopped.
 
 **Otherwise:** Read the next action from session state:
 
@@ -295,10 +295,10 @@ Use `WARN` instead of `OK` if any critical or high findings exist.
 
 ## After Fixes
 
-When the model or user fixes security findings, do NOT re-run the full audit. Instead:
+When the caller returns a repaired build for verification, focus the new audit on changed code and affected trust boundaries:
 
 - **CRITICAL/HIGH fixes:** Re-audit only the affected files and the specific vulnerability class. Verify the fix resolves the finding. Save a new artifact.
-- **MEDIUM/LOW fixes:** Verify the specific fix by reading the changed code. No re-audit needed. Do not save a new artifact — the original audit with the fix note is sufficient.
+- **MEDIUM/LOW fixes:** Verify the specific fix by reading the changed code. Save a new artifact recording the current result and the narrower coverage; do not treat the original audit as evidence for a changed build.
 
 Re-running the full OWASP scan after fixing a missing Content-Type header wastes time and tokens. Target the verification.
 
@@ -323,4 +323,3 @@ Pass `abort` or `error` instead of `success` if the audit did not complete norma
 - **Auth ≠ authz.** Logged in ≠ has permission.
 - **Check git history for secrets.** `git log -p --all -S 'password\|secret\|key\|token'`
 - **Variant analysis in `--thorough`.** One finding = search for the pattern elsewhere.
-
