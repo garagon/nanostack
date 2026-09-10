@@ -1,10 +1,10 @@
 {
   "host": "claude",
   "schema_version": "1",
-  "last_verified": "2026-05-28",
+  "last_verified": "2026-09-10",
   "verification": {
     "method": "ci",
-    "evidence": ".github/workflows/lint.yml: guard-regression and write-guard-regression jobs exercise check-dangerous.sh and check-write.sh on every pull_request and push. The read-only phase write block is additionally exercised on every pull_request by the runtime-contracts job (concurrency-parity suite). The phase gate is further exercised by e2e-user-flows in .github/workflows/e2e.yml, which is workflow_dispatch-only (run before release), so it is not listed as a continuous ci_job.",
+    "evidence": ".github/workflows/lint.yml: guard-regression and write-guard-regression jobs exercise check-dangerous.sh and check-write.sh on every pull_request and push. The read-only phase write block is additionally exercised on every pull_request by the runtime-contracts job (concurrency-parity suite). The phase gate is further exercised by e2e-user-flows in .github/workflows/e2e.yml, which is workflow_dispatch-only (run before release), so it is not listed as a continuous ci_job. On 2026-09-10, an isolated Linux container install confirmed init-project.sh registers both hooks and concurrency-parity passed 10/10. This checks generated hook configuration and script behavior, not a model-driven Claude session.",
     "ci_jobs": ["guard-regression", "write-guard-regression"]
   },
   "skill_discovery": "native",
