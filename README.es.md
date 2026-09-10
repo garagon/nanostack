@@ -33,7 +33,7 @@
 
 Nanostack suma planificación, revisión de código, controles de seguridad y pruebas al trabajo con tu agente. Guarda el plan y los resultados en archivos para que puedas ver qué cambió y cómo se verificó.
 
-Adapters verificados (última verificación registrada: mayo de 2026): **Claude Code, Cursor, OpenAI Codex, OpenCode y Gemini CLI**. Claude Code admite hooks de bloqueo; los demás adapters usan instrucciones guiadas. Consultá [qué se aplica en cada agente](#qué-se-aplica-en-cada-agente). La compatibilidad con versiones más nuevas requiere otra validación.
+Adapters verificados: **Claude Code, Cursor, OpenAI Codex, OpenCode y Gemini CLI**. Claude Code admite hooks de bloqueo; los demás adapters usan instrucciones guiadas. Consultá [qué se aplica en cada agente](#qué-se-aplica-en-cada-agente) y los [registros de verificación](adapters/) para ver fechas y alcance de las pruebas. Verificar la instalación no garantiza un sprint completo en cada versión del agente.
 
 ## Ejemplo
 

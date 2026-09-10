@@ -40,7 +40,7 @@
 
 Nanostack adds planning, code review, security checks, and testing to your AI coding workflow. It saves the plan and results as files, so you can see what changed and how it was checked.
 
-Verified adapters (last recorded verification: May 2026): **Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI**. Claude Code supports blocking hooks; the other adapters use guided instructions. See the [per-agent capabilities](#what-enforces-on-which-agent). Compatibility with newer host versions needs revalidation.
+Verified adapters: **Claude Code, Cursor, OpenAI Codex, OpenCode, and Gemini CLI**. Claude Code supports blocking hooks; the other adapters use guided instructions. See the [per-agent capabilities](#what-enforces-on-which-agent) and [verification records](adapters/) for dates and test scope. Installation checks do not guarantee a full sprint on every host version.
 
 ## Quick start
 
