@@ -1,9 +1,9 @@
 <h1 align="center">Nanostack</h1>
 <p align="center">
-  Tu agente de IA escribe código. Nanostack se asegura de que entregue trabajo en el que podés confiar.<br>
-  <em>Flujo de delivery local para agentes de AI coding.</em><br>
-  Alcance, plan, build, review, security, QA, ship. Cada paso deja evidencia que podés leer, en archivos de texto plano en tu disco. Usá el sprint por defecto, o construí tu propio workflow stack arriba.<br>
-  <strong>Open source. Skills en texto plano. Artefactos locales. Adapters verificados. Sin Nanostack cloud.</strong>
+  Un harness para planificar, revisar y probar el código que publicás.<br>
+  <em>Un proceso de trabajo para tu agente de programación.</em><br>
+  Dale a tu agente un proceso repetible, con planes y resultados que podés inspeccionar. Usá las skills incluidas o armá tu propio workflow.<br>
+  <strong>Open source. Skills editables. Resultados que podés inspeccionar.</strong>
 </p>
 
 <br>
@@ -31,58 +31,20 @@
 
 > **Nota:** la versión en inglés ([README.md](README.md)) es la canónica. Si encontrás divergencias o algo desactualizado en este documento, por favor abrí un issue.
 
-Inspirado en [gstack](https://github.com/garrytan/gstack) de [Garry Tan](https://x.com/garrytan). Nanostack le da a tu agente el método de trabajo de un equipo de producto chico: cuestiona el alcance, planifica, revisa el código, audita seguridad, prueba y entrega, dejando un registro que podés inspeccionar en cada paso. Todo es texto plano y scripts locales bajo Apache 2.0, así que podés leer cada regla que sigue tu agente. Sin Nanostack cloud, sin daemon, sin paso de build.
+Nanostack suma planificación, revisión de código, controles de seguridad y pruebas al trabajo con tu agente. Guarda el plan y los resultados en archivos para que puedas ver qué cambió y cómo se verificó.
 
-Adapters verificados hoy: **Claude Code, Cursor, OpenAI Codex, OpenCode y Gemini CLI**. Los skill files son texto plano, así que otros agentes podrían cargarlos, pero solo esos cinco tienen un adapter verificado y declaración de capabilities en [`adapters/`](adapters/).
+Adapters verificados (última verificación registrada: mayo de 2026): **Claude Code, Cursor, OpenAI Codex, OpenCode y Gemini CLI**. Claude Code admite hooks de bloqueo; los demás adapters usan instrucciones guiadas. Consultá [qué se aplica en cada agente](#qué-se-aplica-en-cada-agente). La compatibilidad con versiones más nuevas requiere otra validación.
 
 ## Ejemplo
 
-```
-Vos:    Necesito agregar notificaciones a mi app. Los usuarios se
-        pierden las respuestas a sus posts.
-Vos:    /think
+Para una idea que todavía necesita definición, empezá con `/think`. Para planificar un cambio concreto, usá `/nano`. En un proyecto existente, `/feature <objetivo>` ejecuta un sprint autónomo: aprueba el plan automáticamente y continúa por las fases.
 
-Agente: Antes de construir nada, ¿cómo lo están manejando hoy?
+- **Planificá el cambio.** Definí alcance, archivos, riesgos y pruebas antes de implementar.
+- **Revisá el resultado.** Compará el código con el plan, auditá seguridad y probá el comportamiento.
+- **Inspeccioná el trabajo.** Leé los reportes o abrilos como [artefactos visuales](#artefactos-visuales) en el navegador.
+- **Adaptá el proceso.** Editá las skills o agregá fases con [workflows propios](#construí-tu-propio-workflow-stack).
 
-Vos:    Abren la app 3 o 4 veces por día solo para chequear. A veces
-        se pierden las respuestas por horas. Están frustrados.
-
-Agente: Voy a empujar contra "notificaciones". Dijiste que abren la
-        app 3-4 veces por día. Eso es alta interacción. Ya vuelven.
-        El problema no es que no se les pueda avisar. El problema es
-        que cuando llegan, no pueden ver qué cambió.
-
-        Eso es un problema de visibilidad, no de mensajería.
-
-        Un sistema de notificaciones (email, push, in-app, preferencias,
-        digest, unsubscribe) es un proyecto de 3 semanas. Un puntito
-        rojo en el ícono que diga "hay algo nuevo" sale esta tarde.
-
-        RECOMENDACIÓN: Reducir alcance. Publicá el puntito. Ver si bajan
-        los reclamos. Si bajan, te ahorraste 3 semanas. Si no bajan,
-        ahí construís push notifications, pero ya con datos.
-
-Vos:    Tiene sentido. Hagamos el puntito.
-Vos:    /nano
-        [3 pasos, 2 archivos]
-
-Vos:    [construye]
-
-Vos:    /review
-        Review: 2 hallazgos (1 auto-arreglado, 1 detalle menor).
-
-Vos:    /security
-        Sin secretos, cambios de auth o flujos de datos inseguros. Grade A.
-
-Vos:    /qa
-        Abrí la app, posteé una respuesta, refresqué, confirmé que el
-        puntito aparece y se limpia. 4 chequeos OK.
-
-Vos:    /ship
-        Ship: PR creado. Tests pasaron.
-```
-
-Vos dijiste "notificaciones". El agente dijo "tus usuarios tienen un problema de visibilidad" y encontró una solución que sale en una tarde en lugar de tres semanas. El loop de delivery completo, no solo generación de código.
+Inspirado en [gstack](https://github.com/garrytan/gstack) de [Garry Tan](https://x.com/garrytan). Apache 2.0. Sin Nanostack cloud. Consultá [Privacidad](#privacidad) para conocer la telemetría y los servicios del proveedor de tu agente, y las [notas de versión](RELEASE_NOTES.md) para ver los cambios recientes.
 
 ## Instalación
 
