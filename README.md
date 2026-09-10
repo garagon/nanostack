@@ -156,8 +156,8 @@ Each skill feeds into the next. `/nano` writes an artifact that `/review` reads 
 |-------|----------------|--------------|
 | `/think` | **Product discovery** | Activates before you build. Refines a rough idea through questions, one at a time. Explores 2-3 approaches with trade-offs. Walks the design with you, section by section. Saves a brief your next steps read. Supports guided archetypes, search privacy modes (`local_only`, `private`, `public`), `--retro` for sprint reflection, and `--autopilot` after the brief is complete. |
 | `/nano` | **Eng Manager** | Auto-generates product specs (Medium scope) or product + technical specs (Large scope) before implementation steps. Product standards for web (shadcn/ui), CLI/TUI (Bubble Tea, Rich, Ink, Ratatui). Stack defaults with CLI preference for beginners. |
-| `/review` | **Staff Engineer** | Two-pass code review: structural then adversarial. Auto-fixes mechanical issues, asks about judgment calls. Detects scope drift against the plan. Cross-references `/security` with 10 conflict precedents. |
-| `/qa` | **QA Lead** | Functional testing + Visual QA. Takes screenshots and analyzes UI against product standards. Browser, API, CLI and debug modes. WTF heuristic stops before fixes cause regressions. |
+| `/review` | **Staff Engineer** | Two-pass code review: structural then adversarial. Reports proposed repairs and decisions needing your input. Detects scope drift against the plan. Cross-references `/security` with 10 conflict precedents. |
+| `/qa` | **QA Lead** | Functional testing + Visual QA. Takes screenshots and analyzes UI against product standards. Browser, API, CLI and debug modes. Reports reproducible bugs without editing product code. |
 | `/security` | **Security Engineer** | Auto-detects your stack, scans secrets, injection, auth, CI/CD, AI/LLM vulnerabilities. Graded report (A-F). Cross-references `/review` for conflict detection. Every finding includes the fix. |
 | `/ship` | **Release Engineer** | Pre-flight + repo quality checks. PR creation, CI monitoring, sprint journal. After commit, asks: run locally, deploy to production, or done. Production path guides through hosting, domain, monitoring, costs. |
 
@@ -228,7 +228,7 @@ You:    /nano
 You:    [builds the feature]
 
 You:    /review
-        Review: 3 findings (2 auto-fixed, 1 ask). Scope drift: CLEAN.
+        Review: 3 findings (2 proposed repairs, 1 decision). Scope drift: CLEAN.
 
 You:    /security
         Security: CRITICAL (0) HIGH (0) MEDIUM (1) LOW (1). Score: A.
