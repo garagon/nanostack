@@ -5,7 +5,7 @@
 `bin/save-artifact.sh` has two modes:
 
 - **Structured (normal path)**: `save-artifact.sh <phase> '<json>'`. The JSON is validated against the per-phase contract in `bin/lib/artifact-schemas.sh` before write. Core SKILL.md files (`plan`, `review`, `qa`, `security`, `ship`) document only this form. See "Required fields per phase" below for the contract each phase must satisfy.
-- **Legacy `--from-session` (manual recovery)**: `save-artifact.sh --from-session <phase> '<prose summary>'`. Builds a minimal JSON from git state plus the prose summary, marks it with `schema_legacy: true`, emits a deprecation warning to stderr, and writes without strict validation. Use this only when an artifact must be reconstructed after the fact (for example, `/think` ran but did not save, and `/plan` needs the artifact to exist). Normal flows never call this form.
+- **Legacy `--from-session` (manual recovery)**: `NANOSTACK_ALLOW_LEGACY_ARTIFACT=1 save-artifact.sh --from-session <phase> '<prose summary>'`. Builds a minimal JSON from git state plus the prose summary, marks it with `schema_legacy: true`, emits a deprecation warning to stderr, and writes without strict validation. Without the explicit opt-in it refuses to write. Use this only when an artifact must be reconstructed after the fact (for example, `/think` ran but did not save, and `/plan` needs the artifact to exist). Normal flows never call this form. The opt-in prevents accidental use; it is not an authorization boundary for callers able to set environment variables.
 
 Legacy artifacts saved before this contract are still readable by `bin/find-artifact.sh` and `bin/resolve.sh`; only the write path enforces the structured contract.
 
