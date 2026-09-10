@@ -295,10 +295,10 @@ Use `WARN` instead of `OK` if any critical or high findings exist.
 
 ## After Fixes
 
-When the model or user fixes security findings, do NOT re-run the full audit. Instead:
+When the caller returns a repaired build for verification, focus the new audit on changed code and affected trust boundaries:
 
 - **CRITICAL/HIGH fixes:** Re-audit only the affected files and the specific vulnerability class. Verify the fix resolves the finding. Save a new artifact.
-- **MEDIUM/LOW fixes:** Verify the specific fix by reading the changed code. No re-audit needed. Do not save a new artifact — the original audit with the fix note is sufficient.
+- **MEDIUM/LOW fixes:** Verify the specific fix by reading the changed code. Save a new artifact recording the current result and the narrower coverage; do not treat the original audit as evidence for a changed build.
 
 Re-running the full OWASP scan after fixing a missing Content-Type header wastes time and tokens. Target the verification.
 
