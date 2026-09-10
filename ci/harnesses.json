@@ -285,7 +285,7 @@
         "jq",
         "git"
       ],
-      "expected_checks": 61,
+      "expected_checks": 73,
       "timeout_minutes": 6,
       "workflow": ".github/workflows/lint.yml",
       "job": "runtime-contracts"

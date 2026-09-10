@@ -191,9 +191,9 @@ Read `profile`, `run_mode`, `autopilot`, and `plan_approval` per `reference/sess
 
 After the review is complete and the artifact is saved, proceed:
 
-**If `autopilot == true` (or `plan_approval == "auto"`) and no blocking issues found:** Proceed directly to the next pending skill. Show: `Autopilot: review complete (X findings, 0 blocking). Running /security...`
+**If `autopilot == true` (or `plan_approval == "auto"`):** Return the artifact and findings to the caller. Do not invoke another specialist. `/feature` owns continuation and waits for the whole verification batch.
 
-**If autopilot and blocking issues found:** Stop and ask the user to resolve. Show the blocking issues and wait. After resolution, continue autopilot.
+**If blocking issues are found:** Report them without repairing product files. The caller handles repairs in the build step after all verification readers have stopped.
 
 **Otherwise:** Read the next action from session state. Do not encode the wording here:
 

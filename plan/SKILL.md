@@ -85,11 +85,7 @@ Pendiente:
   - If solutions are returned, read the summaries first, then load only those relevant to the current task. Past mistakes and patterns should inform the sprint.
   - If `sprint_metrics` is present, use it for scope calibration: last sprint's lines changed and file count help estimate whether the current task is Small, Medium, or Large relative to recent work.
 
-  **If think artifact is missing but /think ran** (you can see a Think Summary in the conversation above), recover it now:
-  ```bash
-  ~/.claude/skills/nanostack/bin/save-artifact.sh --from-session think 'Value prop: <from summary>. Scope: <from summary>. Wedge: <from summary>. Risk: <from summary>. Premise: <from summary>.'
-  ```
-  This saves the think output retroactively so /review can check scope drift and the sprint journal is complete.
+  **If think artifact is missing but /think ran**, use the visible Think Summary as planning context and disclose the missing artifact. Do not use `--from-session` or enable the legacy artifact bypass. Ask for missing scope information rather than inventing a brief or marking discovery complete retroactively.
 
 - Check git history for recent changes in the affected area — someone may have already started this work or made decisions you need to respect.
 - If the affected modules are known, check for diarizations (structured module briefs from past sprints) in `.nanostack/know-how/diarizations/`. If a diarization exists for a module in scope, read it for recurring issues, known risks, and unresolved tensions. These should inform your risk assessment.
@@ -196,34 +192,22 @@ PLAN_JSON=$(jq -n \
 ~/.claude/skills/nanostack/bin/save-artifact.sh plan "$PLAN_JSON"
 ```
 
-**Step 2: Build and proceed.**
+**Step 2: Return the plan.**
 
 ## Next Step
 
-After the user approves the plan and you finish building:
+After the plan artifact is saved:
 
 **If `PLAN_APPROVAL` is `auto`:**
 
-After build completes, invoke each skill in sequence using the Skill tool. Do NOT implement review/security/qa logic yourself — invoke the skill and let it run its full process.
-
-1. Invoke review: `Use Skill tool: skill="review"`
-   Wait for completion. Show: `Autopilot: review complete. Running /security...`
-
-2. Invoke security: `Use Skill tool: skill="security"`
-   Wait for completion. Show: `Autopilot: security complete. Running /qa...`
-
-3. Invoke qa: `Use Skill tool: skill="qa"`
-   Wait for completion. Show: `Autopilot: qa complete. Running /ship...`
-
-4. Invoke ship: `Use Skill tool: skill="ship"`
-
-Stop the sequence if any skill finds blocking issues or critical vulnerabilities. For parallel execution across multiple terminals, use `/conductor`.
+Return the approved plan to the caller. Do not build or invoke downstream specialists. `/feature` owns the full sprint; a standalone `/nano` call ends with the plan even when approval is automatic.
 
 **Otherwise (`manual` or `not_required`):**
 
 Tell the user:
 
-> Build complete. Next steps in the sprint:
+> Plan ready. Next steps in the sprint:
+> - Build the approved plan
 > - `/review` to run a two-pass code review with scope drift detection
 > - `/security` to audit for vulnerabilities
 > - `/qa` to test that everything works

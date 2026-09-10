@@ -39,7 +39,7 @@ Before anything else, ensure the project is configured. Run this once (skips if 
 
 ## Session
 
-Initialize the sprint session with autopilot and explicit plan auto-approval. `--autopilot` already implies `--plan-approval auto` per the session contract, but passing it explicitly makes the intent obvious to anyone reading `session.json`.
+For a direct invocation, initialize the sprint session with autopilot and explicit plan auto-approval. When `/think` hands off a completed autopilot brief, keep that active session instead: do not archive it or initialize a replacement. Confirm its workspace matches the current project, `type=development`, `autopilot=true`, `run_mode=normal`, think is completed, no phase is in progress, and plan has not started. If that handoff state is inconsistent, stop and report it rather than overwrite the session.
 
 ```bash
 ~/.claude/skills/nanostack/bin/session.sh init feature --autopilot --plan-approval auto
@@ -47,13 +47,13 @@ Initialize the sprint session with autopilot and explicit plan auto-approval. `-
 
 Manual feature work should use `/think` + `/nano` instead. `/feature` itself does not accept a manual mode flag.
 
-Then run `session.sh phase-start plan`. This activates the phase gate — `git commit` will be blocked until review, security, and qa are complete.
+Let `/nano` start the plan phase. Phase-gate enforcement depends on the active adapter; do not describe guided hosts as hook-enforced.
 
 ## Process
 
-You are an autonomous orchestrator. You run the entire sprint without stopping between phases. Do NOT wait for user input between steps. Do NOT ask "should I continue?" or "ready for review?". Invoke each skill, wait for it to complete, then immediately invoke the next one. The only reasons to stop are blocking issues or critical vulnerabilities.
+You are the full-sprint coordinator. Invoke each specialist once and wait for its result. Continue routine work without asking permission between phases; stop for unresolved scope, unsafe test environments, blocking findings you cannot fix, or an action requiring user authorization.
 
-**Auto-approval contract for sub-skills.** The session records `plan_approval=auto` and `autopilot=true`, so `/nano`, `/review`, `/security`, `/qa`, and `/ship` read those fields and behave accordingly: present briefly, do not pause for approval. If any of them asks "ready to proceed?", treat it as a regression in that skill, not a signal to stop.
+**Auto-approval is not publication permission.** `plan_approval=auto` approves planning, not PR creation, merge, or deployment. Preserve `/ship`'s preview and explicit authorization requirements. Tell delegated specialists to return their artifacts and findings to this coordinator, not launch another phase.
 
 ### Step 1: Context
 
@@ -68,40 +68,29 @@ The output is JSON with `upstream_artifacts` (think, plan, ship paths if recent)
 ### Step 2: Plan
 
 ```
-Use Skill tool: skill="nano"
+Invoke /nano using the active host's skill mechanism.
 ```
 
 Wait for /nano to complete. It saves its own artifact. Then immediately build.
 
 ### Step 3: Build
 
-Build the feature. Do not ask for approval. The plan was the contract.
+Run `session.sh phase-start build`, then implement the approved plan. Run `session.sh phase-complete build` only after implementation finishes. Do not launch verification against an unfinished build.
 
 ### Step 4: Review + Security + QA (parallel)
 
-These three phases are independent. They all read the build output but don't depend on each other. Launch all three using the Agent tool in a single message with three parallel tool calls:
+Use native delegation only when the active host exposes it. Give each specialist the approved scope, build under test, and this boundary: inspect and report; do not edit product files, commit, or invoke another skill. QA must use isolated test data and output directories. Shared mutable services or fixtures require sequential verification.
 
-```
-Agent: subagent_type="general-purpose", prompt="Run /review on this project. Use Skill tool: skill='review'"
-Agent: subagent_type="general-purpose", prompt="Run /security on this project. Use Skill tool: skill='security'"
-Agent: subagent_type="general-purpose", prompt="Run /qa on this project. Use Skill tool: skill='qa'"
-```
+Otherwise invoke `/review`, `/security`, and `/qa` sequentially using the host's skill mechanism. If delegation fails after any reader has started, wait for or cancel and confirm termination of that reader before falling back; never launch duplicate work against a still-running batch. Guided adapters rely on these instructions, not universal hook enforcement.
 
-If parallel agents are not available, fall back to sequential:
-```
-Use Skill tool: skill="review"
-Use Skill tool: skill="security"
-Use Skill tool: skill="qa"
-```
-
-If any phase finds blocking issues or critical vulnerabilities: fix them, then re-run that phase only.
+If verification finds blocking issues, wait for all readers to finish (or confirm cancellation), return to build, and apply repairs there. After any product change, re-run all three verification phases before `/ship`. Do not carry passing results from the previous build forward. If a repair exceeds approved scope, ask the user instead.
 
 `Feature: review + security + qa complete. Running /ship...`
 
-### Step 7: Ship
+### Step 5: Ship
 
 ```
-Use Skill tool: skill="ship"
+Invoke /ship using the active host's skill mechanism.
 ```
 
 /ship commits, creates PR if remote exists, generates sprint journal, runs /compound, and shows the result with next feature suggestions.
@@ -120,9 +109,9 @@ Pass `abort` or `error` instead of `success` if the feature flow did not complet
 
 ## Rules
 
-- **Do not stop between phases.** This is the most important rule. Plan → build → review → security → qa → ship runs as one continuous flow. No pauses, no questions, no confirmations.
-- Each skill is invoked via the Skill tool, not implemented inline.
+- **One orchestration owner.** `/feature` owns planning, build, verification, and the authorized shipping handoff. Specialists return results; they do not start another sprint.
+- Invoke each skill through the active host's skill mechanism, not by reimplementing it inline.
 - Each skill saves its own artifact. You do not save artifacts — the skills do.
 - Between steps, show one line of status: `Feature: review complete. Running /security...`
-- Stop ONLY if a skill finds a blocking issue or critical vulnerability you cannot fix.
+- Stop when scope, safety, or publication authorization requires a user decision.
 - If the feature already exists in the codebase, tell the user and suggest alternatives.
