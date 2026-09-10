@@ -524,7 +524,7 @@
       "expected_checks": 0,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
-      "job": "readme-public-copy"
+      "job": "public-doc-contracts"
     },
     {
       "id": "check-readme-narrative-locks",
@@ -542,7 +542,7 @@
       "expected_checks": 0,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
-      "job": "readme-narrative-locks"
+      "job": "public-doc-contracts"
     },
     {
       "id": "check-release-docs-locks",
@@ -562,7 +562,7 @@
       "expected_checks": 0,
       "timeout_minutes": 2,
       "workflow": ".github/workflows/lint.yml",
-      "job": "release-docs-locks"
+      "job": "public-doc-contracts"
     },
     {
       "id": "check-helper-path-containment",

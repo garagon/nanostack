@@ -5,21 +5,21 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  nano-run-repair-aware:
-    name: /nano-run repair-aware (no silent --migrate-permissions)
+  onboarding-contracts:
+    name: onboarding contracts
     runs-on: ubuntu-latest
-    # /nano-run vNext PR 4. Two invariants:
-    #   1. The skill calls bin/detect-legacy-setup.sh (read-only)
-    #      before any mutation, so legacy state lands in the setup
-    #      artifact instead of being silently overwritten.
-    #   2. --migrate-permissions never appears in start/SKILL.md
-    #      without "explicit confirmation" or "user approval"
-    #      language nearby. This refuses the silent destructive
-    #      narrowing path.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+      # Previously nano-run-repair-aware; run all checks even if an earlier check fails.
       - name: Detector exists, is executable, runs on a sandbox
+        if: ${{ !cancelled() }}
         run: |
           set -e
           fail=0
@@ -61,6 +61,7 @@ jobs:
           exit $fail
 
       - name: start/SKILL.md calls detect-legacy-setup.sh and refuses silent migration
+        if: ${{ !cancelled() }}
         run: |
           set -e
           fail=0
@@ -83,19 +84,102 @@ jobs:
             fi
           done < <(grep -n 'migrate-permissions' start/SKILL.md)
           exit $fail
-
-  setup-artifact-schema:
-    name: Setup artifact writer enforces schema
-    runs-on: ubuntu-latest
-    # /nano-run vNext PR 3. The writer is the only thing that can
-    # reject a malformed setup payload before it reaches disk; if a
-    # required field gets dropped or an enum widens silently, the
-    # downstream contract for /nano-doctor and support breaks. This
-    # job exercises the writer with one valid payload, three invalid
-    # payloads, and the report_only invariant.
-    steps:
-      - uses: actions/checkout@v4
+      # Previously nano-run-session-first; run all checks even if an earlier check fails.
+      - name: start/SKILL.md reads the five canonical session fields via jq
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          for var in PROFILE RUN_MODE AUTOPILOT PLAN_APPROVAL HOST; do
+            if ! grep -qE "^${var}=.*jq" start/SKILL.md; then
+              echo "FAIL: start/SKILL.md must read $var via jq from session.json"
+              fail=1
+            fi
+          done
+          if ! grep -q 'reference/session-state-contract.md' start/SKILL.md; then
+            echo "FAIL: start/SKILL.md must reference reference/session-state-contract.md"
+            fail=1
+          fi
+          exit $fail
+      # Previously nano-run-report-only; run all checks even if an earlier check fails.
+      - name: REPORT_ONLY guard appears before the first mutation site
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          if ! grep -qE 'REPORT_ONLY' start/SKILL.md; then
+            echo "FAIL: start/SKILL.md must define REPORT_ONLY from run_mode"
+            fail=1
+          fi
+          guard_line=$(grep -nE 'REPORT_ONLY' start/SKILL.md | head -1 | cut -d: -f1)
+          # First mutating call site (init-stack or init-project run).
+          mut_line=$(grep -nE 'init-stack\.sh|init-project\.sh' start/SKILL.md | head -1 | cut -d: -f1)
+          if [ -z "$guard_line" ] || [ -z "$mut_line" ]; then
+            echo "FAIL: could not locate guard or mutation site"
+            exit 1
+          fi
+          if [ "$guard_line" -ge "$mut_line" ]; then
+            echo "FAIL: REPORT_ONLY guard (line $guard_line) must come BEFORE mutation site (line $mut_line)"
+            fail=1
+          fi
+          # Skill must explicitly say report-only does not write the
+          # setup artifact and does not run mutating scripts.
+          if ! grep -qE 'report.?only|REPORT_ONLY=1' start/SKILL.md; then
+            echo "FAIL: start/SKILL.md must reference the report_only mode by name"
+            fail=1
+          fi
+          exit $fail
+      # Previously nano-run-guided-output; run all checks even if an earlier check fails.
+      - name: onboarding-contract.md declares the four Guided blocks
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          contract=start/references/onboarding-contract.md
+          if [ ! -f "$contract" ]; then
+            echo "FAIL: $contract is missing"
+            exit 1
+          fi
+          for block in 'Result' 'How to try' 'What was checked' 'What remains'; do
+            if ! grep -q "$block" "$contract"; then
+              echo "FAIL: $contract missing canonical Guided block: $block"
+              fail=1
+            fi
+          done
+          # Spanish parity, since local mode implies guided.
+          for block in 'Resultado' 'Como verlo' 'Que revise' 'Pendiente'; do
+            if ! grep -q "$block" "$contract"; then
+              echo "FAIL: $contract missing Spanish Guided block: $block"
+              fail=1
+            fi
+          done
+          # start/SKILL.md must point at the contract for shapes.
+          if ! grep -q 'onboarding-contract.md' start/SKILL.md; then
+            echo "FAIL: start/SKILL.md must point at start/references/onboarding-contract.md"
+            fail=1
+          fi
+          exit $fail
+      # Previously nano-run-capability-honesty; run all checks even if an earlier check fails.
+      - name: start/SKILL.md does not use forbidden enforcement claims
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          for phrase in 'always blocks' 'guaranteed blocks' 'all agents enforce' 'hard-blocks on every agent'; do
+            if grep -qiF "$phrase" start/SKILL.md; then
+              echo "FAIL: start/SKILL.md contains forbidden enforcement claim: $phrase"
+              fail=1
+            fi
+          done
+          # Skill must read adapter capabilities from disk.
+          if ! grep -qE 'adapters/' start/SKILL.md; then
+            echo "FAIL: start/SKILL.md must read host capabilities from adapters/"
+            fail=1
+          fi
+          exit $fail
+      # Previously setup-artifact-schema; run all checks even if an earlier check fails.
       - name: Writer roundtrip and rejection paths
+        if: ${{ !cancelled() }}
         run: |
           set -e
           fail=0
@@ -158,140 +242,13 @@ jobs:
           exit $fail
 
       - name: start/SKILL.md mentions the writer
+        if: ${{ !cancelled() }}
         run: |
           set -e
           if ! grep -qE 'save-setup-artifact\.sh|setup artifact' start/SKILL.md; then
             echo "FAIL: start/SKILL.md must reference save-setup-artifact.sh or 'setup artifact'"
             exit 1
           fi
-
-  nano-run-session-first:
-    name: /nano-run reads session state
-    runs-on: ubuntu-latest
-    # /nano-run vNext PR 2. Onboarding has to follow the same
-    # session-first pattern every other Sprint phase already follows
-    # (PROFILE / RUN_MODE / AUTOPILOT / PLAN_APPROVAL / HOST). A
-    # silent regression to git-vs-no-git inference would re-introduce
-    # the bug where Codex+git users land in Professional even though
-    # the adapter is instructions_only.
-    steps:
-      - uses: actions/checkout@v4
-      - name: start/SKILL.md reads the five canonical session fields via jq
-        run: |
-          set -e
-          fail=0
-          for var in PROFILE RUN_MODE AUTOPILOT PLAN_APPROVAL HOST; do
-            if ! grep -qE "^${var}=.*jq" start/SKILL.md; then
-              echo "FAIL: start/SKILL.md must read $var via jq from session.json"
-              fail=1
-            fi
-          done
-          if ! grep -q 'reference/session-state-contract.md' start/SKILL.md; then
-            echo "FAIL: start/SKILL.md must reference reference/session-state-contract.md"
-            fail=1
-          fi
-          exit $fail
-
-  nano-run-report-only:
-    name: /nano-run respects run_mode=report_only
-    runs-on: ubuntu-latest
-    # The report-only guard must appear BEFORE any mutating instruction
-    # (init-stack.sh, init-project.sh, file writes). A future edit that
-    # moves a mutation above the guard reintroduces the silent-mutate
-    # bug; this job blocks that.
-    steps:
-      - uses: actions/checkout@v4
-      - name: REPORT_ONLY guard appears before the first mutation site
-        run: |
-          set -e
-          fail=0
-          if ! grep -qE 'REPORT_ONLY' start/SKILL.md; then
-            echo "FAIL: start/SKILL.md must define REPORT_ONLY from run_mode"
-            fail=1
-          fi
-          guard_line=$(grep -nE 'REPORT_ONLY' start/SKILL.md | head -1 | cut -d: -f1)
-          # First mutating call site (init-stack or init-project run).
-          mut_line=$(grep -nE 'init-stack\.sh|init-project\.sh' start/SKILL.md | head -1 | cut -d: -f1)
-          if [ -z "$guard_line" ] || [ -z "$mut_line" ]; then
-            echo "FAIL: could not locate guard or mutation site"
-            exit 1
-          fi
-          if [ "$guard_line" -ge "$mut_line" ]; then
-            echo "FAIL: REPORT_ONLY guard (line $guard_line) must come BEFORE mutation site (line $mut_line)"
-            fail=1
-          fi
-          # Skill must explicitly say report-only does not write the
-          # setup artifact and does not run mutating scripts.
-          if ! grep -qE 'report.?only|REPORT_ONLY=1' start/SKILL.md; then
-            echo "FAIL: start/SKILL.md must reference the report_only mode by name"
-            fail=1
-          fi
-          exit $fail
-
-  nano-run-guided-output:
-    name: /nano-run Guided output uses the four-block skeleton
-    runs-on: ubuntu-latest
-    # The onboarding contract doc carries the canonical Guided
-    # output examples. The four blocks (Result / How to try / What
-    # was checked / What remains, plus Spanish parity) must all be
-    # present so the skill cannot drift away from the
-    # plain-language contract.
-    steps:
-      - uses: actions/checkout@v4
-      - name: onboarding-contract.md declares the four Guided blocks
-        run: |
-          set -e
-          fail=0
-          contract=start/references/onboarding-contract.md
-          if [ ! -f "$contract" ]; then
-            echo "FAIL: $contract is missing"
-            exit 1
-          fi
-          for block in 'Result' 'How to try' 'What was checked' 'What remains'; do
-            if ! grep -q "$block" "$contract"; then
-              echo "FAIL: $contract missing canonical Guided block: $block"
-              fail=1
-            fi
-          done
-          # Spanish parity, since local mode implies guided.
-          for block in 'Resultado' 'Como verlo' 'Que revise' 'Pendiente'; do
-            if ! grep -q "$block" "$contract"; then
-              echo "FAIL: $contract missing Spanish Guided block: $block"
-              fail=1
-            fi
-          done
-          # start/SKILL.md must point at the contract for shapes.
-          if ! grep -q 'onboarding-contract.md' start/SKILL.md; then
-            echo "FAIL: start/SKILL.md must point at start/references/onboarding-contract.md"
-            fail=1
-          fi
-          exit $fail
-
-  nano-run-capability-honesty:
-    name: /nano-run does not overclaim host enforcement
-    runs-on: ubuntu-latest
-    # The L0-L3 honesty rule applies to onboarding output too. Four
-    # phrasings the skill must never use, regardless of host or
-    # profile. The skill must also read adapters/ for capability
-    # values rather than synthesize them from host name.
-    steps:
-      - uses: actions/checkout@v4
-      - name: start/SKILL.md does not use forbidden enforcement claims
-        run: |
-          set -e
-          fail=0
-          for phrase in 'always blocks' 'guaranteed blocks' 'all agents enforce' 'hard-blocks on every agent'; do
-            if grep -qiF "$phrase" start/SKILL.md; then
-              echo "FAIL: start/SKILL.md contains forbidden enforcement claim: $phrase"
-              fail=1
-            fi
-          done
-          # Skill must read adapter capabilities from disk.
-          if ! grep -qE 'adapters/' start/SKILL.md; then
-            echo "FAIL: start/SKILL.md must read host capabilities from adapters/"
-            fail=1
-          fi
-          exit $fail
 
   workflow-yaml-parses:
     name: Workflow YAML parses
@@ -475,19 +432,16 @@ jobs:
           done
           exit $fail
 
-  think-preset-self-consistency:
-    name: /think presets respect their own voice rules
+  think-contracts:
+    name: think contracts
     runs-on: ubuntu-latest
-    # A preset whose voice rules are stated in its own file must follow
-    # those rules. The garry preset explicitly bans em-dashes and an
-    # AI-vocabulary list; this job fails the PR if the file contradicts
-    # its own declaration. Other presets (default, yc) do not claim the
-    # same constraints and are not checked here.
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      # Previously think-preset-self-consistency; run all checks even if an earlier check fails.
       - name: garry preset has zero em-dashes
+        if: ${{ !cancelled() }}
         run: |
           set -e
           f=think/presets/garry.md
@@ -501,6 +455,7 @@ jobs:
           fi
           echo "OK: 0 em-dashes"
       - name: garry preset does not use banned AI vocabulary
+        if: ${{ !cancelled() }}
         run: |
           # The preset file lists the banned words on its "No AI
           # vocabulary:" line and on its "No banned phrases:" line.
@@ -519,6 +474,729 @@ jobs:
             exit 1
           fi
           echo "OK: no banned vocabulary in prose"
+      # Previously think-archetype-schema; run all checks even if an earlier check fails.
+      - name: Field names appear across schema, skill, and contract docs
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          for path in reference/artifact-schema.md think/SKILL.md think/references/archetypes.md; do
+            for field in archetype archetype_confidence archetype_source example_reference; do
+              if ! grep -q "$field" "$path"; then
+                echo "FAIL: $path missing field name: $field"
+                fail=1
+              fi
+            done
+          done
+          exit $fail
+
+      - name: THINK_JSON build site assigns each archetype field
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          # The Phase 6 jq -n block must declare every archetype
+          # field as a key in summary. Loose grep on each colon-form
+          # the existing block uses.
+          for field in archetype archetype_confidence archetype_source archetype_reason example_reference; do
+            if ! grep -qE "${field}:[[:space:]]+\\\$${field}" think/SKILL.md; then
+              echo "FAIL: think/SKILL.md THINK_JSON does not assign summary.$field"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Live save+read roundtrip with archetype + example_reference
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          tmp=$(mktemp -d /tmp/arch-ci.XXXXXX)
+          cd "$tmp"
+          git init -q
+          mkdir -p .nanostack
+          export NANOSTACK_STORE="$tmp/.nanostack"
+
+          # Two payloads cover the full envelope: detected high-
+          # confidence + example, and the unknown/fallback case.
+          api_payload=$(jq -n '{
+            phase:"think",
+            summary:{
+              value_proposition:"Add /version endpoint",
+              scope_mode:"reduce", target_user:"backend dev",
+              narrowest_wedge:"GET /version", key_risk:"could break /health",
+              premise_validated:true, out_of_scope:[], manual_delivery_test:{possible:true,steps:[]},
+              search_summary:{mode:"local_only",result:"",existing_solution:"none"},
+              archetype:"api_backend", archetype_confidence:"high",
+              archetype_source:"detected_from_files",
+              archetype_reason:"Project has server.js.",
+              example_reference:{name:"api-healthcheck",path:"examples/api-healthcheck",why_relevant:"backend sandbox"}
+            },
+            context_checkpoint:{summary:"x"}
+          }')
+          $GITHUB_WORKSPACE/bin/save-artifact.sh think "$api_payload" >/dev/null
+
+          # Spec acceptance jq.
+          if ! jq -e '.summary.archetype == "api_backend" and .summary.archetype_confidence == "high" and .summary.archetype_source == "detected_from_files" and .summary.example_reference.path == "examples/api-healthcheck"' .nanostack/think/*.json >/dev/null; then
+            echo "FAIL: api_backend artifact did not preserve all archetype fields"
+            fail=1
+          fi
+
+          # Brief gate must still pass on the same artifact, with no
+          # archetype-aware filter. Same five fields the existing
+          # gate checks. A v1 reader without archetype knowledge
+          # must still see the artifact as complete.
+          gate=$(jq -r '
+            (.summary.value_proposition // "") != "" and
+            (.summary.target_user        // "") != "" and
+            (.summary.narrowest_wedge    // "") != "" and
+            (.summary.key_risk           // "") != "" and
+            ((.summary.premise_validated | type) == "boolean")
+          ' .nanostack/think/*.json)
+          if [ "$gate" != "true" ]; then
+            echo "FAIL: brief gate filter rejected an archetype-aware artifact"
+            fail=1
+          fi
+
+          # Reset and try the unknown/fallback envelope.
+          rm .nanostack/think/*.json
+          unknown_payload=$(jq -n '{
+            phase:"think",
+            summary:{
+              value_proposition:"Generic feature ask",
+              scope_mode:"reduce", target_user:"any",
+              narrowest_wedge:"smallest version", key_risk:"premise unclear",
+              premise_validated:false, out_of_scope:[], manual_delivery_test:{possible:false,steps:[]},
+              search_summary:{mode:"local_only",result:"",existing_solution:"none"},
+              archetype:"unknown", archetype_confidence:"low",
+              archetype_source:"fallback", archetype_reason:"",
+              example_reference:null
+            },
+            context_checkpoint:{summary:"x"}
+          }')
+          $GITHUB_WORKSPACE/bin/save-artifact.sh think "$unknown_payload" >/dev/null
+
+          if ! jq -e '.summary.archetype == "unknown" and .summary.archetype_source == "fallback" and .summary.example_reference == null' .nanostack/think/*.json >/dev/null; then
+            echo "FAIL: unknown archetype artifact did not preserve fallback fields"
+            fail=1
+          fi
+          # Brief gate still passes with archetype=unknown and
+          # premise_validated=false (PR #173 fix held).
+          gate=$(jq -r '
+            (.summary.value_proposition // "") != "" and
+            (.summary.target_user        // "") != "" and
+            (.summary.narrowest_wedge    // "") != "" and
+            (.summary.key_risk           // "") != "" and
+            ((.summary.premise_validated | type) == "boolean")
+          ' .nanostack/think/*.json)
+          if [ "$gate" != "true" ]; then
+            echo "FAIL: brief gate filter rejected unknown/false-premise artifact (PR #173 regression)"
+            fail=1
+          fi
+
+          exit $fail
+      # Previously think-archetype-lens-routing; run all checks even if an earlier check fails.
+      - name: Preset section names explicit-preset-wins rule
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          # Loose grep: any phrasing is fine as long as the rule is
+          # named in the user-facing surface. Common phrasings:
+          # "Explicit --preset always wins", "explicit preset wins",
+          # "--preset always wins".
+          if ! grep -qE 'Explicit `?--preset`?[^\\n]*wins|explicit (--)?preset.*wins' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must state that explicit --preset wins over the archetype's lens"
+            exit 1
+          fi
+
+      - name: Per-archetype lens map present in think/SKILL.md
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          # Loose grep: each canonical archetype must appear in the
+          # Preset Selection section (where the lens table lives).
+          # The exact wording can change; the names cannot drift.
+          for arch in founder_validation cli_tooling api_backend landing_experience; do
+            if ! grep -q "$arch" think/SKILL.md; then
+              echo "FAIL: think/SKILL.md missing archetype lens entry: $arch"
+              fail=1
+            fi
+          done
+          # Each archetype's default lens name must appear too.
+          for lens in yc devex eng design; do
+            if ! grep -q "\`$lens\`" think/SKILL.md; then
+              echo "FAIL: think/SKILL.md missing internal lens reference: $lens"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Guided fenced blocks in archetypes.md pass banned-term grep
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          # Plain-language banned terms PLUS the three archetype-
+          # specific words (archetype, preset, mode). Patterns use
+          # word boundaries so "diff" does not match "different".
+          patterns='\bartifact\b|\bartifacts\b|\bPR\b|\bPRs\b|\bCI\b|\bbranch\b|\bbranches\b|\bdiff\b|\bdiffs\b|\bhook\b|\bhooks\b|\bphase\b|\bphases\b|\bsecurity audit\b|\bQA\b|\bscope drift\b|\barchetype\b|\bpreset\b|\bmode\b'
+          blocks=$(awk '
+            /<!-- guided-output:start -->/ { capture=1; buf=""; next }
+            /<!-- guided-output:end -->/   { if (capture) { print buf; buf="" } capture=0; next }
+            capture { buf = buf " " $0 }
+          ' think/references/archetypes.md)
+          if [ -z "$blocks" ]; then
+            echo "FAIL: archetypes.md must contain at least one <!-- guided-output --> example block"
+            exit 1
+          fi
+          while IFS= read -r block; do
+            [ -z "$block" ] && continue
+            hit=$(echo "$block" | grep -i -oE "$patterns" || true)
+            if [ -n "$hit" ]; then
+              echo "FAIL: archetypes.md guided block contains banned term(s): $(echo "$hit" | sort -u | tr '\n' ' ')"
+              echo "      block: $block"
+              fail=1
+            fi
+          done < <(printf '%s\n' "$blocks")
+          exit $fail
+      # Previously think-archetype-aliases; run all checks even if an earlier check fails.
+      - name: Canonical archetypes named in archetypes.md
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          for canonical in founder_validation cli_tooling api_backend landing_experience; do
+            if ! grep -q "$canonical" think/references/archetypes.md; then
+              echo "FAIL: think/references/archetypes.md missing canonical archetype: $canonical"
+              fail=1
+            fi
+          done
+          # Short aliases the skill normalizes from. Spec lists these
+          # as the words a user actually types.
+          for alias in 'founder' 'cli' 'api' 'landing' 'design' 'backend' 'non-technical'; do
+            if ! grep -q "$alias" think/references/archetypes.md; then
+              echo "FAIL: think/references/archetypes.md missing alias: $alias"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: think/SKILL.md normalizes the alias map
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          if ! grep -q 'think/references/archetypes.md' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must reference think/references/archetypes.md"
+            exit 1
+          fi
+          # The skill must mention --archetype as an accepted flag
+          # AND the four short aliases; otherwise the user-facing
+          # surface drifts from the contract.
+          if ! grep -qE '\-\-archetype' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must accept --archetype flag"
+            exit 1
+          fi
+      # Previously think-archetype-no-wizard; run all checks even if an earlier check fails.
+      - name: think/SKILL.md and archetypes.md have no multi-question forms
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          for pattern in 'Question 1.*Question 2' 'answer all' 'fill out this form' 'choose all that apply'; do
+            if grep -nE "$pattern" think/SKILL.md think/references/archetypes.md 2>/dev/null; then
+              echo "FAIL: forbidden multi-question pattern present: $pattern"
+              fail=1
+            fi
+          done
+          exit $fail
+      # Previously think-archetype-examples-source; run all checks even if an earlier check fails.
+      - name: archetypes.md mentions every Examples Library archetype path
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          for example in starter-todo cli-notes api-healthcheck static-landing; do
+            if ! grep -q "examples/$example" think/references/archetypes.md; then
+              echo "FAIL: think/references/archetypes.md missing examples/$example"
+              fail=1
+            fi
+          done
+          exit $fail
+      # Previously think-archetype-brief-gate; run all checks even if an earlier check fails.
+      - name: Brief gate jq filter does not reference archetype
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          # Find the GATE_OK jq block in think/SKILL.md and confirm
+          # archetype does not appear inside it. Loose pattern: the
+          # entire span between "GATE_OK=$(jq" and the matching
+          # closing single quote on the line that has " THINK_FILE"
+          # or 'THINK_FILE'.
+          gate_block=$(awk '
+            /GATE_OK=\$\(jq/ { capture=1 }
+            capture { print }
+            capture && /THINK_FILE"\)/ { capture=0 }
+          ' think/SKILL.md)
+          if [ -z "$gate_block" ]; then
+            echo "FAIL: could not locate the GATE_OK jq block in think/SKILL.md"
+            exit 1
+          fi
+          if echo "$gate_block" | grep -qF 'archetype'; then
+            echo "FAIL: brief gate jq filter references archetype; archetype must remain optional"
+            echo "$gate_block"
+            exit 1
+          fi
+          # Positive check: the five required fields are all named in
+          # the gate. Drift away from those is a separate failure
+          # mode the existing think-autopilot-brief-gate job already
+          # covers, but assert here too so the diagnostic is precise.
+          for field in value_proposition target_user narrowest_wedge key_risk premise_validated; do
+            if ! echo "$gate_block" | grep -qF ".summary.$field"; then
+              echo "FAIL: brief gate missing required field: .summary.$field"
+              exit 1
+            fi
+          done
+      # Previously think-search-privacy; run all checks even if an earlier check fails.
+      - name: search-before-building.md declares the three modes
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          for mode in local_only private public; do
+            if ! grep -qE "\`?${mode}\`?" think/references/search-before-building.md; then
+              echo "FAIL: search-before-building.md missing mode '$mode'"
+              fail=1
+            fi
+          done
+          # The doc must mention each load-bearing concept. Loose grep
+          # by keyword: any phrasing is fine as long as the concept is
+          # covered.
+          for concept in 'Default selection' 'Offline fallback' 'Prompt-injection' 'search_summary'; do
+            if ! grep -qi "$concept" think/references/search-before-building.md; then
+              echo "FAIL: search-before-building.md missing concept '$concept'"
+              fail=1
+            fi
+          done
+          # search_summary fields by name.
+          for field in mode result existing_solution; do
+            if ! grep -qE "\"$field\"" think/references/search-before-building.md; then
+              echo "FAIL: search-before-building.md must document search_summary.$field"
+              fail=1
+            fi
+          done
+          # Sensitive-signal trigger words: at least four of the spec's
+          # examples must appear. The spec is intentionally not a
+          # closed set; this gate just stops the doc from drifting to
+          # zero-signal generic prose.
+          hits=0
+          for kw in cliente client contrato contract compliance auth payments credentials internal proprietary stealth nda; do
+            if grep -qiw "$kw" think/references/search-before-building.md; then
+              hits=$((hits+1))
+            fi
+          done
+          if [ "$hits" -lt 4 ]; then
+            echo "FAIL: search-before-building.md mentions only $hits sensitive-signal keywords (need >=4)"
+            fail=1
+          fi
+          exit $fail
+
+      - name: think/SKILL.md routes search results into search_summary
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          if ! grep -q 'search-before-building.md' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must reference search-before-building.md"
+            fail=1
+          fi
+          if ! grep -q 'summary.search_summary' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must say search results land in summary.search_summary"
+            fail=1
+          fi
+          exit $fail
+      # Previously think-preset-no-dump; run all checks even if an earlier check fails.
+      - name: think/SKILL.md does not dump preset files
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          # Forbidden literal forms the spec called out:
+          if grep -nE 'cat[[:space:]]+"\$PRESET_FILE"' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must not 'cat \$PRESET_FILE' (regression: floods first screen with rules)"
+            fail=1
+          fi
+          if grep -nE 'cat[[:space:]]+"\$HOME/\.claude/skills/nanostack/think/presets/default\.md"' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must not cat default.md either"
+            fail=1
+          fi
+          # Profile-keyed headline: at least mention 'Preset:' (professional)
+          # AND 'guided' (so the doc covers both voices).
+          if ! grep -q 'Preset:' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must show a one-line 'Preset: <name>.' headline"
+            fail=1
+          fi
+          # Spec rule: skill must say it loads the preset internally,
+          # not dump it.
+          if ! grep -qE 'Load the preset internally|read the file' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must declare that it loads the preset internally"
+            fail=1
+          fi
+          exit $fail
+      # Previously think-autopilot-brief-gate; run all checks even if an earlier check fails.
+      - name: think/SKILL.md declares the Brief Gate before Next Step
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          if ! grep -qE '^### Phase 6\.6: Minimum Viable Brief Gate' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must define the Phase 6.6 Brief Gate"
+            fail=1
+          fi
+          # Phase 6.6 must come before Phase 7 (Next Step) so the gate
+          # runs before the autopilot continuation.
+          gate_line=$(grep -n '^### Phase 6\.6: Minimum Viable Brief Gate' think/SKILL.md | head -1 | cut -d: -f1)
+          next_line=$(grep -n '^### Phase 7: Next Step' think/SKILL.md | head -1 | cut -d: -f1)
+          if [ -z "$gate_line" ] || [ -z "$next_line" ] || [ "$gate_line" -ge "$next_line" ]; then
+            echo "FAIL: Phase 6.6 Brief Gate must appear before Phase 7 Next Step"
+            fail=1
+          fi
+          # Gate must check every required field by name.
+          for field in value_proposition target_user narrowest_wedge key_risk premise_validated; do
+            if ! grep -qE "summary\.$field" think/SKILL.md; then
+              echo "FAIL: Brief Gate must check .summary.$field"
+              fail=1
+            fi
+          done
+          # Phase 7 must explicitly handle the gate-failed branch
+          # (not advance to /nano).
+          if ! grep -qE 'Brief Gate (failed|passed)' think/SKILL.md; then
+            echo "FAIL: Phase 7 must reference Brief Gate passed/failed branches"
+            fail=1
+          fi
+          exit $fail
+
+      - name: README and README.es ship the autopilot wording
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          # English: spec asks for the literal "autopilot continues
+          # after a complete brief, not after blind guessing".
+          if ! grep -q 'complete brief, not after blind guessing' README.md; then
+            echo "FAIL: README.md must include 'complete brief, not after blind guessing'"
+            fail=1
+          fi
+          # Spanish: parity wording naming the gate behavior.
+          if ! grep -qiE 'brief completo|adivinando' README.es.md; then
+            echo "FAIL: README.es.md must mirror the autopilot brief-gate wording"
+            fail=1
+          fi
+          exit $fail
+      # Previously think-session-first; run all checks even if an earlier check fails.
+      - name: think/SKILL.md reads canonical session fields
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          if ! grep -q 'reference/session-state-contract.md' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must reference reference/session-state-contract.md"
+            fail=1
+          fi
+          for var in PROFILE RUN_MODE AUTOPILOT PLAN_APPROVAL HOST; do
+            if ! grep -qE "$var=.*jq" think/SKILL.md; then
+              echo "FAIL: think/SKILL.md must read $var via jq from session.json"
+              fail=1
+            fi
+          done
+          # Profile selection must NOT be derived from detect_git_mode
+          # alone. The skill may still mention detect_git_mode as a
+          # secondary signal, but it must explicitly say so.
+          if grep -nE 'detect_git_mode.*(local).*(non-technical|guided)' think/SKILL.md \
+             | grep -v 'secondary signal'; then
+            echo "FAIL: think/SKILL.md couples guided/non-technical to detect_git_mode without naming it as secondary"
+            fail=1
+          fi
+          exit $fail
+
+      - name: "profile resolution: Codex+git is guided"
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          tmp=$(mktemp -d /tmp/think-profile.XXXXXX)
+          cd "$tmp"
+          git init -q
+          mkdir -p .nanostack
+          export NANOSTACK_STORE="$tmp/.nanostack"
+          ( export NANOSTACK_HOST=codex; $GITHUB_WORKSPACE/bin/session.sh init development >/dev/null )
+          profile=$(jq -r .profile .nanostack/session.json)
+          if [ "$profile" != "guided" ]; then
+            echo "FAIL: Codex+git resolved to '$profile' (expected 'guided' from instructions_only adapter)"
+            exit 1
+          fi
+          # And Claude+git stays professional.
+          ( export NANOSTACK_HOST=claude; $GITHUB_WORKSPACE/bin/session.sh init development >/dev/null )
+          profile=$(jq -r .profile .nanostack/session.json)
+          if [ "$profile" != "professional" ]; then
+            echo "FAIL: Claude+git resolved to '$profile' (expected 'professional')"
+            exit 1
+          fi
+      # Previously think-structured-artifact; run all checks even if an earlier check fails.
+      - name: think/SKILL.md does not save via --from-session
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          if grep -nE 'save-artifact\.sh[[:space:]]+--from-session[[:space:]]+think' think/SKILL.md; then
+            echo "FAIL: /think must save structured JSON, not the --from-session prose form"
+            fail=1
+          fi
+          # Must have the structured-save block: jq -n with the named
+          # fields the spec requires. Loose grep on the field names
+          # avoids brittleness to formatting changes.
+          for field in value_proposition scope_mode target_user narrowest_wedge key_risk premise_validated; do
+            if ! grep -q "$field" think/SKILL.md; then
+              echo "FAIL: think/SKILL.md must mention required field '$field'"
+              fail=1
+            fi
+          done
+          # Save call site must reference the canonical schema doc.
+          if ! grep -q 'reference/artifact-schema.md' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md must point at reference/artifact-schema.md"
+            fail=1
+          fi
+          exit $fail
+
+      - name: artifact-schema.md declares the extended /think shape
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          # The schema doc must include the new optional fields too,
+          # so future skills can rely on their names without each
+          # adding their own ad-hoc convention.
+          for field in out_of_scope manual_delivery_test search_summary context_checkpoint; do
+            if ! grep -q "$field" reference/artifact-schema.md; then
+              echo "FAIL: reference/artifact-schema.md missing field '$field' in /think schema"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: structured artifact roundtrip (jq queries from spec pass)
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          tmp=$(mktemp -d /tmp/think-ci.XXXXXX)
+          cd "$tmp"
+          git init -q
+          mkdir -p .nanostack
+          export NANOSTACK_STORE="$tmp/.nanostack"
+          $GITHUB_WORKSPACE/bin/session.sh init development >/dev/null
+          THINK_JSON=$(jq -n '{
+            phase:"think",
+            summary:{value_proposition:"VP", scope_mode:"reduce", target_user:"TU", narrowest_wedge:"NW", key_risk:"KR", premise_validated:true, out_of_scope:["x"]},
+            context_checkpoint:{summary:"x"}
+          }')
+          $GITHUB_WORKSPACE/bin/save-artifact.sh think "$THINK_JSON" >/dev/null
+          # The three jq queries the spec names as acceptance must succeed.
+          jq -e '.summary.value_proposition' .nanostack/think/*.json >/dev/null || { echo "FAIL: value_proposition not retrievable"; fail=1; }
+          jq -e '.summary.narrowest_wedge'   .nanostack/think/*.json >/dev/null || { echo "FAIL: narrowest_wedge not retrievable"; fail=1; }
+          jq -e '.summary.key_risk'          .nanostack/think/*.json >/dev/null || { echo "FAIL: key_risk not retrievable"; fail=1; }
+          # sprint-journal.sh consumes those exact fields; smoke-check it
+          # does not crash.
+          $GITHUB_WORKSPACE/bin/sprint-journal.sh >/dev/null 2>&1 || { echo "FAIL: sprint-journal crashed on structured think artifact"; fail=1; }
+          exit $fail
+      # Previously think-sprint-order-canonical; run all checks even if an earlier check fails.
+      - name: Autopilot announcement uses canonical order
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          if ! grep -nF '/review, /security, /qa, /ship' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md autopilot announcement does not use canonical /review, /security, /qa, /ship order"
+            exit 1
+          fi
+          if grep -nF '/review, /qa, /security, /ship' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md still emits the wrong /review, /qa, /security, /ship order"
+            exit 1
+          fi
+      - name: New-user sprint guide lists /review then /security then /qa then /ship
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          # Pull the fenced quoted block that starts with "Here's the full sprint:"
+          # and stops at the first blank quote line. Then assert the four steps
+          # appear in canonical order.
+          guide=$(awk '
+            /Here.s the full sprint:/ { capture=1 }
+            capture { print }
+            capture && /Or say.*--autopilot/ { print; capture=0 }
+          ' think/SKILL.md)
+          if [ -z "$guide" ]; then
+            echo "FAIL: could not locate the new-user sprint guide block in think/SKILL.md"
+            exit 1
+          fi
+          review_line=$(echo "$guide" | grep -nF '/review' | head -1 | cut -d: -f1)
+          security_line=$(echo "$guide" | grep -nF '/security' | head -1 | cut -d: -f1)
+          qa_line=$(echo "$guide" | grep -nF '/qa' | head -1 | cut -d: -f1)
+          ship_line=$(echo "$guide" | grep -nF '/ship' | head -1 | cut -d: -f1)
+          for var in review_line security_line qa_line ship_line; do
+            eval "val=\$$var"
+            if [ -z "$val" ]; then
+              echo "FAIL: sprint guide missing step ($var)"
+              echo "$guide"
+              exit 1
+            fi
+          done
+          if [ "$review_line" -lt "$security_line" ] && \
+             [ "$security_line" -lt "$qa_line" ] && \
+             [ "$qa_line" -lt "$ship_line" ]; then
+            exit 0
+          fi
+          echo "FAIL: sprint guide order is not /review -> /security -> /qa -> /ship"
+          echo "lines: review=$review_line security=$security_line qa=$qa_line ship=$ship_line"
+          echo "$guide"
+          exit 1
+      # Previously think-early-guide-includes-qa; run all checks even if an earlier check fails.
+      - name: Sprint guide block names /qa explicitly
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          guide=$(awk '
+            /Here.s the full sprint:/ { capture=1 }
+            capture { print }
+            capture && /Or say.*--autopilot/ { print; capture=0 }
+          ' think/SKILL.md)
+          if [ -z "$guide" ]; then
+            echo "FAIL: could not locate the new-user sprint guide block in think/SKILL.md"
+            exit 1
+          fi
+          if ! echo "$guide" | grep -qF '/qa'; then
+            echo "FAIL: new-user sprint guide does not list /qa"
+            echo "$guide"
+            exit 1
+          fi
+      # Previously think-founder-lens-deterministic; run all checks even if an earlier check fails.
+      - name: think/SKILL.md and think/references/archetypes.md do not say "yc or garry"
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          for f in think/SKILL.md think/references/archetypes.md; do
+            # Match the wording loosely: yc, optional whitespace/punctuation,
+            # "or", optional whitespace, garry. Catches "yc or garry",
+            # "`yc` or `garry`", "yc / garry" via the second pattern below.
+            if grep -niE '\byc\b[^a-z0-9]*or[^a-z0-9]+\bgarry\b' "$f"; then
+              echo "FAIL: $f still suggests yc OR garry; founder_validation must be deterministic"
+              fail=1
+            fi
+            if grep -niE '\byc\b[[:space:]]*/[[:space:]]*\bgarry\b' "$f"; then
+              echo "FAIL: $f still suggests yc / garry; founder_validation must be deterministic"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: Both files state the deterministic rule explicitly
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          for f in think/SKILL.md think/references/archetypes.md; do
+            # Positive check: the file mentions garry only as the explicit-flag
+            # path. Loose pattern: "garry" within ~80 chars of "--preset=garry"
+            # or "explicit". One of the two must hit.
+            if ! grep -niE 'garry.{0,80}(--preset=garry|explicit)|(--preset=garry|explicit).{0,80}garry' "$f"; then
+              echo "FAIL: $f does not state that garry is reachable only via the explicit --preset flag"
+              fail=1
+            fi
+          done
+          exit $fail
+      # Previously think-builder-archetypes-do-not-force-startup; run all checks even if an earlier check fails.
+      - name: think/SKILL.md does not force Startup forcing questions on every archetype
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          # The exact phrase that triggered the regression. Block any
+          # variation that says "always" + "Startup Mode" + "forcing".
+          if grep -niE 'always cover the startup mode forcing' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md still forces Startup forcing questions on every archetype"
+            exit 1
+          fi
+          # Positive check: the Phase 2 paragraph mentions Builder explicitly,
+          # so non-technical readers and Codex retest both see the mode is
+          # archetype-driven.
+          if ! grep -nE 'Builder forcing questions for .*cli_tooling.*api_backend|Builder forcing questions for .*api_backend.*cli_tooling' think/SKILL.md; then
+            echo "FAIL: Phase 2 paragraph does not mention Builder forcing questions for cli_tooling and api_backend"
+            exit 1
+          fi
+          # Cross-check: archetypes.md still maps cli_tooling and api_backend
+          # to Builder. If that source of truth changes, this lint becomes
+          # stale and should be updated alongside it.
+          if ! grep -nE '\| .cli_tooling. \| Builder \|' think/references/archetypes.md; then
+            echo "FAIL: archetypes.md no longer maps cli_tooling to Builder; update this lint or the spec"
+            exit 1
+          fi
+          if ! grep -nE '\| .api_backend. \| Builder \|' think/references/archetypes.md; then
+            echo "FAIL: archetypes.md no longer maps api_backend to Builder; update this lint or the spec"
+            exit 1
+          fi
+      # Previously think-collaborative-contract; run all checks even if an earlier check fails.
+      - name: Diagnostic declares the one-question cadence
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          if ! grep -qF 'one question per message' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md no longer declares the one-question-per-message cadence"
+            exit 1
+          fi
+      - name: Phase 4.5 alternatives pass exists and keeps the reduce bias
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          if ! grep -qF '### Phase 4.5: Alternatives' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md is missing the Phase 4.5 Alternatives section"
+            exit 1
+          fi
+          if ! grep -qF 'recommend the smaller one' think/SKILL.md; then
+            echo "FAIL: Phase 4.5 lost the smaller-approach recommendation bias"
+            exit 1
+          fi
+      - name: Interactive brief walks in sections, autopilot keeps the gate
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          if ! grep -qF 'walk the brief in sections' think/SKILL.md; then
+            echo "FAIL: think/SKILL.md is missing the sectioned brief validation instruction"
+            exit 1
+          fi
+          if ! grep -qF 'Under autopilot, skip the section walk' think/SKILL.md; then
+            echo "FAIL: the section walk no longer defers to the brief gate under autopilot"
+            exit 1
+          fi
+      - name: Optional collaborative fields documented and gate-exempt
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          for f in think/SKILL.md reference/artifact-schema.md; do
+            for field in alternatives_considered design_summary; do
+              if ! grep -qF "$field" "$f"; then
+                echo "FAIL: $f does not document $field"
+                exit 1
+              fi
+            done
+          done
+          if ! grep -qF 'Alternatives Considered' think/references/brief-template.md; then
+            echo "FAIL: brief-template.md is missing the Alternatives Considered section"
+            exit 1
+          fi
+          # The brief gate jq filter must keep checking exactly the five
+          # required fields and never consult the collaborative ones.
+          gate_block=$(sed -n '/### Phase 6.6/,/### Phase 7/p' think/SKILL.md)
+          if printf '%s' "$gate_block" | grep -qE 'alternatives_considered|design_summary'; then
+            echo "FAIL: the brief gate consults a collaborative field; it must stay optional"
+            exit 1
+          fi
 
   telemetry-privacy:
     name: Telemetry privacy contract
@@ -1084,710 +1762,208 @@ jobs:
           echo "$out" | jq -e '.session_profile == "guided"' >/dev/null || { echo "FAIL: doctor must propagate session.profile"; fail=1; }
           exit $fail
 
-  think-archetype-schema:
-    name: /think archetype fields land in the artifact
+  public-doc-contracts:
+    name: public doc contracts
     runs-on: ubuntu-latest
-    # Guided Archetypes v1 PR 4. The artifact is the only durable
-    # signal a downstream skill (or analytics, or support) gets
-    # about what archetype shaped this sprint. Three things must
-    # line up:
-    #   1. The schema doc declares the fields (PR 1).
-    #   2. The skill's THINK_JSON build site emits them (this PR).
-    #   3. A live save+read roundtrip on a sandbox preserves the
-    #      five archetype fields without breaking the brief gate.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Field names appear across schema, skill, and contract docs
+      # Previously readme-public-copy; run all checks even if an earlier check fails.
+      - name: Run README public-copy lock
+        if: ${{ !cancelled() }}
+        run: ci/check-readme-public-copy.sh
+      # Previously readme-narrative-locks; run all checks even if an earlier check fails.
+      - name: Run README narrative claim locks
+        if: ${{ !cancelled() }}
+        run: ci/check-readme-narrative-locks.sh
+      # Previously release-docs-locks; run all checks even if an earlier check fails.
+      - name: Run release-surface doc locks
+        if: ${{ !cancelled() }}
+        run: ci/check-release-docs-locks.sh
+      # Previously v1-release-framing; run all checks even if an earlier check fails.
+      - name: VERSION file is well-formed semver
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          ver=$(tr -d '[:space:]' < VERSION 2>/dev/null)
+          if [ -z "$ver" ]; then
+            echo "FAIL: VERSION file is missing or empty"
+            exit 1
+          fi
+          if ! echo "$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "FAIL: VERSION '$ver' is not semver MAJOR.MINOR.PATCH"
+            exit 1
+          fi
+
+      - name: README.md introduces Guided + Professional profiles
+        if: ${{ !cancelled() }}
         run: |
           set -e
           fail=0
-          for path in reference/artifact-schema.md think/SKILL.md think/references/archetypes.md; do
-            for field in archetype archetype_confidence archetype_source example_reference; do
-              if ! grep -q "$field" "$path"; then
-                echo "FAIL: $path missing field name: $field"
+          # Both terms appear, plus the section heading. The section
+          # name "Two profiles, same rigor" anchors the navigation
+          # link so it cannot drift silently.
+          for term in 'Guided' 'Professional' 'Two profiles, same rigor'; do
+            if ! grep -q "$term" README.md; then
+              echo "FAIL: README.md must mention '$term'"
+              fail=1
+            fi
+          done
+          # The session-state and plain-language references must be
+          # public-facing too so users can find the wording rules.
+          if ! grep -q "reference/plain-language-contract.md" README.md; then
+            echo "FAIL: README.md must link to reference/plain-language-contract.md"
+            fail=1
+          fi
+          if ! grep -q "reference/session-state-contract.md" README.md; then
+            echo "FAIL: README.md must link to reference/session-state-contract.md"
+            fail=1
+          fi
+          exit $fail
+
+      - name: README.es.md mirrors the framing in Spanish
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          for term in 'Guiado' 'Profesional' 'Dos perfiles, mismo rigor'; do
+            if ! grep -q "$term" README.es.md; then
+              echo "FAIL: README.es.md must mention '$term'"
+              fail=1
+            fi
+          done
+          if ! grep -q "reference/plain-language-contract.md" README.es.md; then
+            echo "FAIL: README.es.md must link to reference/plain-language-contract.md"
+            fail=1
+          fi
+          if ! grep -q "reference/session-state-contract.md" README.es.md; then
+            echo "FAIL: README.es.md must link to reference/session-state-contract.md"
+            fail=1
+          fi
+          exit $fail
+      # Previously spanish-surface-parity; run all checks even if an earlier check fails.
+      - name: Spanish files exist and are linked from English surface
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+
+          for f in README.es.md TROUBLESHOOTING.es.md; do
+            if [ ! -f "$f" ]; then
+              echo "FAIL: $f is missing"
+              fail=1
+            fi
+          done
+
+          if ! grep -q "README.es.md" README.md; then
+            echo "FAIL: README.md must link to README.es.md"
+            fail=1
+          fi
+          if ! grep -q "TROUBLESHOOTING.es.md" TROUBLESHOOTING.md; then
+            echo "FAIL: TROUBLESHOOTING.md must link to TROUBLESHOOTING.es.md"
+            fail=1
+          fi
+          if ! grep -q "TROUBLESHOOTING.es.md" README.es.md; then
+            echo "FAIL: README.es.md must link to TROUBLESHOOTING.es.md"
+            fail=1
+          fi
+          exit $fail
+
+      - name: README.es covers load-bearing sections
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          # Iterate with literal-quoted args so multi-word headings stay
+          # one item each. The heredoc form was correct shell but
+          # interacted badly with YAML block-scalar indentation rules.
+          for h in '## Instalación' '## Ejemplo' '## El sprint' '## Autopilot' '## Guard' '## Problemas comunes'; do
+            if ! grep -qE "^$h" README.es.md; then
+              echo "FAIL: README.es.md missing required section: $h"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: TROUBLESHOOTING.es covers most-encountered entries
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          # Spanish entries that map to the high-traffic English ones.
+          # Advanced topics (corporate proxy, telemetry, autopilot
+          # double-run) are allowed to live only in canonical English.
+          for h in 'Los comandos slash no aparecen' 'Command not found: jq' 'phase gate' 'Estoy en Windows' 'sprint' 'Conflicto de nombres'; do
+            if ! grep -qiE "$h" TROUBLESHOOTING.es.md; then
+              echo "FAIL: TROUBLESHOOTING.es.md missing high-traffic entry: $h"
+              fail=1
+            fi
+          done
+          exit $fail
+      # Previously plain-language-contract; run all checks even if an earlier check fails.
+      - name: Contract document exists and is referenced
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          if [ ! -f reference/plain-language-contract.md ]; then
+            echo "FAIL: reference/plain-language-contract.md is missing"
+            exit 1
+          fi
+          # Each user-facing skill must point at the contract so wording
+          # changes don't drift away from the canonical list.
+          for skill in think/SKILL.md plan/SKILL.md qa/SKILL.md ship/SKILL.md doctor/SKILL.md review/SKILL.md security/SKILL.md; do
+            if ! grep -q "reference/plain-language-contract.md" "$skill"; then
+              echo "FAIL: $skill must reference reference/plain-language-contract.md"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Guided fenced blocks pass the banned-term grep
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          # Banned terms (case-insensitive whole-word). Order matches
+          # the contract's term table. Patterns use word boundaries so
+          # "diff" doesn't match "different".
+          patterns='\bartifact\b|\bartifacts\b|\bPR\b|\bPRs\b|\bCI\b|\bbranch\b|\bbranches\b|\bdiff\b|\bdiffs\b|\bhook\b|\bhooks\b|\bphase\b|\bphases\b|\bsecurity audit\b|\bQA\b|\bscope drift\b'
+          for skill in think/SKILL.md plan/SKILL.md qa/SKILL.md ship/SKILL.md doctor/SKILL.md review/SKILL.md security/SKILL.md reference/plain-language-contract.md; do
+            # Extract fenced blocks. awk emits one line per block,
+            # joined with " || " so grep -E -i sees the full block.
+            blocks=$(awk '
+              /<!-- guided-output:start -->/ { capture=1; buf=""; next }
+              /<!-- guided-output:end -->/   { if (capture) { print buf; buf="" } capture=0; next }
+              capture { buf = buf " " $0 }
+            ' "$skill")
+            if [ -z "$blocks" ]; then
+              # Skills that print user-facing Guided output must include
+              # at least one example block. The contract reference itself
+              # has multiple examples and is allowed here too.
+              if [ "$skill" != "reference/plain-language-contract.md" ]; then
+                echo "FAIL: $skill has no <!-- guided-output --> example block"
                 fail=1
               fi
-            done
+              continue
+            fi
+            # Process substitution keeps $fail in the parent shell scope
+            # (a piped while runs in a subshell, which would lose the flag).
+            while IFS= read -r block; do
+              [ -z "$block" ] && continue
+              hit=$(echo "$block" | grep -i -oE "$patterns" || true)
+              if [ -n "$hit" ]; then
+                echo "FAIL: $skill guided block contains banned term(s): $(echo "$hit" | sort -u | tr '\n' ' ')"
+                echo "      block: $block"
+                fail=1
+              fi
+            done < <(printf '%s\n' "$blocks")
           done
           exit $fail
-
-      - name: THINK_JSON build site assigns each archetype field
-        run: |
-          set -e
-          fail=0
-          # The Phase 6 jq -n block must declare every archetype
-          # field as a key in summary. Loose grep on each colon-form
-          # the existing block uses.
-          for field in archetype archetype_confidence archetype_source archetype_reason example_reference; do
-            if ! grep -qE "${field}:[[:space:]]+\\\$${field}" think/SKILL.md; then
-              echo "FAIL: think/SKILL.md THINK_JSON does not assign summary.$field"
-              fail=1
-            fi
-          done
-          exit $fail
-
-      - name: Live save+read roundtrip with archetype + example_reference
-        run: |
-          set -e
-          fail=0
-          tmp=$(mktemp -d /tmp/arch-ci.XXXXXX)
-          cd "$tmp"
-          git init -q
-          mkdir -p .nanostack
-          export NANOSTACK_STORE="$tmp/.nanostack"
-
-          # Two payloads cover the full envelope: detected high-
-          # confidence + example, and the unknown/fallback case.
-          api_payload=$(jq -n '{
-            phase:"think",
-            summary:{
-              value_proposition:"Add /version endpoint",
-              scope_mode:"reduce", target_user:"backend dev",
-              narrowest_wedge:"GET /version", key_risk:"could break /health",
-              premise_validated:true, out_of_scope:[], manual_delivery_test:{possible:true,steps:[]},
-              search_summary:{mode:"local_only",result:"",existing_solution:"none"},
-              archetype:"api_backend", archetype_confidence:"high",
-              archetype_source:"detected_from_files",
-              archetype_reason:"Project has server.js.",
-              example_reference:{name:"api-healthcheck",path:"examples/api-healthcheck",why_relevant:"backend sandbox"}
-            },
-            context_checkpoint:{summary:"x"}
-          }')
-          $GITHUB_WORKSPACE/bin/save-artifact.sh think "$api_payload" >/dev/null
-
-          # Spec acceptance jq.
-          if ! jq -e '.summary.archetype == "api_backend" and .summary.archetype_confidence == "high" and .summary.archetype_source == "detected_from_files" and .summary.example_reference.path == "examples/api-healthcheck"' .nanostack/think/*.json >/dev/null; then
-            echo "FAIL: api_backend artifact did not preserve all archetype fields"
-            fail=1
-          fi
-
-          # Brief gate must still pass on the same artifact, with no
-          # archetype-aware filter. Same five fields the existing
-          # gate checks. A v1 reader without archetype knowledge
-          # must still see the artifact as complete.
-          gate=$(jq -r '
-            (.summary.value_proposition // "") != "" and
-            (.summary.target_user        // "") != "" and
-            (.summary.narrowest_wedge    // "") != "" and
-            (.summary.key_risk           // "") != "" and
-            ((.summary.premise_validated | type) == "boolean")
-          ' .nanostack/think/*.json)
-          if [ "$gate" != "true" ]; then
-            echo "FAIL: brief gate filter rejected an archetype-aware artifact"
-            fail=1
-          fi
-
-          # Reset and try the unknown/fallback envelope.
-          rm .nanostack/think/*.json
-          unknown_payload=$(jq -n '{
-            phase:"think",
-            summary:{
-              value_proposition:"Generic feature ask",
-              scope_mode:"reduce", target_user:"any",
-              narrowest_wedge:"smallest version", key_risk:"premise unclear",
-              premise_validated:false, out_of_scope:[], manual_delivery_test:{possible:false,steps:[]},
-              search_summary:{mode:"local_only",result:"",existing_solution:"none"},
-              archetype:"unknown", archetype_confidence:"low",
-              archetype_source:"fallback", archetype_reason:"",
-              example_reference:null
-            },
-            context_checkpoint:{summary:"x"}
-          }')
-          $GITHUB_WORKSPACE/bin/save-artifact.sh think "$unknown_payload" >/dev/null
-
-          if ! jq -e '.summary.archetype == "unknown" and .summary.archetype_source == "fallback" and .summary.example_reference == null' .nanostack/think/*.json >/dev/null; then
-            echo "FAIL: unknown archetype artifact did not preserve fallback fields"
-            fail=1
-          fi
-          # Brief gate still passes with archetype=unknown and
-          # premise_validated=false (PR #173 fix held).
-          gate=$(jq -r '
-            (.summary.value_proposition // "") != "" and
-            (.summary.target_user        // "") != "" and
-            (.summary.narrowest_wedge    // "") != "" and
-            (.summary.key_risk           // "") != "" and
-            ((.summary.premise_validated | type) == "boolean")
-          ' .nanostack/think/*.json)
-          if [ "$gate" != "true" ]; then
-            echo "FAIL: brief gate filter rejected unknown/false-premise artifact (PR #173 regression)"
-            fail=1
-          fi
-
-          exit $fail
-
-  think-archetype-lens-routing:
-    name: /think archetype lens routing + preset interaction
-    runs-on: ubuntu-latest
-    # Guided Archetypes v1 PR 3. Three rules to lock at lint time:
-    #   1. Explicit --preset wins over the archetype's default lens.
-    #   2. The archetype -> internal lens table is documented in
-    #      think/SKILL.md so the runtime can read it without
-    #      re-deriving rules from prose.
-    #   3. Guided fenced output blocks for each archetype (in
-    #      think/references/archetypes.md) do NOT contain "preset",
-    #      "archetype", or "mode" — the three archetype-specific
-    #      banned terms on top of the plain-language contract bans.
-    steps:
-      - uses: actions/checkout@v4
-      - name: Preset section names explicit-preset-wins rule
-        run: |
-          set -e
-          # Loose grep: any phrasing is fine as long as the rule is
-          # named in the user-facing surface. Common phrasings:
-          # "Explicit --preset always wins", "explicit preset wins",
-          # "--preset always wins".
-          if ! grep -qE 'Explicit `?--preset`?[^\\n]*wins|explicit (--)?preset.*wins' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md must state that explicit --preset wins over the archetype's lens"
-            exit 1
-          fi
-
-      - name: Per-archetype lens map present in think/SKILL.md
-        run: |
-          set -e
-          fail=0
-          # Loose grep: each canonical archetype must appear in the
-          # Preset Selection section (where the lens table lives).
-          # The exact wording can change; the names cannot drift.
-          for arch in founder_validation cli_tooling api_backend landing_experience; do
-            if ! grep -q "$arch" think/SKILL.md; then
-              echo "FAIL: think/SKILL.md missing archetype lens entry: $arch"
-              fail=1
-            fi
-          done
-          # Each archetype's default lens name must appear too.
-          for lens in yc devex eng design; do
-            if ! grep -q "\`$lens\`" think/SKILL.md; then
-              echo "FAIL: think/SKILL.md missing internal lens reference: $lens"
-              fail=1
-            fi
-          done
-          exit $fail
-
-      - name: Guided fenced blocks in archetypes.md pass banned-term grep
-        run: |
-          set -e
-          fail=0
-          # Plain-language banned terms PLUS the three archetype-
-          # specific words (archetype, preset, mode). Patterns use
-          # word boundaries so "diff" does not match "different".
-          patterns='\bartifact\b|\bartifacts\b|\bPR\b|\bPRs\b|\bCI\b|\bbranch\b|\bbranches\b|\bdiff\b|\bdiffs\b|\bhook\b|\bhooks\b|\bphase\b|\bphases\b|\bsecurity audit\b|\bQA\b|\bscope drift\b|\barchetype\b|\bpreset\b|\bmode\b'
-          blocks=$(awk '
-            /<!-- guided-output:start -->/ { capture=1; buf=""; next }
-            /<!-- guided-output:end -->/   { if (capture) { print buf; buf="" } capture=0; next }
-            capture { buf = buf " " $0 }
-          ' think/references/archetypes.md)
-          if [ -z "$blocks" ]; then
-            echo "FAIL: archetypes.md must contain at least one <!-- guided-output --> example block"
-            exit 1
-          fi
-          while IFS= read -r block; do
-            [ -z "$block" ] && continue
-            hit=$(echo "$block" | grep -i -oE "$patterns" || true)
-            if [ -n "$hit" ]; then
-              echo "FAIL: archetypes.md guided block contains banned term(s): $(echo "$hit" | sort -u | tr '\n' ' ')"
-              echo "      block: $block"
-              fail=1
-            fi
-          done < <(printf '%s\n' "$blocks")
-          exit $fail
-
-  think-archetype-aliases:
-    name: /think archetypes alias map present
-    runs-on: ubuntu-latest
-    # Guided Archetypes v1 PR 2. The alias map is the single user-
-    # facing entry point. CI ensures the four canonical archetype
-    # names plus the most-used short aliases are documented in the
-    # contract reference, so a future edit cannot drop a canonical
-    # without breaking lint.
-    steps:
-      - uses: actions/checkout@v4
-      - name: Canonical archetypes named in archetypes.md
-        run: |
-          set -e
-          fail=0
-          for canonical in founder_validation cli_tooling api_backend landing_experience; do
-            if ! grep -q "$canonical" think/references/archetypes.md; then
-              echo "FAIL: think/references/archetypes.md missing canonical archetype: $canonical"
-              fail=1
-            fi
-          done
-          # Short aliases the skill normalizes from. Spec lists these
-          # as the words a user actually types.
-          for alias in 'founder' 'cli' 'api' 'landing' 'design' 'backend' 'non-technical'; do
-            if ! grep -q "$alias" think/references/archetypes.md; then
-              echo "FAIL: think/references/archetypes.md missing alias: $alias"
-              fail=1
-            fi
-          done
-          exit $fail
-
-      - name: think/SKILL.md normalizes the alias map
-        run: |
-          set -e
-          if ! grep -q 'think/references/archetypes.md' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md must reference think/references/archetypes.md"
-            exit 1
-          fi
-          # The skill must mention --archetype as an accepted flag
-          # AND the four short aliases; otherwise the user-facing
-          # surface drifts from the contract.
-          if ! grep -qE '\-\-archetype' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md must accept --archetype flag"
-            exit 1
-          fi
-
-  think-archetype-no-wizard:
-    name: /think archetypes one-question rule (no wizard)
-    runs-on: ubuntu-latest
-    # The classifier asks at most one question, only when confidence
-    # is low. Multi-question forms ("Question 1... Question 2...",
-    # "answer all", "fill out this form", "choose all that apply")
-    # would turn /think into a survey. This job blocks the regression.
-    steps:
-      - uses: actions/checkout@v4
-      - name: think/SKILL.md and archetypes.md have no multi-question forms
-        run: |
-          set -e
-          fail=0
-          for pattern in 'Question 1.*Question 2' 'answer all' 'fill out this form' 'choose all that apply'; do
-            if grep -nE "$pattern" think/SKILL.md think/references/archetypes.md 2>/dev/null; then
-              echo "FAIL: forbidden multi-question pattern present: $pattern"
-              fail=1
-            fi
-          done
-          exit $fail
-
-  think-archetype-examples-source:
-    name: /think archetypes reference all four Examples Library paths
-    runs-on: ubuntu-latest
-    # Each archetype is grounded in a validated example. If the
-    # contract drops one, downstream skills lose the example_reference
-    # they save into the artifact. Lint enforces the reference set
-    # is complete.
-    steps:
-      - uses: actions/checkout@v4
-      - name: archetypes.md mentions every Examples Library archetype path
-        run: |
-          set -e
-          fail=0
-          for example in starter-todo cli-notes api-healthcheck static-landing; do
-            if ! grep -q "examples/$example" think/references/archetypes.md; then
-              echo "FAIL: think/references/archetypes.md missing examples/$example"
-              fail=1
-            fi
-          done
-          exit $fail
-
-  think-archetype-brief-gate:
-    name: /think archetypes do not block the brief gate
-    runs-on: ubuntu-latest
-    # The autopilot brief gate (Phase 6.6) checks five fields. The
-    # archetype field is OPTIONAL and the gate must NOT consult it.
-    # A future edit that adds archetype to the gate jq filter would
-    # break backward compatibility for v1 sessions and previous
-    # think artifacts that have no archetype set. This job blocks
-    # that drift.
-    steps:
-      - uses: actions/checkout@v4
-      - name: Brief gate jq filter does not reference archetype
-        run: |
-          set -e
-          # Find the GATE_OK jq block in think/SKILL.md and confirm
-          # archetype does not appear inside it. Loose pattern: the
-          # entire span between "GATE_OK=$(jq" and the matching
-          # closing single quote on the line that has " THINK_FILE"
-          # or 'THINK_FILE'.
-          gate_block=$(awk '
-            /GATE_OK=\$\(jq/ { capture=1 }
-            capture { print }
-            capture && /THINK_FILE"\)/ { capture=0 }
-          ' think/SKILL.md)
-          if [ -z "$gate_block" ]; then
-            echo "FAIL: could not locate the GATE_OK jq block in think/SKILL.md"
-            exit 1
-          fi
-          if echo "$gate_block" | grep -qF 'archetype'; then
-            echo "FAIL: brief gate jq filter references archetype; archetype must remain optional"
-            echo "$gate_block"
-            exit 1
-          fi
-          # Positive check: the five required fields are all named in
-          # the gate. Drift away from those is a separate failure
-          # mode the existing think-autopilot-brief-gate job already
-          # covers, but assert here too so the diagnostic is precise.
-          for field in value_proposition target_user narrowest_wedge key_risk premise_validated; do
-            if ! echo "$gate_block" | grep -qF ".summary.$field"; then
-              echo "FAIL: brief gate missing required field: .summary.$field"
-              exit 1
-            fi
-          done
-
-  think-search-privacy:
-    name: /think search-before-building has modes + privacy boundary
-    runs-on: ubuntu-latest
-    # /think vNext PR 5. Search must respect privacy (private repos,
-    # sensitive keywords, non-technical users) and offline. The
-    # reference doc carries the contract; this job prevents
-    # accidental simplification that drops a mode or a boundary.
-    steps:
-      - uses: actions/checkout@v4
-      - name: search-before-building.md declares the three modes
-        run: |
-          set -e
-          fail=0
-          for mode in local_only private public; do
-            if ! grep -qE "\`?${mode}\`?" think/references/search-before-building.md; then
-              echo "FAIL: search-before-building.md missing mode '$mode'"
-              fail=1
-            fi
-          done
-          # The doc must mention each load-bearing concept. Loose grep
-          # by keyword: any phrasing is fine as long as the concept is
-          # covered.
-          for concept in 'Default selection' 'Offline fallback' 'Prompt-injection' 'search_summary'; do
-            if ! grep -qi "$concept" think/references/search-before-building.md; then
-              echo "FAIL: search-before-building.md missing concept '$concept'"
-              fail=1
-            fi
-          done
-          # search_summary fields by name.
-          for field in mode result existing_solution; do
-            if ! grep -qE "\"$field\"" think/references/search-before-building.md; then
-              echo "FAIL: search-before-building.md must document search_summary.$field"
-              fail=1
-            fi
-          done
-          # Sensitive-signal trigger words: at least four of the spec's
-          # examples must appear. The spec is intentionally not a
-          # closed set; this gate just stops the doc from drifting to
-          # zero-signal generic prose.
-          hits=0
-          for kw in cliente client contrato contract compliance auth payments credentials internal proprietary stealth nda; do
-            if grep -qiw "$kw" think/references/search-before-building.md; then
-              hits=$((hits+1))
-            fi
-          done
-          if [ "$hits" -lt 4 ]; then
-            echo "FAIL: search-before-building.md mentions only $hits sensitive-signal keywords (need >=4)"
-            fail=1
-          fi
-          exit $fail
-
-      - name: think/SKILL.md routes search results into search_summary
-        run: |
-          set -e
-          fail=0
-          if ! grep -q 'search-before-building.md' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md must reference search-before-building.md"
-            fail=1
-          fi
-          if ! grep -q 'summary.search_summary' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md must say search results land in summary.search_summary"
-            fail=1
-          fi
-          exit $fail
-
-  think-preset-no-dump:
-    name: /think preset loading without output noise
-    runs-on: ubuntu-latest
-    # /think vNext PR 4. Preset markdown is internal voice instruction,
-    # not user-facing content. Dumping it via `cat "$PRESET_FILE"` puts
-    # 50+ lines of rules on the first screen the user sees, which is
-    # noise for technical users and overwhelm for non-technical ones.
-    # The skill must read the preset internally and print one short
-    # headline.
-    steps:
-      - uses: actions/checkout@v4
-      - name: think/SKILL.md does not dump preset files
-        run: |
-          set -e
-          fail=0
-          # Forbidden literal forms the spec called out:
-          if grep -nE 'cat[[:space:]]+"\$PRESET_FILE"' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md must not 'cat \$PRESET_FILE' (regression: floods first screen with rules)"
-            fail=1
-          fi
-          if grep -nE 'cat[[:space:]]+"\$HOME/\.claude/skills/nanostack/think/presets/default\.md"' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md must not cat default.md either"
-            fail=1
-          fi
-          # Profile-keyed headline: at least mention 'Preset:' (professional)
-          # AND 'guided' (so the doc covers both voices).
-          if ! grep -q 'Preset:' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md must show a one-line 'Preset: <name>.' headline"
-            fail=1
-          fi
-          # Spec rule: skill must say it loads the preset internally,
-          # not dump it.
-          if ! grep -qE 'Load the preset internally|read the file' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md must declare that it loads the preset internally"
-            fail=1
-          fi
-          exit $fail
-
-  think-autopilot-brief-gate:
-    name: /think autopilot brief gate
-    runs-on: ubuntu-latest
-    # /think vNext PR 3. Autopilot's promise is "discuss the idea,
-    # approve the brief, walk away". That is only honest when there
-    # is actually a brief to walk away from. /think must validate
-    # the structured artifact's required fields before advancing,
-    # and stop with one focused question when any field is missing
-    # or empty.
-    steps:
-      - uses: actions/checkout@v4
-      - name: think/SKILL.md declares the Brief Gate before Next Step
-        run: |
-          set -e
-          fail=0
-          if ! grep -qE '^### Phase 6\.6: Minimum Viable Brief Gate' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md must define the Phase 6.6 Brief Gate"
-            fail=1
-          fi
-          # Phase 6.6 must come before Phase 7 (Next Step) so the gate
-          # runs before the autopilot continuation.
-          gate_line=$(grep -n '^### Phase 6\.6: Minimum Viable Brief Gate' think/SKILL.md | head -1 | cut -d: -f1)
-          next_line=$(grep -n '^### Phase 7: Next Step' think/SKILL.md | head -1 | cut -d: -f1)
-          if [ -z "$gate_line" ] || [ -z "$next_line" ] || [ "$gate_line" -ge "$next_line" ]; then
-            echo "FAIL: Phase 6.6 Brief Gate must appear before Phase 7 Next Step"
-            fail=1
-          fi
-          # Gate must check every required field by name.
-          for field in value_proposition target_user narrowest_wedge key_risk premise_validated; do
-            if ! grep -qE "summary\.$field" think/SKILL.md; then
-              echo "FAIL: Brief Gate must check .summary.$field"
-              fail=1
-            fi
-          done
-          # Phase 7 must explicitly handle the gate-failed branch
-          # (not advance to /nano).
-          if ! grep -qE 'Brief Gate (failed|passed)' think/SKILL.md; then
-            echo "FAIL: Phase 7 must reference Brief Gate passed/failed branches"
-            fail=1
-          fi
-          exit $fail
-
-      - name: README and README.es ship the autopilot wording
-        run: |
-          set -e
-          fail=0
-          # English: spec asks for the literal "autopilot continues
-          # after a complete brief, not after blind guessing".
-          if ! grep -q 'complete brief, not after blind guessing' README.md; then
-            echo "FAIL: README.md must include 'complete brief, not after blind guessing'"
-            fail=1
-          fi
-          # Spanish: parity wording naming the gate behavior.
-          if ! grep -qiE 'brief completo|adivinando' README.es.md; then
-            echo "FAIL: README.es.md must mirror the autopilot brief-gate wording"
-            fail=1
-          fi
-          exit $fail
-
-  think-session-first:
-    name: /think reads session state (profile/run_mode/autopilot)
-    runs-on: ubuntu-latest
-    # /think vNext PR 2. Every other Sprint phase routes through the
-    # session-state contract; /think used detect_git_mode as the only
-    # signal for "non-technical user". On Codex/Cursor/OpenCode the
-    # adapter declares instructions_only, so the user can be guided
-    # even with git. Trust profile from the session, not detect_git_mode
-    # alone.
-    steps:
-      - uses: actions/checkout@v4
-      - name: think/SKILL.md reads canonical session fields
-        run: |
-          set -e
-          fail=0
-          if ! grep -q 'reference/session-state-contract.md' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md must reference reference/session-state-contract.md"
-            fail=1
-          fi
-          for var in PROFILE RUN_MODE AUTOPILOT PLAN_APPROVAL HOST; do
-            if ! grep -qE "$var=.*jq" think/SKILL.md; then
-              echo "FAIL: think/SKILL.md must read $var via jq from session.json"
-              fail=1
-            fi
-          done
-          # Profile selection must NOT be derived from detect_git_mode
-          # alone. The skill may still mention detect_git_mode as a
-          # secondary signal, but it must explicitly say so.
-          if grep -nE 'detect_git_mode.*(local).*(non-technical|guided)' think/SKILL.md \
-             | grep -v 'secondary signal'; then
-            echo "FAIL: think/SKILL.md couples guided/non-technical to detect_git_mode without naming it as secondary"
-            fail=1
-          fi
-          exit $fail
-
-      - name: "profile resolution: Codex+git is guided"
-        run: |
-          set -e
-          tmp=$(mktemp -d /tmp/think-profile.XXXXXX)
-          cd "$tmp"
-          git init -q
-          mkdir -p .nanostack
-          export NANOSTACK_STORE="$tmp/.nanostack"
-          ( export NANOSTACK_HOST=codex; $GITHUB_WORKSPACE/bin/session.sh init development >/dev/null )
-          profile=$(jq -r .profile .nanostack/session.json)
-          if [ "$profile" != "guided" ]; then
-            echo "FAIL: Codex+git resolved to '$profile' (expected 'guided' from instructions_only adapter)"
-            exit 1
-          fi
-          # And Claude+git stays professional.
-          ( export NANOSTACK_HOST=claude; $GITHUB_WORKSPACE/bin/session.sh init development >/dev/null )
-          profile=$(jq -r .profile .nanostack/session.json)
-          if [ "$profile" != "professional" ]; then
-            echo "FAIL: Claude+git resolved to '$profile' (expected 'professional')"
-            exit 1
-          fi
-
-  think-structured-artifact:
-    name: /think saves structured JSON artifact
-    runs-on: ubuntu-latest
-    # /think vNext PR 1. The artifact is the contract /nano,
-    # sprint-journal, and resolve.sh consume. Refusing to advance to
-    # /nano without a value_proposition / narrowest_wedge / key_risk
-    # is only honest when those fields actually live as named JSON
-    # keys, not as a prose blob inside summary.value.
-    steps:
-      - uses: actions/checkout@v4
-      - name: think/SKILL.md does not save via --from-session
-        run: |
-          set -e
-          fail=0
-          if grep -nE 'save-artifact\.sh[[:space:]]+--from-session[[:space:]]+think' think/SKILL.md; then
-            echo "FAIL: /think must save structured JSON, not the --from-session prose form"
-            fail=1
-          fi
-          # Must have the structured-save block: jq -n with the named
-          # fields the spec requires. Loose grep on the field names
-          # avoids brittleness to formatting changes.
-          for field in value_proposition scope_mode target_user narrowest_wedge key_risk premise_validated; do
-            if ! grep -q "$field" think/SKILL.md; then
-              echo "FAIL: think/SKILL.md must mention required field '$field'"
-              fail=1
-            fi
-          done
-          # Save call site must reference the canonical schema doc.
-          if ! grep -q 'reference/artifact-schema.md' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md must point at reference/artifact-schema.md"
-            fail=1
-          fi
-          exit $fail
-
-      - name: artifact-schema.md declares the extended /think shape
-        run: |
-          set -e
-          fail=0
-          # The schema doc must include the new optional fields too,
-          # so future skills can rely on their names without each
-          # adding their own ad-hoc convention.
-          for field in out_of_scope manual_delivery_test search_summary context_checkpoint; do
-            if ! grep -q "$field" reference/artifact-schema.md; then
-              echo "FAIL: reference/artifact-schema.md missing field '$field' in /think schema"
-              fail=1
-            fi
-          done
-          exit $fail
-
-      - name: structured artifact roundtrip (jq queries from spec pass)
-        run: |
-          set -e
-          fail=0
-          tmp=$(mktemp -d /tmp/think-ci.XXXXXX)
-          cd "$tmp"
-          git init -q
-          mkdir -p .nanostack
-          export NANOSTACK_STORE="$tmp/.nanostack"
-          $GITHUB_WORKSPACE/bin/session.sh init development >/dev/null
-          THINK_JSON=$(jq -n '{
-            phase:"think",
-            summary:{value_proposition:"VP", scope_mode:"reduce", target_user:"TU", narrowest_wedge:"NW", key_risk:"KR", premise_validated:true, out_of_scope:["x"]},
-            context_checkpoint:{summary:"x"}
-          }')
-          $GITHUB_WORKSPACE/bin/save-artifact.sh think "$THINK_JSON" >/dev/null
-          # The three jq queries the spec names as acceptance must succeed.
-          jq -e '.summary.value_proposition' .nanostack/think/*.json >/dev/null || { echo "FAIL: value_proposition not retrievable"; fail=1; }
-          jq -e '.summary.narrowest_wedge'   .nanostack/think/*.json >/dev/null || { echo "FAIL: narrowest_wedge not retrievable"; fail=1; }
-          jq -e '.summary.key_risk'          .nanostack/think/*.json >/dev/null || { echo "FAIL: key_risk not retrievable"; fail=1; }
-          # sprint-journal.sh consumes those exact fields; smoke-check it
-          # does not crash.
-          $GITHUB_WORKSPACE/bin/sprint-journal.sh >/dev/null 2>&1 || { echo "FAIL: sprint-journal crashed on structured think artifact"; fail=1; }
-          exit $fail
-
-  guided-skeleton-single-source:
-    name: Guided skeleton has a single source of truth
-    runs-on: ubuntu-latest
-    # Retest follow-up P2. Two divergent four-block lists existed: the
-    # plain-language contract (Result/How to try/What was checked/
-    # What remains) and the session-state contract (What was checked/
-    # Safe to try/One next action/What remains). Skills could "comply"
-    # with one and violate the other. This job pins
-    # plain-language-contract.md as canonical and refuses any reintro
-    # of a numbered skeleton in session-state-contract.md.
-    steps:
-      - uses: actions/checkout@v4
-      - name: plain-language-contract.md owns the four-block list
-        run: |
-          set -e
-          # Canonical list must define the four blocks in this exact
-          # order (the skill greps and the plain-language CI lock onto
-          # these names).
-          fail=0
-          for block in 'Result' 'How to try' 'What was checked' 'What remains'; do
-            if ! grep -qE "\*\*${block}\*\*|\*\*${block}\.\*\*" reference/plain-language-contract.md; then
-              echo "FAIL: plain-language-contract.md missing canonical block: $block"
-              fail=1
-            fi
-          done
-          exit $fail
-
-      - name: session-state-contract.md does not redefine the skeleton
-        run: |
-          set -e
-          fail=0
-          # Must reference the plain-language contract for the skeleton.
-          if ! grep -q 'reference/plain-language-contract.md' reference/session-state-contract.md; then
-            echo "FAIL: session-state-contract.md must point at plain-language-contract.md for the Guided skeleton"
-            fail=1
-          fi
-          # Must NOT contain a numbered list of four bold-headed blocks
-          # in the Guided section. We scan the "Guided final-output"
-          # block specifically, between its heading and the next H2.
-          guided=$(awk '/^## Guided final-output/{flag=1; next} /^## /{flag=0} flag' reference/session-state-contract.md)
-          numbered_bold=$(echo "$guided" | grep -cE '^[1-4]\. \*\*' || true)
-          if [ "$numbered_bold" -ge 4 ]; then
-            echo "FAIL: session-state-contract.md redefines a four-block skeleton (must reference plain-language-contract.md instead)"
-            echo "$guided"
-            fail=1
-          fi
-          exit $fail
-
-      - name: SKILL.md files reference the canonical skeleton (not the old session-state list)
-        run: |
-          set -e
-          fail=0
-          # If a skill mentions "four blocks from reference/session-state-contract.md"
-          # that points at the old (now removed) list and is a regression.
-          # The canonical pointer phrase is "four-block skeleton in reference/plain-language-contract.md".
-          for skill in review/SKILL.md security/SKILL.md qa/SKILL.md; do
-            if grep -q "four blocks from .reference/session-state-contract.md" "$skill"; then
-              echo "FAIL: $skill points at the removed four-block list in session-state-contract.md"
-              fail=1
-            fi
-          done
-          exit $fail
-
-  ship-report-only:
-    name: /ship respects run_mode=report_only
-    runs-on: ubuntu-latest
-    # Retest follow-up P1. Every other phase already routes through the
-    # session-state contract; ship/SKILL.md must declare the same
-    # contract before the pipeline section so a future edit cannot
-    # silently bypass report-only and start mutating state.
-    steps:
-      - uses: actions/checkout@v4
+      # Previously ship-report-only; run all checks even if an earlier check fails.
       - name: ship/SKILL.md reads run_mode
+        if: ${{ !cancelled() }}
         run: |
           set -e
           fail=0
@@ -1821,50 +1997,60 @@ jobs:
             fail=1
           fi
           exit $fail
+      # Previously guided-skeleton-single-source; run all checks even if an earlier check fails.
+      - name: plain-language-contract.md owns the four-block list
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          # Canonical list must define the four blocks in this exact
+          # order (the skill greps and the plain-language CI lock onto
+          # these names).
+          fail=0
+          for block in 'Result' 'How to try' 'What was checked' 'What remains'; do
+            if ! grep -qE "\*\*${block}\*\*|\*\*${block}\.\*\*" reference/plain-language-contract.md; then
+              echo "FAIL: plain-language-contract.md missing canonical block: $block"
+              fail=1
+            fi
+          done
+          exit $fail
 
-  readme-public-copy:
-    name: README public-copy regression lock
-    runs-on: ubuntu-latest
-    # Spec public-copy-regression-locks-2026-04-26. Stale claims have
-    # bitten this repo before (telemetry endpoint "lands in a later
-    # PR" stayed in the README months after the Worker shipped). This
-    # job asserts the stale strings the spec called out are gone and
-    # the required v1.0/Examples-Library/telemetry framing is present.
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run README public-copy lock
-        run: ci/check-readme-public-copy.sh
+      - name: session-state-contract.md does not redefine the skeleton
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          # Must reference the plain-language contract for the skeleton.
+          if ! grep -q 'reference/plain-language-contract.md' reference/session-state-contract.md; then
+            echo "FAIL: session-state-contract.md must point at plain-language-contract.md for the Guided skeleton"
+            fail=1
+          fi
+          # Must NOT contain a numbered list of four bold-headed blocks
+          # in the Guided section. We scan the "Guided final-output"
+          # block specifically, between its heading and the next H2.
+          guided=$(awk '/^## Guided final-output/{flag=1; next} /^## /{flag=0} flag' reference/session-state-contract.md)
+          numbered_bold=$(echo "$guided" | grep -cE '^[1-4]\. \*\*' || true)
+          if [ "$numbered_bold" -ge 4 ]; then
+            echo "FAIL: session-state-contract.md redefines a four-block skeleton (must reference plain-language-contract.md instead)"
+            echo "$guided"
+            fail=1
+          fi
+          exit $fail
 
-  readme-narrative-locks:
-    name: README narrative claim locks
-    runs-on: ubuntu-latest
-    # Spec readme-product-narrative-refresh-2026-04-26. PR 1 of the
-    # round rewrote the README around "default sprint + framework
-    # for workflow stacks". This job locks the new claim surface so
-    # later edits do not silently drift back to the older wording or
-    # reintroduce the disallowed phrases the spec called out (Amp,
-    # Cline, Antigravity, "4 commands", "every workflow run", etc.).
-    # The existing readme-public-copy job above already locks an
-    # earlier round's required + stale set; this job is additive.
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run README narrative claim locks
-        run: ci/check-readme-narrative-locks.sh
-
-  release-docs-locks:
-    name: Release-surface doc locks (notes, EXTENDING, llms, AGENTS)
-    runs-on: ubuntu-latest
-    # Spec release-readme-site-refresh-2026-05-29 PR 3. The narrative
-    # locks above cover README.md and README.es.md. This job locks the
-    # rest of the release surface the refresh round touched
-    # (RELEASE_NOTES.md, EXTENDING.md, llms.txt, AGENTS.md): the same
-    # required + forbidden token set, plus a version-currency check so a
-    # published release cannot advertise a version that differs from the
-    # VERSION file.
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run release-surface doc locks
-        run: ci/check-release-docs-locks.sh
+      - name: SKILL.md files reference the canonical skeleton (not the old session-state list)
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          fail=0
+          # If a skill mentions "four blocks from reference/session-state-contract.md"
+          # that points at the old (now removed) list and is a regression.
+          # The canonical pointer phrase is "four-block skeleton in reference/plain-language-contract.md".
+          for skill in review/SKILL.md security/SKILL.md qa/SKILL.md; do
+            if grep -q "four blocks from .reference/session-state-contract.md" "$skill"; then
+              echo "FAIL: $skill points at the removed four-block list in session-state-contract.md"
+              fail=1
+            fi
+          done
+          exit $fail
 
   helper-path-containment:
     name: Helper scripts stay within their folders
@@ -1932,435 +2118,6 @@ jobs:
         run: |
           chmod +x ci/check-examples.sh
           ci/check-examples.sh
-
-  v1-release-framing:
-    name: v1.0 release framing (Guided/Professional in READMEs)
-    runs-on: ubuntu-latest
-    # Sprint 6 release contract. Once v1.0 is out, both READMEs must
-    # carry the Guided/Professional framing — the public face of the
-    # delivery-experience release. Reverting that wording would orphan
-    # the implementation work in Sprints 1-5. Lock it in CI.
-    steps:
-      - uses: actions/checkout@v4
-      - name: VERSION file is well-formed semver
-        run: |
-          set -e
-          ver=$(tr -d '[:space:]' < VERSION 2>/dev/null)
-          if [ -z "$ver" ]; then
-            echo "FAIL: VERSION file is missing or empty"
-            exit 1
-          fi
-          if ! echo "$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "FAIL: VERSION '$ver' is not semver MAJOR.MINOR.PATCH"
-            exit 1
-          fi
-
-      - name: README.md introduces Guided + Professional profiles
-        run: |
-          set -e
-          fail=0
-          # Both terms appear, plus the section heading. The section
-          # name "Two profiles, same rigor" anchors the navigation
-          # link so it cannot drift silently.
-          for term in 'Guided' 'Professional' 'Two profiles, same rigor'; do
-            if ! grep -q "$term" README.md; then
-              echo "FAIL: README.md must mention '$term'"
-              fail=1
-            fi
-          done
-          # The session-state and plain-language references must be
-          # public-facing too so users can find the wording rules.
-          if ! grep -q "reference/plain-language-contract.md" README.md; then
-            echo "FAIL: README.md must link to reference/plain-language-contract.md"
-            fail=1
-          fi
-          if ! grep -q "reference/session-state-contract.md" README.md; then
-            echo "FAIL: README.md must link to reference/session-state-contract.md"
-            fail=1
-          fi
-          exit $fail
-
-      - name: README.es.md mirrors the framing in Spanish
-        run: |
-          set -e
-          fail=0
-          for term in 'Guiado' 'Profesional' 'Dos perfiles, mismo rigor'; do
-            if ! grep -q "$term" README.es.md; then
-              echo "FAIL: README.es.md must mention '$term'"
-              fail=1
-            fi
-          done
-          if ! grep -q "reference/plain-language-contract.md" README.es.md; then
-            echo "FAIL: README.es.md must link to reference/plain-language-contract.md"
-            fail=1
-          fi
-          if ! grep -q "reference/session-state-contract.md" README.es.md; then
-            echo "FAIL: README.es.md must link to reference/session-state-contract.md"
-            fail=1
-          fi
-          exit $fail
-
-  spanish-surface-parity:
-    name: Spanish surface parity
-    runs-on: ubuntu-latest
-    # Sprint 5 contract. README.es and TROUBLESHOOTING.es must exist
-    # and cover the load-bearing entries; README.md must link to the
-    # Spanish surface so a first-10-minute user finds it without
-    # scrolling. Advanced material can point to canonical English.
-    steps:
-      - uses: actions/checkout@v4
-      - name: Spanish files exist and are linked from English surface
-        run: |
-          set -e
-          fail=0
-
-          for f in README.es.md TROUBLESHOOTING.es.md; do
-            if [ ! -f "$f" ]; then
-              echo "FAIL: $f is missing"
-              fail=1
-            fi
-          done
-
-          if ! grep -q "README.es.md" README.md; then
-            echo "FAIL: README.md must link to README.es.md"
-            fail=1
-          fi
-          if ! grep -q "TROUBLESHOOTING.es.md" TROUBLESHOOTING.md; then
-            echo "FAIL: TROUBLESHOOTING.md must link to TROUBLESHOOTING.es.md"
-            fail=1
-          fi
-          if ! grep -q "TROUBLESHOOTING.es.md" README.es.md; then
-            echo "FAIL: README.es.md must link to TROUBLESHOOTING.es.md"
-            fail=1
-          fi
-          exit $fail
-
-      - name: README.es covers load-bearing sections
-        run: |
-          set -e
-          fail=0
-          # Iterate with literal-quoted args so multi-word headings stay
-          # one item each. The heredoc form was correct shell but
-          # interacted badly with YAML block-scalar indentation rules.
-          for h in '## Instalación' '## Ejemplo' '## El sprint' '## Autopilot' '## Guard' '## Problemas comunes'; do
-            if ! grep -qE "^$h" README.es.md; then
-              echo "FAIL: README.es.md missing required section: $h"
-              fail=1
-            fi
-          done
-          exit $fail
-
-      - name: TROUBLESHOOTING.es covers most-encountered entries
-        run: |
-          set -e
-          fail=0
-          # Spanish entries that map to the high-traffic English ones.
-          # Advanced topics (corporate proxy, telemetry, autopilot
-          # double-run) are allowed to live only in canonical English.
-          for h in 'Los comandos slash no aparecen' 'Command not found: jq' 'phase gate' 'Estoy en Windows' 'sprint' 'Conflicto de nombres'; do
-            if ! grep -qiE "$h" TROUBLESHOOTING.es.md; then
-              echo "FAIL: TROUBLESHOOTING.es.md missing high-traffic entry: $h"
-              fail=1
-            fi
-          done
-          exit $fail
-
-  plain-language-contract:
-    name: Plain-language contract (Guided output)
-    runs-on: ubuntu-latest
-    # Sprint 4 contract. The wording rule applies to user-facing Guided
-    # output, not to skill instructions. To avoid false positives on
-    # prose like "scope drift is informational", only the fenced blocks
-    # marked with <!-- guided-output:start --> ... <!-- guided-output:end -->
-    # are scanned. Outside the fence, banned terms are allowed.
-    steps:
-      - uses: actions/checkout@v4
-      - name: Contract document exists and is referenced
-        run: |
-          set -e
-          fail=0
-          if [ ! -f reference/plain-language-contract.md ]; then
-            echo "FAIL: reference/plain-language-contract.md is missing"
-            exit 1
-          fi
-          # Each user-facing skill must point at the contract so wording
-          # changes don't drift away from the canonical list.
-          for skill in think/SKILL.md plan/SKILL.md qa/SKILL.md ship/SKILL.md doctor/SKILL.md review/SKILL.md security/SKILL.md; do
-            if ! grep -q "reference/plain-language-contract.md" "$skill"; then
-              echo "FAIL: $skill must reference reference/plain-language-contract.md"
-              fail=1
-            fi
-          done
-          exit $fail
-
-      - name: Guided fenced blocks pass the banned-term grep
-        run: |
-          set -e
-          fail=0
-          # Banned terms (case-insensitive whole-word). Order matches
-          # the contract's term table. Patterns use word boundaries so
-          # "diff" doesn't match "different".
-          patterns='\bartifact\b|\bartifacts\b|\bPR\b|\bPRs\b|\bCI\b|\bbranch\b|\bbranches\b|\bdiff\b|\bdiffs\b|\bhook\b|\bhooks\b|\bphase\b|\bphases\b|\bsecurity audit\b|\bQA\b|\bscope drift\b'
-          for skill in think/SKILL.md plan/SKILL.md qa/SKILL.md ship/SKILL.md doctor/SKILL.md review/SKILL.md security/SKILL.md reference/plain-language-contract.md; do
-            # Extract fenced blocks. awk emits one line per block,
-            # joined with " || " so grep -E -i sees the full block.
-            blocks=$(awk '
-              /<!-- guided-output:start -->/ { capture=1; buf=""; next }
-              /<!-- guided-output:end -->/   { if (capture) { print buf; buf="" } capture=0; next }
-              capture { buf = buf " " $0 }
-            ' "$skill")
-            if [ -z "$blocks" ]; then
-              # Skills that print user-facing Guided output must include
-              # at least one example block. The contract reference itself
-              # has multiple examples and is allowed here too.
-              if [ "$skill" != "reference/plain-language-contract.md" ]; then
-                echo "FAIL: $skill has no <!-- guided-output --> example block"
-                fail=1
-              fi
-              continue
-            fi
-            # Process substitution keeps $fail in the parent shell scope
-            # (a piped while runs in a subshell, which would lose the flag).
-            while IFS= read -r block; do
-              [ -z "$block" ] && continue
-              hit=$(echo "$block" | grep -i -oE "$patterns" || true)
-              if [ -n "$hit" ]; then
-                echo "FAIL: $skill guided block contains banned term(s): $(echo "$hit" | sort -u | tr '\n' ' ')"
-                echo "      block: $block"
-                fail=1
-              fi
-            done < <(printf '%s\n' "$blocks")
-          done
-          exit $fail
-
-  think-sprint-order-canonical:
-    name: /think autopilot + sprint guide use canonical order
-    runs-on: ubuntu-latest
-    # The canonical post-build order is /review -> /security -> /qa -> /ship.
-    # A retest caught think/SKILL.md emitting /review, /qa, /security, /ship
-    # in the autopilot announcement; that contradicts the README, the new-user
-    # sprint guide, and downstream skills. Lock the order so it cannot drift
-    # again.
-    steps:
-      - uses: actions/checkout@v4
-      - name: Autopilot announcement uses canonical order
-        run: |
-          set -e
-          if ! grep -nF '/review, /security, /qa, /ship' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md autopilot announcement does not use canonical /review, /security, /qa, /ship order"
-            exit 1
-          fi
-          if grep -nF '/review, /qa, /security, /ship' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md still emits the wrong /review, /qa, /security, /ship order"
-            exit 1
-          fi
-      - name: New-user sprint guide lists /review then /security then /qa then /ship
-        run: |
-          set -e
-          # Pull the fenced quoted block that starts with "Here's the full sprint:"
-          # and stops at the first blank quote line. Then assert the four steps
-          # appear in canonical order.
-          guide=$(awk '
-            /Here.s the full sprint:/ { capture=1 }
-            capture { print }
-            capture && /Or say.*--autopilot/ { print; capture=0 }
-          ' think/SKILL.md)
-          if [ -z "$guide" ]; then
-            echo "FAIL: could not locate the new-user sprint guide block in think/SKILL.md"
-            exit 1
-          fi
-          review_line=$(echo "$guide" | grep -nF '/review' | head -1 | cut -d: -f1)
-          security_line=$(echo "$guide" | grep -nF '/security' | head -1 | cut -d: -f1)
-          qa_line=$(echo "$guide" | grep -nF '/qa' | head -1 | cut -d: -f1)
-          ship_line=$(echo "$guide" | grep -nF '/ship' | head -1 | cut -d: -f1)
-          for var in review_line security_line qa_line ship_line; do
-            eval "val=\$$var"
-            if [ -z "$val" ]; then
-              echo "FAIL: sprint guide missing step ($var)"
-              echo "$guide"
-              exit 1
-            fi
-          done
-          if [ "$review_line" -lt "$security_line" ] && \
-             [ "$security_line" -lt "$qa_line" ] && \
-             [ "$qa_line" -lt "$ship_line" ]; then
-            exit 0
-          fi
-          echo "FAIL: sprint guide order is not /review -> /security -> /qa -> /ship"
-          echo "lines: review=$review_line security=$security_line qa=$qa_line ship=$ship_line"
-          echo "$guide"
-          exit 1
-
-  think-early-guide-includes-qa:
-    name: /think early-sprint guide includes /qa
-    runs-on: ubuntu-latest
-    # The new-user sprint guide is the first place a non-technical user
-    # learns what the workflow does. Dropping /qa removes the "open the app
-    # like a real user" step that is exactly the value for non-technical
-    # users. This job blocks that regression.
-    steps:
-      - uses: actions/checkout@v4
-      - name: Sprint guide block names /qa explicitly
-        run: |
-          set -e
-          guide=$(awk '
-            /Here.s the full sprint:/ { capture=1 }
-            capture { print }
-            capture && /Or say.*--autopilot/ { print; capture=0 }
-          ' think/SKILL.md)
-          if [ -z "$guide" ]; then
-            echo "FAIL: could not locate the new-user sprint guide block in think/SKILL.md"
-            exit 1
-          fi
-          if ! echo "$guide" | grep -qF '/qa'; then
-            echo "FAIL: new-user sprint guide does not list /qa"
-            echo "$guide"
-            exit 1
-          fi
-
-  think-founder-lens-deterministic:
-    name: /think founder_validation lens is deterministic
-    runs-on: ubuntu-latest
-    # PR #193 made think/SKILL.md route founder_validation to `yc` by
-    # default and `garry` only via explicit --preset=garry. The reference
-    # doc that the skill tells readers to consult still said "yc or garry"
-    # until #194. An agent reading the reference can otherwise re-introduce
-    # the variability. Lock the deterministic phrasing in both files.
-    steps:
-      - uses: actions/checkout@v4
-      - name: think/SKILL.md and think/references/archetypes.md do not say "yc or garry"
-        run: |
-          set -e
-          fail=0
-          for f in think/SKILL.md think/references/archetypes.md; do
-            # Match the wording loosely: yc, optional whitespace/punctuation,
-            # "or", optional whitespace, garry. Catches "yc or garry",
-            # "`yc` or `garry`", "yc / garry" via the second pattern below.
-            if grep -niE '\byc\b[^a-z0-9]*or[^a-z0-9]+\bgarry\b' "$f"; then
-              echo "FAIL: $f still suggests yc OR garry; founder_validation must be deterministic"
-              fail=1
-            fi
-            if grep -niE '\byc\b[[:space:]]*/[[:space:]]*\bgarry\b' "$f"; then
-              echo "FAIL: $f still suggests yc / garry; founder_validation must be deterministic"
-              fail=1
-            fi
-          done
-          exit $fail
-      - name: Both files state the deterministic rule explicitly
-        run: |
-          set -e
-          fail=0
-          for f in think/SKILL.md think/references/archetypes.md; do
-            # Positive check: the file mentions garry only as the explicit-flag
-            # path. Loose pattern: "garry" within ~80 chars of "--preset=garry"
-            # or "explicit". One of the two must hit.
-            if ! grep -niE 'garry.{0,80}(--preset=garry|explicit)|(--preset=garry|explicit).{0,80}garry' "$f"; then
-              echo "FAIL: $f does not state that garry is reachable only via the explicit --preset flag"
-              fail=1
-            fi
-          done
-          exit $fail
-
-  think-builder-archetypes-do-not-force-startup:
-    name: /think Builder archetypes are not forced into Startup mode
-    runs-on: ubuntu-latest
-    # archetypes.md maps cli_tooling and api_backend to Builder mode. The
-    # Phase 2 instruction "Always cover the Startup Mode forcing-question
-    # set" contradicts that mapping and pushes Builder users through
-    # founder-style questions. Lock the wording so it stays mode-aware.
-    steps:
-      - uses: actions/checkout@v4
-      - name: think/SKILL.md does not force Startup forcing questions on every archetype
-        run: |
-          set -e
-          # The exact phrase that triggered the regression. Block any
-          # variation that says "always" + "Startup Mode" + "forcing".
-          if grep -niE 'always cover the startup mode forcing' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md still forces Startup forcing questions on every archetype"
-            exit 1
-          fi
-          # Positive check: the Phase 2 paragraph mentions Builder explicitly,
-          # so non-technical readers and Codex retest both see the mode is
-          # archetype-driven.
-          if ! grep -nE 'Builder forcing questions for .*cli_tooling.*api_backend|Builder forcing questions for .*api_backend.*cli_tooling' think/SKILL.md; then
-            echo "FAIL: Phase 2 paragraph does not mention Builder forcing questions for cli_tooling and api_backend"
-            exit 1
-          fi
-          # Cross-check: archetypes.md still maps cli_tooling and api_backend
-          # to Builder. If that source of truth changes, this lint becomes
-          # stale and should be updated alongside it.
-          if ! grep -nE '\| .cli_tooling. \| Builder \|' think/references/archetypes.md; then
-            echo "FAIL: archetypes.md no longer maps cli_tooling to Builder; update this lint or the spec"
-            exit 1
-          fi
-          if ! grep -nE '\| .api_backend. \| Builder \|' think/references/archetypes.md; then
-            echo "FAIL: archetypes.md no longer maps api_backend to Builder; update this lint or the spec"
-            exit 1
-          fi
-
-  think-collaborative-contract:
-    name: /think collaborative cadence + alternatives contract
-    runs-on: ubuntu-latest
-    # think vNext (brainstorm-grade): the diagnostic asks one question per
-    # message, Phase 4.5 presents 2-3 alternatives with trade-offs before
-    # the scope mode, the brief walks in sections when interactive, and
-    # the artifact carries optional alternatives_considered and
-    # design_summary fields that the brief gate never reads. Lock the
-    # mechanics so a later edit cannot silently regress /think to
-    # batched-question, single-verdict behavior.
-    steps:
-      - uses: actions/checkout@v4
-      - name: Diagnostic declares the one-question cadence
-        run: |
-          set -e
-          if ! grep -qF 'one question per message' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md no longer declares the one-question-per-message cadence"
-            exit 1
-          fi
-      - name: Phase 4.5 alternatives pass exists and keeps the reduce bias
-        run: |
-          set -e
-          if ! grep -qF '### Phase 4.5: Alternatives' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md is missing the Phase 4.5 Alternatives section"
-            exit 1
-          fi
-          if ! grep -qF 'recommend the smaller one' think/SKILL.md; then
-            echo "FAIL: Phase 4.5 lost the smaller-approach recommendation bias"
-            exit 1
-          fi
-      - name: Interactive brief walks in sections, autopilot keeps the gate
-        run: |
-          set -e
-          if ! grep -qF 'walk the brief in sections' think/SKILL.md; then
-            echo "FAIL: think/SKILL.md is missing the sectioned brief validation instruction"
-            exit 1
-          fi
-          if ! grep -qF 'Under autopilot, skip the section walk' think/SKILL.md; then
-            echo "FAIL: the section walk no longer defers to the brief gate under autopilot"
-            exit 1
-          fi
-      - name: Optional collaborative fields documented and gate-exempt
-        run: |
-          set -e
-          for f in think/SKILL.md reference/artifact-schema.md; do
-            for field in alternatives_considered design_summary; do
-              if ! grep -qF "$field" "$f"; then
-                echo "FAIL: $f does not document $field"
-                exit 1
-              fi
-            done
-          done
-          if ! grep -qF 'Alternatives Considered' think/references/brief-template.md; then
-            echo "FAIL: brief-template.md is missing the Alternatives Considered section"
-            exit 1
-          fi
-          # The brief gate jq filter must keep checking exactly the five
-          # required fields and never consult the collaborative ones.
-          gate_block=$(sed -n '/### Phase 6.6/,/### Phase 7/p' think/SKILL.md)
-          if printf '%s' "$gate_block" | grep -qE 'alternatives_considered|design_summary'; then
-            echo "FAIL: the brief gate consults a collaborative field; it must stay optional"
-            exit 1
-          fi
 
   phase-registry-contract:
     name: Phase registry library exposes the public API
