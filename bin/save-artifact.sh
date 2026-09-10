@@ -20,8 +20,8 @@
 # Because the validator bypass produces an artifact that downstream gates
 # still trust as "verified", --from-session is gated behind an explicit
 # opt-in (NANOSTACK_ALLOW_LEGACY_ARTIFACT=1). No normal-flow skill sets
-# it, so a buggy or compromised call cannot silently write a
-# schema-bypassing artifact; manual recovery sets it deliberately.
+# it, so accidental calls fail by default; manual recovery sets it
+# deliberately. Callers able to set the environment can opt in too.
 #
 # Validates JSON has required fields before saving. Fails on invalid input.
 set -e
